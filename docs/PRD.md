@@ -25,6 +25,7 @@ BlockFactor is an analytical, location-intelligence platform engineered to evalu
 
 ---
 
+
 ## 3. Inputs & User Configuration
 
 ### 3.1 Mandatory Input
