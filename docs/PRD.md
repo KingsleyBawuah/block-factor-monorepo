@@ -40,13 +40,16 @@ BlockFactor is an analytical, location-intelligence platform engineered to evalu
 
 | Factor | Default Weight | Rationale |
 |---|---|---|
-| Transit | 35% | Highest priority — core value proposition for car-free living |
-| Groceries | 25% | Daily necessity; walking distance to a supermarket is a hard requirement for many |
-| Third Places | 20% | Strong signal for neighborhood quality-of-life and remote work viability |
-| Public Safety | 15% | Important but less differentiating across Chicago's transit-rich neighborhoods |
-| Solar Exposure | 5% | Highly personal; apartment hunters rarely lead with this |
+| Transit (`S_transit`) | 30% | Highest priority — core value proposition for car-free living |
+| Groceries (`S_grocery`) | 20% | Daily necessity; walking distance to a full supermarket |
+| Third Places (`S_third_place`) | 15% | Vital for neighborhood vibe, community, and remote work viability |
+| Green Space & Parks (`S_green`) | 10% | Outdoor recreation, Lakefront/606 trail access, and mental well-being |
+| Noise Environment (`S_noise`) | 10% | Acoustic comfort; balances transit proximity vs. 'L' track & arterial roar |
+| Public Safety (`S_safety`) | 10% | Baseline security against violent & property incident density |
+| Flood Risk (`S_flood`) | 3% | Guardrail against chronic Chicago basement/garden-unit flooding |
+| Solar Exposure (`S_solar`) | 2% | Unit-specific natural light quality |
 
-> Weights are normalized at runtime so they always sum to 100%, even if the user adjusts individual sliders.
+> Weights are dynamically normalized at runtime so they always sum to 100%, even when customized by the user.
 
 ---
 
@@ -61,9 +64,12 @@ BlockFactor is an analytical, location-intelligence platform engineered to evalu
 | **Travel Times** | Commute Durations | Self-Hosted OpenTripPlanner 2.x | Local HTTP API; computed on-demand via OSM + GTFS. |
 | **Sustenance** | Supermarkets & Pharmacies | OpenStreetMap (Overpass API) | Ingested via Illinois OSM extract into PostGIS. |
 | **Third Places** | Cafes, Gyms & Studios | Google Places API (New) | Nearby Search Pro; cached in PostGIS spatial grids (30-day TTL). |
+| **Green Space** | Parks & Forest Preserves | Chicago Data Portal + OSM `leisure=park` | PostGIS spatial polygon table; sync quarterly. |
+| **Noise Environment** | Track & Traffic Buffers | OSM Road Hierarchy + CTA Track Geometry | Deterministic spatial buffer evaluation in PostGIS. |
+| **Flood Hazard** | FEMA Zones & Basement 311s | FEMA NFHL + Chicago Data Portal 311 | PostGIS polygon overlays + 311 sewer backup incident density. |
 | **Public Safety** | Reported Incident Density | Chicago Data Portal (Crimes) | Socrata API query (`$where=within_circle`) over trailing 12 mo. |
 | **Solar Exposure** | Sunlight Angles & Hours | Astronomical Math (`suncalc`) | Local deterministic calculation based on coordinates/azimuth. |
-| **Utilities** | Broadband & Fiber Access | FCC National Broadband Map API | Geocoded coordinate lookup; cached per address (refreshed bi-annually to align with FCC update cadence). Powers both the report's broadband availability display and the fiber affiliate CTAs. |
+| **Utilities** | Broadband & Fiber Access | FCC National Broadband Map API | Geocoded coordinate lookup; cached per address (refreshed bi-annually). Powers broadband specs and affiliate CTAs. |
 
 ---
 
@@ -81,7 +87,7 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 
 ### 5.2 Transit Score (`S_transit`)
 
-- **100 pts** at ≤ 0.25 miles from a CTA 'L' stop. (~5 min walk)
+- **100 pts** at ≤ 0.25 miles from a CTA 'L' stop (~5 min walk).
 - Linear decay to **0 pts** at 1.0 mile.
 - **+10 pt bonus** for dual-line access OR a high-frequency bus stop (≤ 10 min headways) within 0.2 miles.
 
@@ -96,20 +102,51 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 | 0.75 – 1.0 miles | Linear decay from 75 → 0 |
 | > 1.0 miles | 0 |
 
-> **Note:** Corner stores cap at a maximum of 40 points.
-
-> **TODO (open question):** Should pharmacy proximity contribute a secondary grocery sub-score? e.g., a CVS/Walgreens within 0.2 miles could add +10 pts for "daily essentials" coverage.
+> **Note:** Corner stores / bodegas cap at a maximum of 40 points.
+> **Pharmacy Bonus:** A pharmacy/drugstore (Walgreens, CVS) within ≤ 0.2 miles provides a +10 pt boost (capped at 100 total).
 
 ---
 
 ### 5.4 Third Places Score (`S_third_place`)
 
 - Evaluates cached Google Places POIs within 0.5 miles.
-- **Benchmark for 100 pts:** ≥ 3 independent cafes AND ≥ 1 fitness center within 0.4 miles.
+- **Benchmark for 100 pts:** ≥ 3 independent cafes AND ≥ 1 fitness center/studio within 0.4 miles.
 
 ---
 
-### 5.5 Solar Score (`S_solar`)
+### 5.5 Green Space & Parks Score (`S_green`)
+
+- **100 pts** at ≤ 0.1 miles from a recognized public park or community garden entrance.
+- Decays to **50 pts** at 0.3 miles, and **0 pts** at 0.75 miles.
+- **+15 pt bonus** for direct off-street trail corridor access (Lakefront Trail, 606/Bloomingdale Trail).
+
+---
+
+### 5.6 Noise Environment Score (`S_noise`)
+
+Evaluates acoustic livability by detecting proximity to major urban noise generators:
+
+| Noise Source | Distance Threshold | Penalty Applied |
+|---|---|---|
+| Elevated CTA Tracks ('L') | < 150 ft | -35 pts |
+| Elevated CTA Tracks ('L') | 150 – 300 ft | -20 pts |
+| Expressways (I-90/94, I-290, etc.) | < 500 ft | -30 pts |
+| Major 4-lane Arterial Corridors | < 100 ft | -15 pts |
+
+- Base score starts at **100 pts** (quiet residential street) and applies cumulative proximity penalties (floored at 0).
+
+---
+
+### 5.7 Flood Risk Score (`S_flood`)
+
+Addresses the critical Chicago risk of basement and garden-unit flooding:
+
+- **Base Score:** 100 pts for FEMA Zone X (Minimal Flood Hazard); 40 pts for Zone A/AE (100-year flood zone).
+- **Urban Sewer Backup Penalty:** -5 pts per reported 311 water/sewer backup incident within 0.25 miles over the past 24 months (floored at 0).
+
+---
+
+### 5.8 Solar Score (`S_solar`)
 
 **Base score by window direction:**
 
@@ -134,7 +171,7 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 
 ---
 
-### 5.6 Public Safety Score (`S_safety`)
+### 5.9 Public Safety Score (`S_safety`)
 
 - Performs a radial query against Chicago Data Portal crimes over the trailing 12 months.
 - **Penalty Calculation:** `Penalty = (5 × Violent Count) + (1 × Property Count)`
@@ -148,18 +185,27 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 3. A block at the **0th percentile** (lowest crime) scores **100**. A block at the **99th percentile** (highest crime) scores **0**.
 4. This means scores are always meaningful *relative to Chicago as a whole* — a score of 70 means "safer than 70% of Chicago blocks."
 
-> **Open Question:** Should the percentile distribution be computed city-wide, or scoped to comparable neighborhoods (e.g., only transit-dense, dense urban blocks)? City-wide is simpler but may punish dense urban areas unfairly vs. low-density suburban-style blocks.
-
-> **Open Question:** What query radius should we use for the radial crime lookup? 0.25 miles (1–2 block radius) is very hyper-local; 0.5 miles captures more signal but may bleed into adjacent neighborhoods.
-
 ---
 
-## 6. Monetization Model
+## 6. Monetization & Native Affiliate Catalog
 
-Contextual, non-intrusive **Native Utility Affiliate Cards** placed at the bottom of each generated report.
+BlockFactor integrates non-intrusive, context-triggered **Native Affiliate Cards** into the address report.
 
-| Category | Partners | Payout |
-|---|---|---|
-| Home Broadband / Fiber | AT&T Fiber, Astound, Comcast/Xfinity | $50 – $120 per activation |
-| Renters Insurance | Lemonade, Policygenius | $10 – $25 per policy bound |
-| Moving Services | Truck rentals & movers | 5% – 15% booking revenue share |
+### 6.1 Active v1 Affiliate Partners
+
+| Category | Partner(s) | Trigger / Context | Compensation Model |
+|---|---|---|---|
+| **Broadband & Fiber** | AT&T Fiber, Astound Broadband, Comcast/Xfinity | FCC broadband card showing available ISP speeds & fiber lines | $50 – $120 CPA per activation |
+| **Insurance (Multi-Product)** | **Lemonade** (Renters, Pet, Condo/Home) | Standard report summary, with dynamic pet bundle option | $10 – $25 CPA per policy bound |
+| **On-Demand Moving Help** | **Dolly** | "Moving to this address?" CTA for local/micro apartment moves | ~$15 CPA per completed job |
+| **Moving Quote Aggregator** | **Unpakt** | Full-service moving quote comparison card | $10 – $25 CPA per verified quote |
+| **Container & Self-Move** | **PODS / U-Box** (U-Haul) | Relocation comparison modal for mid-to-long distance moves | 5% – 15% booking rev-share |
+| **Off-Site Storage** | **CubeSmart / Extra Space Storage** | Unit size/lifestyle section (apartment storage optimization) | $20 – $50 CPA per unit rental |
+| **Fitness & Third Places** | **ClassPass** | Displayed next to `S_third_place` fitness studio / gym count | $30 – $60 CPA per trial/membership |
+
+### 6.2 Future Expansion Roadmap (Buyer Mode)
+
+When buyer mode is activated, high-ticket mortgage and homeowner services will augment the affiliate drawer:
+- **Digital Mortgage Origination:** Better.com ($100 – $200+ CPA per closed loan)
+- **Mortgage Comparison:** Credible / LendingTree ($50 – $100 CPA per lead)
+- **Homeowners/Condo Insurance:** Kin Insurance ($30 – $50 CPA per quote)
