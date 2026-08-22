@@ -34,28 +34,35 @@ BlockFactor is an analytical, location-intelligence platform engineered to evalu
 ## 3. Inputs & User Configuration
 
 ### 3.1 Mandatory Input
-- Target street address (geocoded via Nominatim).
+- **Home Street Address:** Candidate residential property address (geocoded via Nominatim).
 
-### 3.2 Optional Unit Metadata
+### 3.2 Optional Commute Destination (Hybrid / In-Office Commuters)
+- **Workplace / Destination Address:** Target office, coworking space (e.g. WeWork), university campus, or secondary frequent destination.
+- **Commute Mode Preference:** Transit (v1 default and the only scored mode). Biking and Walking rubrics are deferred post-v1 — the `S_commute` rubric (5.10) is transit-specific (transfers, one-seat rides).
+- **Departure Window:** Tuesday 8:30 AM (simulated rush-hour timetable).
+- *If omitted (Fully Remote mode):* The commute factor is hidden and weights dynamically rebalance across the remaining 8 factors.
+
+### 3.3 Optional Unit Metadata
 - **Primary Window Facing Direction:** N, NE, E, SE, S, SW, W, NW
 - **Floor Level:** Integer (default: 1)
 - **Unit Exposure:** Street-facing, Courtyard/Interior, Alley-facing
 
-### 3.3 User Customization
-- Sliders (0% to 100%) to individually weight the following factors, with **opinionated defaults** reflecting the primary persona's priorities:
+### 3.4 User Customization & Persona Presets
+Users can adjust individual weight sliders (0% to 100%). BlockFactor provides opinionated presets:
 
-| Factor | Default Weight | Rationale |
-|---|---|---|
-| Transit (`S_transit`) | 30% | Highest priority — core value proposition for car-free living |
-| Groceries (`S_grocery`) | 20% | Daily necessity; walking distance to a full supermarket |
-| Third Places (`S_third_place`) | 15% | Vital for neighborhood vibe, community, and remote work viability |
-| Green Space & Parks (`S_green`) | 10% | Outdoor recreation, Lakefront/606 trail access, and mental well-being |
-| Noise Environment (`S_noise`) | 10% | Acoustic comfort; balances transit proximity vs. 'L' track & arterial roar |
-| Public Safety (`S_safety`) | 10% | Baseline security against violent & property incident density |
-| Flood Risk (`S_flood`) | 3% | Guardrail against chronic Chicago basement/garden-unit flooding |
-| Solar Exposure (`S_solar`) | 2% | Unit-specific natural light quality |
+| Factor | Remote Worker Preset (Default) | Hybrid / In-Office Commuter Preset | Rationale |
+|---|---|---|---|
+| Transit (`S_transit`) | 30% | 20% | Static proximity to 'L' stations & high-frequency bus corridors |
+| Commute Duration (`S_commute`) | **0% (Hidden)** | **20%** | Door-to-door transit time & transfer friction to user's workplace |
+| Groceries (`S_grocery`) | 20% | 15% | Daily necessity; walking distance to a full supermarket |
+| Third Places (`S_third_place`) | 15% | 10% | Vital for neighborhood vibe, cafes, and daytime remote work spots |
+| Green Space & Parks (`S_green`) | 10% | 10% | Outdoor recreation, Lakefront/606 trail access, mental well-being |
+| Noise Environment (`S_noise`) | 10% | 10% | Acoustic comfort; balances transit proximity vs. track/traffic noise |
+| Public Safety (`S_safety`) | 10% | 10% | Baseline security against violent & property incident density |
+| Flood Risk (`S_flood`) | 3% | 3% | Guardrail against chronic Chicago basement/garden-unit flooding |
+| Solar Exposure (`S_solar`) | 2% | 2% | Unit-specific natural light quality and window orientation |
 
-> Weights are dynamically normalized at runtime so they always sum to 100%, even when customized by the user.
+> **Dynamic Normalization:** Weights are dynamically normalized at runtime so active factors always sum to 100% ($\sum w_i = 100\%$).
 
 ---
 
@@ -65,16 +72,16 @@ BlockFactor is an analytical, location-intelligence platform engineered to evalu
 |---|---|---|---|
 | **Transit** | 'L' Rail Stops & Lines | Chicago Data Portal (CTA 'L' Stops) | PostGIS spatial point table; sync monthly. |
 | **Transit** | High-Frequency Bus Lines | CTA Static GTFS Schedule | PostGIS; routes with ≤ 10 min headways. Sync quarterly. |
-| **Micro-Mobility** | Divvy Docks & E-Bikes | Lyft / Divvy GBFS JSON Feed | Station coords static; live capacity cached in-memory (5m TTL). |
+| **Micro-Mobility** | Divvy Docks & E-Bikes | Lyft / Divvy GBFS JSON Feed | Station coords static; live capacity cached in-memory (5m TTL). Powers the map dock-capacity layer only — not a scored factor. |
 | **Cycling** | Protected Lanes & Trails | Chicago Data Portal (Bike Routes) | PostGIS linestring buffering; filter for protected lanes/trails. |
 | **Travel Times** | Commute Durations | Self-Hosted OpenTripPlanner 2.x | Local HTTP API; computed on-demand via OSM + GTFS; commute durations cached in PostGIS (7-day TTL). |
-| **Sustenance** | Supermarkets & Pharmacies | OpenStreetMap (Overpass API) | Ingested via Illinois OSM extract into PostGIS. |
+| **Sustenance** | Supermarkets & Pharmacies | OpenStreetMap (Geofabrik Illinois extract) | Filtered POI import (`shop=supermarket`, `shop=convenience`, `amenity=pharmacy`) → PostGIS `osm_pois` table; sync quarterly. |
 | **Third Places** | Cafes, Gyms & Studios | Google Places API (New) | Nearby Search Pro; cached in PostGIS spatial grids (30-day TTL). |
 | **Green Space** | Parks & Forest Preserves | Chicago Data Portal + OSM `leisure=park` | PostGIS spatial polygon table; sync quarterly. |
 | **Noise Environment** | Track & Traffic Buffers | OSM Road Hierarchy + CTA Track Geometry | Deterministic spatial buffer evaluation in PostGIS. |
 | **Flood Hazard** | FEMA Zones & Basement 311s | FEMA NFHL + Chicago Data Portal 311 | PostGIS polygon overlays + 311 sewer backup incident density. |
-| **Public Safety** | Reported Incident Density | Chicago Data Portal (Crimes) | Socrata API query (`$where=within_circle`) over trailing 12 mo. |
-| **Solar Exposure** | Sunlight Angles & Hours | Astronomical Math (`suncalc`) | Local deterministic calculation based on coordinates/azimuth. |
+| **Public Safety** | Reported Incident Density | Chicago Data Portal (Crimes) | SODA-ingested into PostGIS (`cpd_crimes`, trailing 12 mo); scored via local `ST_DWithin` radial queries — no live Socrata calls at request time. |
+| **Solar Exposure** | Window Orientation & Floor | Deterministic lookup (no external data) | Orientation base score × exposure modifier + floor bonus (see 5.8); no astronomical library required. |
 | **Utilities** | Broadband & Fiber Access | FCC National Broadband Map API | Geocoded coordinate lookup; cached per address (refreshed bi-annually). Powers broadband specs and affiliate CTAs. |
 
 ---
@@ -91,6 +98,12 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 
 > **Score Clamping:** All individual factor sub-scores `Sᵢ` are strictly bounded to the range [0, 100]:
 > $$S_i = \min(100, \max(0, \text{CalculatedScore}))$$
+
+> **Boundary Semantics:** All distance/duration band tables in this section use half-open intervals — a value landing exactly on a shared boundary falls into the *better* (higher-scoring) band.
+
+> **Distance Measurement (v1):** Distances are geodesic straight-line (`ST_DWithin` on `geography` columns), not walking-network distances. Chicago's river branches and rail viaducts can make straight-line optimistic; thresholds are calibrated with this in mind. Network-based distances (OTP2 one-to-many) are a post-v1 refinement.
+
+> **Degraded Factors:** A factor that times out or lacks data returns `null`; its weight is excluded and the remaining weights renormalize (the same mechanism used when the commute factor is hidden). The report visually flags degraded factors. If all active weights are 0, the API rejects the request with a validation error rather than dividing by zero.
 
 ---
 
@@ -127,13 +140,15 @@ Evaluates cached Google Places POIs within a 0.5 mile radius (~10-minute walk):
 | At least 1 independent cafe or gym within ≤ 0.5 miles | 40 |
 | No qualifying third places within 0.5 miles | 0 |
 
+> **Independence Heuristic:** Google Places data carries no "independent" flag. Cafes are classified as independent via a maintained chain-brand exclusion list (Starbucks, Dunkin', Peet's, etc.) matched against place names at cache-fill time.
+
 ---
 
 ### 5.5 Green Space & Parks Score (`S_green`)
 
-- **100 pts** at ≤ 0.1 miles from a recognized public park or community garden entrance.
+- **100 pts** at ≤ 0.1 miles from the nearest boundary of a recognized public park or community garden polygon. (Distance is measured to the polygon edge — OSM park *entrance* nodes are too sparsely mapped to rely on.)
 - Decays to **50 pts** at 0.3 miles, and **0 pts** at 0.75 miles.
-- **+15 pt bonus** for direct off-street trail corridor access (Lakefront Trail, 606/Bloomingdale Trail) (capped at 100 total).
+- **+15 pt bonus** when an off-street trail access point (Lakefront Trail, 606/Bloomingdale Trail) lies within 0.25 miles (capped at 100 total).
 
 ---
 
@@ -149,6 +164,10 @@ Evaluates acoustic livability by detecting proximity to major urban noise genera
 | Major 4-lane Arterial Corridors | < 100 ft | -15 pts |
 
 - Base score starts at **100 pts** (quiet residential street) and applies cumulative proximity penalties (floored at 0).
+
+> **Grade Separation:** Track penalties apply only to elevated and at-grade CTA segments. Subway segments (State St / Dearborn tunnels) are exempt — grade separation is derived from OSM `bridge` / `tunnel` tags on railway ways, with manual segment tagging as a fallback.
+
+> **Scope (v1):** Metra rail, freight corridors, and O'Hare/Midway flight paths are not yet modeled as noise sources.
 
 ---
 
@@ -199,6 +218,34 @@ Addresses the critical Chicago risk of basement and garden-unit flooding:
 2. When a user submits an address, we compute that address's raw penalty score and find where it falls in the city-wide distribution.
 3. A block at the **0th percentile** (lowest crime) scores **100**. A block at the **99th percentile** (highest crime) scores **0**.
 4. This means scores are always meaningful *relative to Chicago as a whole* — a score of 70 means "safer than 70% of Chicago blocks."
+
+---
+
+### 5.10 Custom Commute Score (`S_commute` — Optional)
+
+When a user provides an optional workplace or campus address, BlockFactor queries the local OpenTripPlanner 2 engine for a Tuesday 8:30 AM rush-hour door-to-door transit itinerary (walking + waiting + riding + transfers):
+
+| Door-to-Door Commute Duration | Base Score | Commute Experience |
+|---|---|---|
+| ≤ 20 minutes | 100 | Gold-standard effortless commute |
+| 20 – 35 minutes | 85 | Standard single-seat ride or quick transfer |
+| 35 – 50 minutes | 55 | Manageable 2–3 days/week hybrid commute |
+| 50 – 65 minutes | 25 | High-friction commute with multiple transfers |
+| > 65 minutes | 0 | Severe transit friction |
+
+- **One-Seat Ride Bonus:** +10 pts if the commute requires 0 transfers (direct train or bus route).
+- **Transfer Friction Penalty:** -15 pts per transfer beyond 1 transfer (e.g. 2 transfers = -15 pts).
+- **Formula:** `S_commute = clamp(BaseScore + OneSeatBonus - TransferPenalty, 0, 100)`
+
+> **Departure Date Resolution:** "Tuesday 8:30 AM" resolves to the next Tuesday that falls inside the loaded GTFS feed's service validity window. If the feed's calendar has expired (e.g. a quarterly refresh slipped), the commute factor degrades to `null` rather than returning misleading itineraries.
+
+> **Why penalize transfers when duration already includes them?** The explicit penalty intentionally double-weights transfers relative to raw duration: it captures friction beyond time cost — platform waits in weather, missed-connection risk, and cognitive load.
+
+> **Benchmark Reference Commutes:** Regardless of whether a custom workplace is entered, the report UI displays reference commute duration pills to Chicago's 4 major economic hubs:
+> * **The Loop (Clark/Lake):** e.g. `18 min (Pink Line direct)`
+> * **Fulton Market / West Loop:** e.g. `14 min (Pink Line / Bike)`
+> * **O'Hare International Airport:** e.g. `52 min (Pink → Blue at Clark/Lake)`
+> * **Midway International Airport:** e.g. `35 min (Pink → Bus 62 / Orange)`
 
 ---
 
