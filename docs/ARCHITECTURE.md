@@ -20,9 +20,10 @@ BlockFactor is initially self-hosted on a personal home server for active develo
 - **Co-located Services:** Plex, Arr stack (Sonarr, Radarr, Bazarr), Usenet clients, Home Assistant, n8n, monitoring stack (Prometheus, Grafana, Loki)
 
 **Dedicated Storage for BlockFactor:**
-- A dedicated **~1TB M.2 2230 NVMe SSD** (via USB-C M.2 adapter) will be provisioned as a dedicated mount for BlockFactor's persistent data volumes: PostGIS data, OTP2 graph files, and OSM extracts.
+- A dedicated **M.2 NVMe SSD in a Sabrent USB-C enclosure** is provisioned as a dedicated mount for BlockFactor's persistent data volumes: PostGIS data, OTP2 graph files, and OSM extracts.
 - Rationale: `/media/disk1` (main array, 704GB free) and `/media/disk2` (17TB array, critically full at 100%) are co-located with media. A dedicated SSD avoids I/O contention and keeps BlockFactor's data isolated and easy to manage.
-- ⚠️ This SSD is pending setup. Until it is mounted, use the root volume (`/`, 128GB free) for initial development data.
+- **Status (provisioned 2026-08-22):** Partitioned as GPT with a single partition, formatted `ext4` (label `external-ssd-enc` — truncated from `external-ssd-enclosure` due to ext4's 16-character label limit), and mounted at `/mnt/external-ssd-enclosure` (476.9 GB, owned by the `kingsley-swizzin` user). Persisted across reboots via a UUID-based `/etc/fstab` entry (`defaults,noatime`).
+- ⚠️ Actual capacity is **512 GB-class (476.9 GB usable)**, smaller than the ~1TB originally estimated — worth keeping in mind for OSM extract + PostGIS + OTP2 graph capacity planning.
 
 **Key Constraints:**
 - OTP2 JVM heap capped at ~5 GB to avoid starving co-located services.
@@ -90,7 +91,7 @@ Following the existing manual compose pattern (e.g., `strava-stats`, `readmeaboo
 /home/kingsley-swizzin/blockfactor/
 ├── docker-compose.yml
 ├── .env
-└── data/               # symlink or bind mount → dedicated NVMe SSD mount point
+└── data/               # symlink or bind mount → /mnt/external-ssd-enclosure
 ```
 
 ---
@@ -201,7 +202,7 @@ services/api/
 ### 5.1 Database Engine & Image
 * **Engine:** **PostgreSQL 18 + PostGIS** extension.
 * **Docker Context:** Runs as a dedicated container (`blockfactor-db`) isolated from any existing host database.
-* **Volume Mount:** Persisted to the dedicated NVMe SSD mount point (`/media/.../blockfactor/pgdata`).
+* **Volume Mount:** Persisted to the dedicated NVMe SSD mount point (`/mnt/external-ssd-enclosure/blockfactor/pgdata`).
 
 ### 5.2 Spatial Coordinate Standard & Types
 * **Standard Representation:** `geography(Point, 4326)` (WGS84 GPS latitude and longitude).
@@ -238,7 +239,7 @@ To avoid dependencies on external host Redis instances, caching is partitioned a
 
 ### 6.2 Resource Controls & Persistence
 * **JVM Heap Limit:** Strictly capped at `-Xmx5G` to prevent memory contention with co-located media and automation stacks.
-* **Graph Persistence:** The graph is pre-compiled once (`otp --build data/`) and saved as `graph.obj` on the dedicated NVMe SSD. On restarts, OTP2 boots in < 15 seconds by loading the pre-compiled graph directly into RAM.
+* **Graph Persistence:** The graph is pre-compiled once (`otp --build data/`) and saved as `graph.obj` on the dedicated NVMe SSD (`/mnt/external-ssd-enclosure/blockfactor/otp-data/graph.obj`). On restarts, OTP2 boots in < 15 seconds by loading the pre-compiled graph directly into RAM.
 
 ---
 
