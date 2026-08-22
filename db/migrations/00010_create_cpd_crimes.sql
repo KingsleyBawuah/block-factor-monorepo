@@ -10,6 +10,12 @@
 --
 -- source_id maps to the source's `id` field (Socrata's stable row
 -- identifier), not `case_number` (a human-facing but less stable key).
+--
+-- category is intentionally a closed 2-value set: primary_type has 30+ real
+-- values (narcotics, gambling, liquor law violations, etc.) that are neither
+-- violent nor property, and S_safety (PRD 5.9) only scores those two. The
+-- ingestion CLI filters out non-matching rows before insert — see
+-- docs/DATA_SOURCES.md "Category coverage".
 CREATE TABLE cpd_crimes (
     id BIGSERIAL PRIMARY KEY,
     source_id TEXT NOT NULL UNIQUE,
