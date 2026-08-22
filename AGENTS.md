@@ -31,6 +31,32 @@ This document establishes the behavioral and operational guidelines for AI codin
 - Do **not** run `git commit`, `git push`, or alter git history automatically or implicitly.
 - After presenting modifications and diff summaries, ask for explicit permission before staging or committing changes.
 
+### Rule 5: Conventional Commit Format
+- All commit messages MUST follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification: `<type>[optional scope]: <description>`.
+- Common types used in this project: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`, `build`, `perf`, `style`.
+- Use a scope for the affected package or domain where it adds clarity (e.g., `feat(scoring): ...`, `fix(api): ...`, `docs(agents): ...`).
+- Breaking changes are marked with `!` before the colon (e.g., `feat(api)!: ...`) and/or a `BREAKING CHANGE:` footer describing the break.
+- Descriptions are imperative mood ("add", not "added"/"adds"), lowercase after the type, no trailing period.
+- If a change doesn't cleanly fit one type, split it into multiple commits rather than combining types in one message.
+
+### Rule 6: Changelog Discipline
+- `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any commit that changes user-facing behavior, API contracts, or dependencies MUST add a corresponding entry under `## [Unreleased]` in the same commit/PR — not deferred to release time.
+- Group entries under the standard headings (`Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`); only include headings that have entries.
+- Purely internal changes with no observable effect (`chore`, `ci`, `test`, `style`, or a `refactor` with zero behavior change) do **not** need a changelog entry — the changelog is for humans, not a mirror of commit history.
+- Conventional Commit type → changelog section mapping:
+
+  | Commit Type | Changelog Section |
+  |---|---|
+  | `feat` | Added |
+  | `fix` | Fixed |
+  | `feat!` / `BREAKING CHANGE` footer | Added or Changed, explicitly called out as breaking |
+  | `refactor` / `perf` (if user-observable) | Changed |
+  | Removal of a feature | Removed |
+  | Security fix | Security |
+  | `docs` / `chore` / `ci` / `test` / `style` / `build` | No entry needed |
+
+- At release time, rename `[Unreleased]` to the new version + ISO 8601 date (e.g., `## [0.2.0] - 2026-09-01`) and add a fresh empty `## [Unreleased]` above it.
+
 ---
 
 ## 3. Engineering & Code Standards
@@ -44,6 +70,7 @@ This document establishes the behavioral and operational guidelines for AI codin
 - **Frontend Standards:** Idiomatic React 19 / TanStack patterns (Router & Query), strictly typed search params, and declarative component state.
 - **Spatial Precision:** Maintain exact PostGIS geometry conventions (SRID 4326 for WGS84 coordinates, appropriate metric spherical distance queries with `ST_DWithin`).
 - **Cost & API Consciousness:** Prioritize local calculation, caching (PostGIS spatial grid cache), and self-hosted services (OTP2, Nominatim, OSM) over metered third-party commercial APIs.
+- **Privacy & Data Minimization:** Follow `docs/PRIVACY_AND_DATA_HANDLING.md` for all PII handling — cache by coordinate/grid cell rather than raw address, never persist raw address strings beyond the request lifecycle, and never add address or coordinate data to logs, metrics labels, or affiliate click payloads.
 
 ---
 

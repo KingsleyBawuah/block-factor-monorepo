@@ -28,6 +28,8 @@ BlockFactor is an analytical location-intelligence platform engineered to evalua
 | **[Technical Architecture Specification](docs/ARCHITECTURE.md)** | Full technical architecture: Go backend, PostGIS spatial database, self-contained caching, OTP2 routing, WebGL frontend, and server environment profile. |
 | **[Implementation Phases & Roadmap](docs/IMPLEMENTATION_PHASES.md)** | Step-by-step engineering roadmap (Phases 1–7) with deliverables and validation criteria. |
 | **[Third-Party Requirements & Guardrails](docs/THIRD_PARTY_REQUIREMENTS.md)** | Compliance guidelines, rate limits, caching rules (Google Places 30-day TTL, OSM Nominatim policies). |
+| **[Privacy & PII Data Handling](docs/PRIVACY_AND_DATA_HANDLING.md)** | Data minimization principles, PII guardrails, third-party data flow map, and retention policy. |
+| **[External Service Provisioning](docs/PROVISIONING.md)** | Setup runbook for external accounts, API keys, and budget/cost controls (Google Cloud, Chicago Data Portal). |
 | **[Agent Guidelines & Working Agreements](AGENTS.md)** | Pair programming standards, permission gates, idiomatic Go standards, and anti-vibe-coding UI rules. |
 | **[Open Data Attribution](ATTRIBUTION.md)** | OpenStreetMap, CTA, City of Chicago, FEMA, and FCC data attribution notices. |
 | **[License](LICENSE)** | Proprietary / Closed-Source License. |
