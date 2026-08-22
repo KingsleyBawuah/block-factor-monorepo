@@ -452,6 +452,7 @@ On the home server, a lightweight systemd timer or monthly cron job invokes `mak
 | 20 | Data Ingestion Pipeline | **Standalone CLI (`cmd/seed/main.go` + `make seed`)** | Decoupled from API runtime; testable, flag-selectable, and easily scheduled via cron. | ✅ Resolved |
 | 21 | OpenAPI Exclusivity Modeling | **Flat optional fields + handler-level validation, not `oneOf`** | `oapi-codegen` generates a wrapper type requiring `AsX`/`FromX`/`MergeX` accessors for `oneOf` rather than a flat struct — worse ergonomics here, especially since branches sharing identical properties (differing only in which field is required) don't map cleanly to oapi-codegen's union-type generation anyway. | ✅ Resolved |
 | 22 | JS Runtime & Package Manager | **Bun** (replaces Node.js + pnpm) | Significantly faster installs and a built-in bundler/test runner/TS execution reduce tooling overhead; workspace/monorepo support (`workspace:*` protocol, catalogs) is mature. Corepack does not manage Bun versions, so pinning uses `engines.bun` (local dev) + an explicit `bun-version` in the `oven-sh/setup-bun` CI step instead. | ✅ Resolved |
+| 23 | Frontend Test Runner | **`bun test`** (not Vitest) | Faster than Vitest (no separate transform layer) and consistent with the rest of the Bun toolchain; React/DOM testing is well-supported via `happy-dom` preload + `@testing-library/react`, per Bun's own docs. Tradeoff: unlike Vitest, `bun test` doesn't automatically share `vite.config.ts` (aliases, plugins) — acceptable given no exotic Vite plugins are in use. | ✅ Resolved |
 
 ---
 
