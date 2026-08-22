@@ -97,8 +97,6 @@ Following the existing manual compose pattern (e.g., `strava-stats`, `readmeaboo
 
 ## 3. High-Level System Topology
 
-## 3. High-Level System Topology
-
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Frontend Client                        │
@@ -161,7 +159,7 @@ Rather than a generic worker pool, address evaluation uses structured concurrenc
 │    ├── go scoreNoise(ctx, pt)          [PostGIS / Track & Arterial Buffers]    │
 │    ├── go scoreFloodRisk(ctx, pt)      [PostGIS / FEMA + 311 Sewer History]    │
 │    ├── go scorePublicSafety(ctx, pt)   [PostGIS / CPD 12mo Density]            │
-│    ├── go scoreBroadband(ctx, pt)      [PostGIS Address Cache]                 │
+│    ├── go fetchBroadbandSpecs(ctx, pt) [PostGIS Address Cache]                 │
 │    ├── go scoreSolarExposure(meta)     [Pure Math / In-Memory]                 │
 │    └── go fetchCommuteIsochrones(ctx)  [Local OTP2 HTTP API]                   │
 │                                                                                │

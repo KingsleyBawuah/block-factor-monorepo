@@ -67,7 +67,7 @@ BlockFactor is an analytical, location-intelligence platform engineered to evalu
 | **Transit** | High-Frequency Bus Lines | CTA Static GTFS Schedule | PostGIS; routes with ≤ 10 min headways. Sync quarterly. |
 | **Micro-Mobility** | Divvy Docks & E-Bikes | Lyft / Divvy GBFS JSON Feed | Station coords static; live capacity cached in-memory (5m TTL). |
 | **Cycling** | Protected Lanes & Trails | Chicago Data Portal (Bike Routes) | PostGIS linestring buffering; filter for protected lanes/trails. |
-| **Travel Times** | Commute Durations | Self-Hosted OpenTripPlanner 2.x | Local HTTP API; computed on-demand via OSM + GTFS. |
+| **Travel Times** | Commute Durations | Self-Hosted OpenTripPlanner 2.x | Local HTTP API; computed on-demand via OSM + GTFS; commute durations cached in PostGIS (7-day TTL). |
 | **Sustenance** | Supermarkets & Pharmacies | OpenStreetMap (Overpass API) | Ingested via Illinois OSM extract into PostGIS. |
 | **Third Places** | Cafes, Gyms & Studios | Google Places API (New) | Nearby Search Pro; cached in PostGIS spatial grids (30-day TTL). |
 | **Green Space** | Parks & Forest Preserves | Chicago Data Portal + OSM `leisure=park` | PostGIS spatial polygon table; sync quarterly. |
@@ -87,7 +87,10 @@ BlockFactor is an analytical, location-intelligence platform engineered to evalu
 BlockFactor = Σ(wᵢ · Sᵢ) / Σwᵢ
 ```
 
-A weighted average of individual factor scores, where `wᵢ` are the user-configured weight sliders and `Sᵢ` are the normalized sub-scores (0–100).
+A weighted average of individual factor scores, where `wᵢ` are the user-configured weight sliders and `Sᵢ` are the normalized sub-scores ($0\text{–}100$).
+
+> **Score Clamping:** All individual factor sub-scores $S_i$ are strictly bounded to the range $[0, 100]$:
+> $$S_i = \min(100, \max(0, \text{CalculatedScore}))$$
 
 ---
 
@@ -95,7 +98,7 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 
 - **100 pts** at ≤ 0.25 miles from a CTA 'L' stop (~5 min walk).
 - Linear decay to **0 pts** at 1.0 mile.
-- **+10 pt bonus** for dual-line access OR a high-frequency bus stop (≤ 10 min headways) within 0.2 miles.
+- **+10 pt bonus** for dual-line access OR a high-frequency bus stop (≤ 10 min headways) within 0.2 miles (capped at 100 total).
 
 ---
 
@@ -115,8 +118,14 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 
 ### 5.4 Third Places Score (`S_third_place`)
 
-- Evaluates cached Google Places POIs within 0.5 miles.
-- **Benchmark for 100 pts:** ≥ 3 independent cafes AND ≥ 1 fitness center/studio within 0.4 miles.
+Evaluates cached Google Places POIs within a $0.5\text{ mile}$ radius (~10-minute walk):
+
+| Criterion within POI Window | Score |
+|---|---|
+| $\ge 3$ independent cafes AND $\ge 1$ fitness center/studio within $\le 0.4\text{ miles}$ | 100 |
+| $\ge 2$ independent cafes OR $\ge 1$ fitness center/studio within $0.4\text{–}0.5\text{ miles}$ | 75 |
+| At least 1 independent cafe or gym within $0.5\text{ miles}$ | 40 |
+| No qualifying third places within $0.5\text{ miles}$ | 0 |
 
 ---
 
@@ -124,7 +133,7 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 
 - **100 pts** at ≤ 0.1 miles from a recognized public park or community garden entrance.
 - Decays to **50 pts** at 0.3 miles, and **0 pts** at 0.75 miles.
-- **+15 pt bonus** for direct off-street trail corridor access (Lakefront Trail, 606/Bloomingdale Trail).
+- **+15 pt bonus** for direct off-street trail corridor access (Lakefront Trail, 606/Bloomingdale Trail) (capped at 100 total).
 
 ---
 
@@ -173,7 +182,7 @@ Addresses the critical Chicago risk of basement and garden-unit flooding:
 
 **Floor Bonus:** +5 pts per floor above floor 2 (e.g., floor 3 = +5, floor 5 = +15).
 
-`S_solar = BaseScore × ExposureModifier + FloorBonus`
+`S_solar = clamp(BaseScore × ExposureModifier + FloorBonus, 0, 100)`
 
 ---
 

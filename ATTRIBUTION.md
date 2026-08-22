@@ -47,3 +47,10 @@ BlockFactor is built with open data and public APIs provided by municipal, trans
 ## 6. Federal Emergency Management Agency (FEMA)
 * **Data Provider:** FEMA National Flood Hazard Layer (NFHL) ([msc.fema.gov](https://msc.fema.gov/))
 * **Datasets Used:** Flood Insurance Rate Maps (FIRM) flood hazard zones.
+
+---
+
+## 7. Google Maps Platform (Google Places API)
+* **Data Provider:** Google LLC ([developers.google.com/maps](https://developers.google.com/maps))
+* **APIs Used:** Places API (New) Nearby Search.
+* **Attribution Notice:** Point-of-interest data, business details, and place metadata are provided by Google and cached in accordance with Google Maps Platform Terms of Service (30-day TTL). Displayed with "Powered by Google" where applicable.
