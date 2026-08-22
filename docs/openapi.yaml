@@ -1,0 +1,402 @@
+# Pinned to 3.1.0 for maximum compatibility with oapi-codegen and
+# openapi-typescript, which may not have caught up to 3.2 yet (released
+# 2025-09-19). Nothing in this document uses 3.2-exclusive features, so
+# revisit bumping to 3.2 once tooling support has matured.
+openapi: 3.1.0
+info:
+  title: BlockFactor API
+  summary: Location intelligence and rental property scoring for Chicago, IL.
+  description: >
+    REST API for computing composite livability scores (0-100) for
+    residential addresses in Chicago, based on transit access, commute
+    duration, grocery access, third places, green space, noise, flood risk,
+    solar exposure, and public safety. See docs/PRD.md for the full scoring
+    formula and docs/ARCHITECTURE.md for the response-contract decisions
+    this spec implements.
+  version: 0.1.0
+
+servers:
+  - url: http://localhost:4001
+    description: Local development (Phase 1). Production server entries are added in Phase 7.
+
+tags:
+  - name: Scoring
+    description: Composite address scoring.
+  - name: Geocoding
+    description: Address-to-coordinate resolution.
+  - name: Isochrones
+    description: Walk/transit reach polygons.
+  - name: Health
+    description: Service liveness.
+
+paths:
+  /api/v1/score:
+    post:
+      tags: [Scoring]
+      operationId: scoreAddress
+      summary: Compute a composite livability score for an address.
+      description: >
+        Accepts either a raw address or pre-resolved coordinates from a
+        prior call to /api/v1/geocode, computes the composite BlockFactor
+        score, and returns per-factor sub-scores plus benchmark commute
+        pills. Exactly one of `address` or `origin` must be provided.
+        Requests outside the City of Chicago boundary are rejected with
+        422 OUT_OF_COVERAGE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScoreRequest"
+            examples:
+              byAddress:
+                summary: Score by raw address
+                value:
+                  address: "233 S Wacker Dr, Chicago, IL"
+                  destination: "1 N State St, Chicago, IL"
+      responses:
+        "200":
+          description: Composite score computed successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScoreResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "422":
+          $ref: "#/components/responses/OutOfCoverage"
+
+  /api/v1/geocode:
+    get:
+      tags: [Geocoding]
+      operationId: geocodeAddress
+      summary: Resolve a raw address to ranked coordinate candidates.
+      description: >
+        One-shot geocode used to disambiguate an address before scoring.
+        No typeahead/autocomplete support in Phase 1, per the public
+        Nominatim usage policy (docs/THIRD_PARTY_REQUIREMENTS.md).
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Raw address text to geocode.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ranked geocode candidates.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeocodeResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/v1/isochrones:
+    get:
+      tags: [Isochrones]
+      operationId: getIsochrones
+      summary: Get 15-minute walk and 30-minute transit reach polygons for a coordinate.
+      description: >
+        Served independently from /api/v1/score for faster first paint and
+        separate caching (docs/ARCHITECTURE.md §13.1).
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+            minimum: -90
+            maximum: 90
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+            minimum: -180
+            maximum: 180
+      responses:
+        "200":
+          description: Isochrone polygons as GeoJSON.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IsochroneResponse"
+        "422":
+          $ref: "#/components/responses/OutOfCoverage"
+
+  /api/v1/health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Liveness check.
+      responses:
+        "200":
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+components:
+  schemas:
+    Coordinates:
+      type: object
+      required: [lat, lon]
+      properties:
+        lat:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        lon:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+
+    UnitMetadata:
+      type: object
+      description: Optional unit-level metadata powering the solar exposure factor.
+      properties:
+        facing:
+          type: string
+          enum: [N, NE, E, SE, S, SW, W, NW]
+        floor:
+          type: integer
+          minimum: 1
+          default: 1
+        exposure:
+          type: string
+          enum: [street, courtyard, alley]
+
+    WeightOverrides:
+      type: object
+      description: >
+        Optional per-factor weight overrides (0-100). Any omitted factor
+        falls back to preset defaults; active weights are dynamically
+        renormalized so they sum to 100%.
+      properties:
+        transit: { type: number, minimum: 0, maximum: 100 }
+        commute: { type: number, minimum: 0, maximum: 100 }
+        grocery: { type: number, minimum: 0, maximum: 100 }
+        thirdPlace: { type: number, minimum: 0, maximum: 100 }
+        green: { type: number, minimum: 0, maximum: 100 }
+        noise: { type: number, minimum: 0, maximum: 100 }
+        safety: { type: number, minimum: 0, maximum: 100 }
+        flood: { type: number, minimum: 0, maximum: 100 }
+        solar: { type: number, minimum: 0, maximum: 100 }
+
+    ScoreRequest:
+      type: object
+      description: >
+        Exactly one of `address` or `origin` must be provided; the API
+        returns 400 if neither or both are set. Deliberately not expressed
+        as a `oneOf` in this schema — with `oapi-codegen`, `oneOf` produces
+        a wrapper type requiring `AsX`/`FromX`/`MergeX` accessor methods
+        rather than a flat struct, which is worse ergonomics than a plain
+        optional-pointer field validated in the handler. Same rule applies
+        to `destination` vs. `destinationCoordinates`; if omitted entirely,
+        the commute factor is hidden and weights renormalize across the
+        remaining 8 factors.
+      properties:
+        address:
+          type: string
+          description: Raw address to geocode before scoring. Mutually exclusive with `origin`.
+        origin:
+          allOf:
+            - $ref: "#/components/schemas/Coordinates"
+          description: Pre-resolved origin coordinates from a prior /api/v1/geocode call. Mutually exclusive with `address`.
+        destination:
+          type: string
+          description: Optional workplace/destination address for the custom commute factor.
+        destinationCoordinates:
+          allOf:
+            - $ref: "#/components/schemas/Coordinates"
+          description: Pre-resolved destination coordinates. Mutually exclusive with `destination`.
+        weights:
+          $ref: "#/components/schemas/WeightOverrides"
+        unit:
+          $ref: "#/components/schemas/UnitMetadata"
+
+    ContributingPoi:
+      type: object
+      required: [name, distanceMeters]
+      properties:
+        name:
+          type: string
+        distanceMeters:
+          type: number
+
+    FactorScore:
+      type: object
+      required: [degraded]
+      properties:
+        score:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+          description: Composite sub-score (0-100). Null when `degraded` is true.
+        degraded:
+          type: boolean
+          description: >
+            True when this factor timed out or lacked data; its weight was
+            excluded from the composite score and the remaining weights
+            renormalized.
+        distanceMeters:
+          type: [number, "null"]
+          description: Straight-line distance in meters to the nearest contributing feature, when applicable.
+        contributingPois:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContributingPoi"
+
+    CommutePill:
+      type: object
+      description: Benchmark commute duration to one of Chicago's major economic hubs, always computed live.
+      required: [destination, durationMinutes, transfers, summary]
+      properties:
+        destination:
+          type: string
+          enum: [loop, fulton_market, ohare, midway]
+        durationMinutes:
+          type: integer
+        transfers:
+          type: integer
+        summary:
+          type: string
+          description: Human-readable itinerary summary, e.g. "Pink Line direct".
+
+    ScoreResponse:
+      type: object
+      required: [compositeScore, factors, benchmarkCommutes]
+      properties:
+        compositeScore:
+          type: number
+          minimum: 0
+          maximum: 100
+        factors:
+          type: object
+          description: "`commute` is present only when a destination was supplied in the request."
+          required:
+            [transit, grocery, thirdPlace, green, noise, safety, flood, solar]
+          properties:
+            transit: { $ref: "#/components/schemas/FactorScore" }
+            commute: { $ref: "#/components/schemas/FactorScore" }
+            grocery: { $ref: "#/components/schemas/FactorScore" }
+            thirdPlace: { $ref: "#/components/schemas/FactorScore" }
+            green: { $ref: "#/components/schemas/FactorScore" }
+            noise: { $ref: "#/components/schemas/FactorScore" }
+            safety: { $ref: "#/components/schemas/FactorScore" }
+            flood: { $ref: "#/components/schemas/FactorScore" }
+            solar: { $ref: "#/components/schemas/FactorScore" }
+        benchmarkCommutes:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommutePill"
+
+    GeocodeCandidate:
+      type: object
+      required: [formattedAddress, coordinates, rank]
+      properties:
+        formattedAddress:
+          type: string
+        coordinates:
+          $ref: "#/components/schemas/Coordinates"
+        rank:
+          type: integer
+          description: 0-indexed rank; 0 is the top match.
+
+    GeocodeResponse:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeocodeCandidate"
+
+    IsochroneFeature:
+      type: object
+      required: [type, properties, geometry]
+      properties:
+        type:
+          type: string
+          const: Feature
+        properties:
+          type: object
+          required: [mode, minutes]
+          properties:
+            mode:
+              type: string
+              enum: [walk, transit]
+            minutes:
+              type: integer
+              enum: [15, 30]
+        geometry:
+          type: object
+          description: GeoJSON Polygon or MultiPolygon geometry.
+          required: [type, coordinates]
+          properties:
+            type:
+              type: string
+              enum: [Polygon, MultiPolygon]
+            coordinates:
+              type: array
+              description: >
+                GeoJSON coordinate array. Left untyped because Polygon uses
+                [][][2]float64 while MultiPolygon uses [][][][2]float64 —
+                OpenAPI cannot express this union cleanly. Validated at the
+                Go layer via GeoJSON parsing.
+              items: {}
+
+    IsochroneResponse:
+      type: object
+      required: [type, features]
+      properties:
+        type:
+          type: string
+          const: FeatureCollection
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/IsochroneFeature"
+
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code, e.g. `OUT_OF_COVERAGE`.
+        message:
+          type: string
+
+  responses:
+    OutOfCoverage:
+      description: The requested coordinates fall outside the City of Chicago boundary.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            outOfCoverage:
+              value:
+                code: OUT_OF_COVERAGE
+                message: The provided address is outside the City of Chicago boundary.
+    ValidationError:
+      description: The request failed validation (e.g. missing required field, all weights zero).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
