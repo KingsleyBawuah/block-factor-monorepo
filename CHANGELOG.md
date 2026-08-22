@@ -15,3 +15,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - React 19 + Vite 8 frontend skeleton in `packages/web/` with Bun package manager, Biome linter, Tailwind CSS v4 design tokens, `shadcn/ui` primitives, and Lineicons.
   - Dual-stack OpenAPI codegen pipeline: `oapi-codegen` for Go and `openapi-typescript` for TypeScript, wired into `make generate` and `make generate-check`.
 - OpenAPI 3.1 contract (`docs/openapi.yaml`) for `POST /api/v1/score`, `GET /api/v1/geocode`, `GET /api/v1/isochrones`, and `GET /api/v1/health`.
+- `S_bike` scoring factor (PRD §5.11): quality-tiered proximity to bike infrastructure (protected lanes, buffered lanes, greenways, marked shared lanes) plus a directional network bonus for north-south/east-west coverage. Adds `bike` to `WeightOverrides` and `ScoreResponse.factors` in the OpenAPI contract, and rebalances the default weight presets (PRD §3.4) to include it.

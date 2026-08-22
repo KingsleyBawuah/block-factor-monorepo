@@ -56,17 +56,20 @@ Users can adjust individual weight sliders (0% to 100%). BlockFactor provides op
 
 | Factor | Remote Worker Preset (Default) | Hybrid / In-Office Commuter Preset | Rationale |
 |---|---|---|---|
-| Transit (`S_transit`) | 30% | 20% | Static proximity to 'L' stations & high-frequency bus corridors |
-| Commute Duration (`S_commute`) | **0% (Hidden)** | **20%** | Door-to-door transit time & transfer friction to user's workplace |
-| Groceries (`S_grocery`) | 20% | 15% | Daily necessity; walking distance to a full supermarket |
-| Third Places (`S_third_place`) | 15% | 10% | Vital for neighborhood vibe, cafes, and daytime remote work spots |
-| Green Space & Parks (`S_green`) | 10% | 10% | Outdoor recreation, Lakefront/606 trail access, mental well-being |
-| Noise Environment (`S_noise`) | 10% | 10% | Acoustic comfort; balances transit proximity vs. track/traffic noise |
-| Public Safety (`S_safety`) | 10% | 10% | Baseline security against violent & property incident density |
+| Transit (`S_transit`) | 25% | 17% | Static proximity to 'L' stations & high-frequency bus corridors |
+| Commute Duration (`S_commute`) | **0% (Hidden)** | **17%** | Door-to-door transit time & transfer friction to user's workplace |
+| Bike Infrastructure (`S_bike`) | 12% | 10% | Proximity and directional network coverage of protected/buffered bike lanes |
+| Groceries (`S_grocery`) | 18% | 13% | Daily necessity; walking distance to a full supermarket |
+| Third Places (`S_third_place`) | 13% | 9% | Vital for neighborhood vibe, cafes, and daytime remote work spots |
+| Green Space & Parks (`S_green`) | 9% | 9% | Outdoor recreation, Lakefront/606 trail access, mental well-being |
+| Noise Environment (`S_noise`) | 9% | 10% | Acoustic comfort; balances transit proximity vs. track/traffic noise |
+| Public Safety (`S_safety`) | 9% | 10% | Baseline security against violent & property incident density |
 | Flood Risk (`S_flood`) | 3% | 3% | Guardrail against chronic Chicago basement/garden-unit flooding |
 | Solar Exposure (`S_solar`) | 2% | 2% | Unit-specific natural light quality and window orientation |
 
 > **Dynamic Normalization:** Weights are dynamically normalized at runtime so active factors always sum to 100% ($\sum w_i = 100\%$).
+
+> **Future consideration — dedicated Cyclist preset:** PRD §2 names "Active Commuters & Cyclists" as a target persona, but there is currently no preset chip weighting specifically for it — bike weight is folded into the two existing presets instead. Presets are purely a frontend default-values convenience (no representation in the OpenAPI contract or database schema), so adding a third preset later is a low-risk, purely additive change — deferred for now rather than designed as part of this pass.
 
 ---
 
@@ -256,6 +259,28 @@ When a user provides an optional workplace or campus address, BlockFactor querie
 > * **Midway International Airport:** e.g. `35 min (Pink → Bus 62 / Orange)`
 >
 > Hub coordinates are defined as canonical constants in `internal/scoring`; the durations above are illustrative and always computed live, never hardcoded UI copy.
+
+---
+
+### 5.11 Bike Infrastructure Score (`S_bike`)
+
+Evaluates proximity to genuinely useful cycling infrastructure, weighted by real safety/comfort quality rather than treating all "bike lanes" as equivalent:
+
+| Nearest Qualifying Infrastructure (`bike_routes` category) | Base Score at ≤ 0.1 mi |
+|---|---|
+| Protected Bike Lane or Neighborhood Greenway | 100 |
+| Buffered Bike Lane | 70 |
+| Bike Lane (paint only) | 40 |
+| Marked Shared Lane | 15 |
+| None within 0.5 miles | 0 |
+
+- Base score decays linearly to 0 at 0.5 miles.
+- When multiple categories are present within range, the higher-scoring category wins — a Protected Bike Lane at 0.4 mi can outscore a Marked Shared Lane at 0.05 mi.
+- **+15 pt network bonus** if qualifying segments (Buffered Bike Lane or better) exist in **both** a north-south-oriented direction and an east-west-oriented direction within 0.5 miles (capped at 100 total). Orientation is computed from each segment's bearing (PostGIS `ST_Azimuth`), bucketed as north-south (within ±45° of due north/south) or east-west (everything else).
+
+> **Why the quality tiers:** Painted lanes and sharrows provide markings but no physical protection from vehicle traffic — a materially different safety experience from a protected lane or a calmed greenway street. Treating all "bike infrastructure" as equivalent would hide exactly the distinction that matters to a car-free cyclist choosing where to live.
+
+> **Why the network bonus, not just a density count:** A single isolated protected-lane segment is less useful than a connected network — but more specifically, *direction* matters more than raw count. Two parallel lanes running the same axis don't help if your actual trips need to go the other way; genuinely useful access means being able to travel in more than one direction from home. Chicago's strict cardinal street grid makes a simple two-bucket (north-south / east-west) orientation check a reasonably accurate, low-complexity proxy for "can I actually get anywhere from here," without needing full compass-rose granularity.
 
 ---
 
