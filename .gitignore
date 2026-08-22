@@ -22,6 +22,7 @@ node_modules/
 .bun/
 packages/web/dist/
 packages/web/.turbo/
+*.tsbuildinfo
 
 # Database & Persistent Volumes
 pgdata/

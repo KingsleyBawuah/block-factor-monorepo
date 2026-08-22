@@ -23,6 +23,7 @@ func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "4001"
+		logger.Info("PORT environment variable not set, defaulting to port", slog.String("port", port))
 	}
 
 	serverImpl := api.NewServer(logger)

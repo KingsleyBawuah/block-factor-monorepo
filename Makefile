@@ -6,7 +6,7 @@ export PATH := $(HOME)/.bun/bin:$(HOME)/go/bin:$(PATH)
 dev:
 	docker compose up -d db otp
 	@echo "Starting Go API (Air) and Vite Frontend..."
-	# runs concurrently via air and bun run dev
+	# runs concurrently via air and bun run --bun dev
 
 # Run all unit and integration tests
 test:
@@ -16,7 +16,7 @@ test:
 # Run linters across Go and TypeScript
 lint:
 	golangci-lint run ./services/api/...
-	cd packages/web && bun run lint
+	cd packages/web && bun run --bun typecheck && bun run --bun lint
 
 # Run database migrations
 migrate-up:
@@ -29,8 +29,9 @@ seed:
 # Regenerate OpenAPI contracts and client SDKs
 generate:
 	oapi-codegen -config services/api/openapi.cfg.yaml docs/openapi.yaml
-	cd packages/web && bun run generate-api
+	cd packages/web && bun run --bun generate-api
 
 # Verify generated contracts are up-to-date (CI drift gate)
 generate-check: generate
+	git add -A -N .
 	git diff --exit-code

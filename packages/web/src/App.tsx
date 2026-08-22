@@ -1,3 +1,4 @@
+import { Outlet } from "@tanstack/react-router";
 import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
 
@@ -38,6 +39,7 @@ export default function App() {
                 </div>
               </CardContent>
             </Card>
+            <Outlet />
           </div>
 
           <div className="lg:col-span-8">
