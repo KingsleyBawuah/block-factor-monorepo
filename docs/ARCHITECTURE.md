@@ -450,6 +450,7 @@ On the home server, a lightweight systemd timer or monthly cron job invokes `mak
 | 18 | Compose Topology | **Single `docker-compose.yml` with Profiles (`profiles: ["transit"]`)** | Unifies networking; decouples OTP2 build/start lifecycle from dev app restarts. | ✅ Resolved |
 | 19 | Go Internal Package Layout | **Domain-Layered (`internal/scoring`, `internal/spatial`, `internal/clients`)** | Idiomatic Go; groups by responsibility and avoids package fragmentation or circular dependencies. | ✅ Resolved |
 | 20 | Data Ingestion Pipeline | **Standalone CLI (`cmd/seed/main.go` + `make seed`)** | Decoupled from API runtime; testable, flag-selectable, and easily scheduled via cron. | ✅ Resolved |
+| 21 | OpenAPI Exclusivity Modeling | **Flat optional fields + handler-level validation, not `oneOf`** | `oapi-codegen` generates a wrapper type requiring `AsX`/`FromX`/`MergeX` accessors for `oneOf` rather than a flat struct — worse ergonomics here, especially since branches sharing identical properties (differing only in which field is required) don't map cleanly to oapi-codegen's union-type generation anyway. | ✅ Resolved |
 
 ---
 
