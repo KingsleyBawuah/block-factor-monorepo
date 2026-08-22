@@ -6,7 +6,7 @@
 
 ## Overview
 
-BlockFactor is an analytical location-intelligence platform engineered to evaluate, score, and rank residential properties ($0\text{–}100$) for transit-reliant renters and urban commuters. It calculates objective composite scores across 8 environmental, logistical, and safety factors:
+BlockFactor is an analytical location-intelligence platform engineered to evaluate, score, and rank residential properties (0–100) for transit-reliant renters and urban commuters. It calculates objective composite scores across 8 environmental, logistical, and safety factors:
 
 1. **Transit Proximity & Reliability:** CTA 'L' rapid transit and high-frequency bus corridors.
 2. **Supermarket & Grocery Access:** Walking distance to full-scale supermarkets and daily essentials.
@@ -35,33 +35,20 @@ BlockFactor is an analytical location-intelligence platform engineered to evalua
 
 ## Tech Stack
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                      Frontend Client                        │
-│             React 19 + Vite + TanStack (Query / Router)     │
-│             Tailwind CSS v4 + Radix UI (shadcn) + Lineicons │
-│             MapLibre GL JS (WebGL / Vector Tiles)           │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ HTTPS / JSON REST API (OpenAPI 3.0)
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Go Backend API                         │
-│   - Standard Library net/http (Go 1.22+ routing)            │
-│   - Concurrent errgroup Fan-Out & Rate Semaphores           │
-│   - Structured Logging (log/slog) & Prometheus Metrics      │
-│   - Normalization & Weighted Factor Scoring Engine          │
-└──────────┬────────────────────────┬─────────────────────────┘
-           │                        │
-           ▼                        ▼
-┌──────────────────────────┐   ┌──────────────────────────────┐
-│  PostgreSQL 18 + PostGIS │   │  OpenTripPlanner 2 (OTP2)    │
-│  - CTA Stops & Routes    │   │  - CTA GTFS Schedule         │
-│  - Bike Lanes & Trails   │   │  - Cook County OSM Graph     │
-│  - CPD Crimes (12 mo)    │   │  - Pedestrian Isochrones     │
-│  - Parks & Flood Layers  │   │  - Multi-Modal Commute Times │
-│  - Spatial Grid Cache    │   └──────────────────────────────┘
-│  - Two-Tier Cache Tables │
-└──────────────────────────┘
+```mermaid
+graph TD
+    Client["Frontend Client<br/>• React 19 + Vite<br/>• TanStack Router & Query<br/>• Tailwind v4 + Lineicons<br/>• MapLibre GL JS (WebGL)"]
+    Proxy["Caddy Reverse Proxy<br/>Tailscale MagicDNS TLS"]
+    API["Go Backend API (:4001)<br/>• Standard Library net/http<br/>• errgroup Concurrent Fan-Out<br/>• log/slog + Prometheus /metrics<br/>• In-Memory Divvy Cache (5m TTL)"]
+    DB[("PostgreSQL 18 + PostGIS (:5433)<br/>• CTA Stops & Bike Routes<br/>• CPD Crimes (12mo)<br/>• Parks & FEMA Flood Data<br/>• 400m Spatial Grid Cache<br/>• Query & Route Cache Tables")]
+    OTP["OpenTripPlanner 2 (:4003)<br/>• CTA Static GTFS<br/>• Cook County OSM Graph<br/>• Multi-Modal Commute Times<br/>• Pedestrian Isochrones"]
+    Ext["External APIs<br/>• Google Places API<br/>• Nominatim Geocoding<br/>• FCC Broadband Fabric<br/>• Divvy GBFS Feed"]
+
+    Client -->|HTTPS / REST API| Proxy
+    Proxy --> API
+    API -->|Spatial SQL & Cache| DB
+    API -->|HTTP Routing API| OTP
+    API -->|Rate-Limited Semaphores| Ext
 ```
 
 ---

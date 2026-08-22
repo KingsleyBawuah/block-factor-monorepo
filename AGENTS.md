@@ -65,3 +65,16 @@ The application must look and feel like an analytical, high-density location int
   - Maintain strict layout geometry: tight border-radii (`rounded-sm` or `rounded-md`), consistent padding scales (`p-4`, `p-6`), and zero bubbly floating elements.
 - **Authentic Spatial Imagery:**
   - Never use generic abstract placeholder divs; utilize real MapLibre GL vector tiles, authentic CTA rail badges, and real spatial overlays.
+
+---
+
+## 5. Documentation, Markdown & Diagramming Standards
+
+- **GitHub-Flavored Markdown (GFM) & Math Mode Syntax:**
+  - All markdown files must parse cleanly on GitHub without rendering artifacts or KaTeX errors.
+  - In math mode (`$...$`), never leave unescaped underscores inside `\text{}` (e.g. use `$S_{\text{third\_place}}$` or simply backtick `S_third_place`).
+  - Avoid wrapping simple numbers, ranges, or unit strings in math delimiters (use plain `0–100`, `< 5 ms`, `≥ 85` instead of `$0\text{–}100$`, `$<5\text{ ms}$`, `$\ge 85$`). Use standard Unicode arrows `→` and comparison operators `≥`, `≤`.
+- **Mermaid Diagrams Only (No ASCII Art):**
+  - Always render system topologies, request lifecycles, architecture components, and data flow pipelines using **Mermaid diagrams** (`mermaid` code blocks).
+  - Quote node labels that contain special characters (parentheses, slashes, brackets) to prevent Mermaid syntax parsing errors.
+  - Keep diagrams clean, readable, and structured with logical subgraphs where appropriate.
