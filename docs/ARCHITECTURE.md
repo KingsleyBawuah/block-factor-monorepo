@@ -333,17 +333,17 @@ To ensure **100% parity between local development and GitHub Actions CI pipeline
 dev:
 	docker compose up -d db otp
 	@echo "Starting Go API (Air) and Vite Frontend..."
-	# runs concurrently via air and pnpm dev
+	# runs concurrently via air and bun run dev
 
 # Run all unit and integration tests
 test:
 	go test -v ./services/api/...
-	cd packages/web && pnpm test
+	cd packages/web && bun run test
 
 # Run linters across Go and TypeScript
 lint:
 	golangci-lint run ./services/api/...
-	cd packages/web && pnpm lint
+	cd packages/web && bun run lint
 
 # Run database migrations
 migrate-up:
@@ -356,7 +356,7 @@ seed:
 # Regenerate OpenAPI contracts and client SDKs
 generate:
 	oapi-codegen -config services/api/openapi.cfg.yaml docs/openapi.yaml
-	cd packages/web && pnpm generate-api
+	cd packages/web && bun run generate-api
 
 # Verify generated contracts are up-to-date (CI drift gate)
 generate-check: generate
@@ -451,6 +451,7 @@ On the home server, a lightweight systemd timer or monthly cron job invokes `mak
 | 19 | Go Internal Package Layout | **Domain-Layered (`internal/scoring`, `internal/spatial`, `internal/clients`)** | Idiomatic Go; groups by responsibility and avoids package fragmentation or circular dependencies. | ✅ Resolved |
 | 20 | Data Ingestion Pipeline | **Standalone CLI (`cmd/seed/main.go` + `make seed`)** | Decoupled from API runtime; testable, flag-selectable, and easily scheduled via cron. | ✅ Resolved |
 | 21 | OpenAPI Exclusivity Modeling | **Flat optional fields + handler-level validation, not `oneOf`** | `oapi-codegen` generates a wrapper type requiring `AsX`/`FromX`/`MergeX` accessors for `oneOf` rather than a flat struct — worse ergonomics here, especially since branches sharing identical properties (differing only in which field is required) don't map cleanly to oapi-codegen's union-type generation anyway. | ✅ Resolved |
+| 22 | JS Runtime & Package Manager | **Bun** (replaces Node.js + pnpm) | Significantly faster installs and a built-in bundler/test runner/TS execution reduce tooling overhead; workspace/monorepo support (`workspace:*` protocol, catalogs) is mature. Corepack does not manage Bun versions, so pinning uses `engines.bun` (local dev) + an explicit `bun-version` in the `oven-sh/setup-bun` CI step instead. | ✅ Resolved |
 
 ---
 
@@ -467,7 +468,7 @@ Final decisions locked before Phase 1 implementation begins. These supplement th
 * **OTP2 API:** GTFS GraphQL API only; legacy REST plan API is gone in OTP 2.x. Fixtures are GraphQL-shaped from Phase 3. (6.1)
 * **Score response contract:** Factor sub-scores are objects (`score`, `degraded` flag, distances / contributing POIs) plus benchmark commute pills; **isochrones are excluded** from the score response and fetched independently via `GET /api/v1/isochrones` — faster first paint, independently cacheable.
 * **Units:** Meters internally everywhere; imperial only at the presentation layer; every scoring threshold is a named constant in `internal/scoring`. (PRD 5.1)
-* **Toolchain pinning:** Go via the `go.mod` `toolchain` directive; Node via `.nvmrc`; pnpm via the `package.json` `packageManager` field (Corepack); Docker images pinned to exact tags (PostgreSQL 18 / PostGIS 3.6 line, latest stable OTP 2.x); `golangci-lint` version pinned in CI. Exact versions are recorded in the pin files during Phase 1 scaffolding.
+* **Toolchain pinning:** Go via the `go.mod` `toolchain` directive; JS runtime + package manager is **Bun** (replaces Node.js + pnpm) — pinned via `engines.bun` in `package.json` for local dev and an explicit `bun-version` in the `oven-sh/setup-bun` GitHub Actions step for CI, since Corepack does not manage Bun versions; Docker images pinned to exact tags (PostgreSQL 18 / PostGIS 3.6 line, latest stable OTP 2.x); `golangci-lint` version pinned in CI. Exact versions are recorded in the pin files during Phase 1 scaffolding.
 * **Dev ergonomics:** Vite dev proxy for `/api` (no CORS in development); `make generate-check` is the CI contract-drift gate. (7.1, 9.1)
 * **Derived-table recompute:** Staging table + transactional rename swap. (11.3)
 * **Benchmark hubs:** Clark/Lake, Fulton Market, O'Hare, and Midway coordinates are canonical constants in `internal/scoring`. (PRD 5.10)
