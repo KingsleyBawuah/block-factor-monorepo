@@ -65,8 +65,8 @@ Create database tables with spatial indexes and build the standalone CLI tool to
 
 ### Validation Criteria
 - `make migrate-up` creates all tables and spatial indexes cleanly.
-- `make seed` successfully populates PostGIS with real Chicago open data in $<60\text{ seconds}$.
-- Spatial radius queries (`ST_DWithin`) execute in $<5\text{ ms}$.
+- `make seed` successfully populates PostGIS with real Chicago open data in < 60 seconds.
+- Spatial radius queries (`ST_DWithin`) execute in < 5 ms.
 
 ---
 
@@ -77,14 +77,14 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
 
 ### Deliverables
 1. **Factor Calculators (`services/api/internal/scoring/`):**
-   - `factor_transit.go` ($S_{\text{transit}}$: 'L' station distance decay + bus bonus).
-   - `factor_grocery.go` ($S_{\text{grocery}}$: Supermarket distance + pharmacy boost).
-   - `factor_third_places.go` ($S_{\text{third\_place}}$: Cached POI density).
-   - `factor_green.go` ($S_{\text{green}}$: Park proximity + Lakefront/606 trail bonus).
-   - `factor_noise.go` ($S_{\text{noise}}$: Elevated CTA track & arterial road proximity penalties).
-   - `factor_flood.go` ($S_{\text{flood}}$: FEMA zones + 311 sewer backup penalty).
-   - `factor_safety.go` ($S_{\text{safety}}$: 12-month violent/property penalty normalized to city percentiles).
-   - `factor_solar.go` ($S_{\text{solar}}$: SunCalc azimuth + window orientation + floor level).
+   - `factor_transit.go` (`S_transit`: 'L' station distance decay + bus bonus).
+   - `factor_grocery.go` (`S_grocery`: Supermarket distance + pharmacy boost).
+   - `factor_third_places.go` (`S_third_place`: Cached POI density).
+   - `factor_green.go` (`S_green`: Park proximity + Lakefront/606 trail bonus).
+   - `factor_noise.go` (`S_noise`: Elevated CTA track & arterial road proximity penalties).
+   - `factor_flood.go` (`S_flood`: FEMA zones + 311 sewer backup penalty).
+   - `factor_safety.go` (`S_safety`: 12-month violent/property penalty normalized to city percentiles).
+   - `factor_solar.go` (`S_solar`: SunCalc azimuth + window orientation + floor level).
 2. **Concurrency Orchestrator (`engine.go`):**
    - `errgroup` fan-out with a hard 8-second parent context deadline.
    - Dynamic weight normalization ($\sum w_i = 100\%$).
@@ -96,7 +96,7 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
 
 ### Validation Criteria
 - 100% unit test coverage on scoring mathematical formulas and edge cases (boundary distances, zero weights).
-- Live API response latency $<150\text{ ms}$ for warm cache hits.
+- Live API response latency < 150 ms for warm cache hits.
 
 ---
 
@@ -128,7 +128,7 @@ Assemble the high-density Split-Screen Analytics Workspace, reactive weight cust
 
 ### Deliverables
 1. **Left Scored Analytics Panel:**
-   - Hero Composite Score Ring ($0\text{–}100$) with archetype badge.
+   - Hero Composite Score Ring (0–100) with archetype badge.
    - Collapsible Weight Customization Slider Drawer with instant reactive recalculation and URL search param sync.
    - 8 Dense Factor Breakdown Cards with distance badges and sub-score progress bars.
 2. **Contextual Affiliate Cards:**
@@ -162,7 +162,7 @@ Deploy OpenTripPlanner 2 in Docker, compile the Cook County transit graph, and s
    - Semi-transparent reachable area polygons rendered directly on MapLibre.
 
 ### Validation Criteria
-- OTP2 boots in $<15\text{ seconds}$ from pre-compiled `graph.obj`.
+- OTP2 boots in < 15 seconds from pre-compiled `graph.obj`.
 - Isochrone polygons render accurately over the Chicago street grid.
 
 ---

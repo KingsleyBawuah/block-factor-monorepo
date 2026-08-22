@@ -20,9 +20,10 @@ BlockFactor is initially self-hosted on a personal home server for active develo
 - **Co-located Services:** Plex, Arr stack (Sonarr, Radarr, Bazarr), Usenet clients, Home Assistant, n8n, monitoring stack (Prometheus, Grafana, Loki)
 
 **Dedicated Storage for BlockFactor:**
-- A dedicated **~1TB M.2 2230 NVMe SSD** (via USB-C M.2 adapter) will be provisioned as a dedicated mount for BlockFactor's persistent data volumes: PostGIS data, OTP2 graph files, and OSM extracts.
+- A dedicated **M.2 NVMe SSD in a Sabrent USB-C enclosure** is provisioned as a dedicated mount for BlockFactor's persistent data volumes: PostGIS data, OTP2 graph files, and OSM extracts.
 - Rationale: `/media/disk1` (main array, 704GB free) and `/media/disk2` (17TB array, critically full at 100%) are co-located with media. A dedicated SSD avoids I/O contention and keeps BlockFactor's data isolated and easy to manage.
-- ⚠️ This SSD is pending setup. Until it is mounted, use the root volume (`/`, 128GB free) for initial development data.
+- **Status (provisioned 2026-08-22):** Partitioned as GPT with a single partition, formatted `ext4` (label `external-ssd-enc` — truncated from `external-ssd-enclosure` due to ext4's 16-character label limit), and mounted at `/mnt/external-ssd-enclosure` (476.9 GB, owned by the `kingsley-swizzin` user). Persisted across reboots via a UUID-based `/etc/fstab` entry (`defaults,noatime`).
+- ⚠️ Actual capacity is **512 GB-class (476.9 GB usable)**, smaller than the ~1TB originally estimated — worth keeping in mind for OSM extract + PostGIS + OTP2 graph capacity planning.
 
 **Key Constraints:**
 - OTP2 JVM heap capped at ~5 GB to avoid starving co-located services.
@@ -90,44 +91,25 @@ Following the existing manual compose pattern (e.g., `strava-stats`, `readmeaboo
 /home/kingsley-swizzin/blockfactor/
 ├── docker-compose.yml
 ├── .env
-└── data/               # symlink or bind mount → dedicated NVMe SSD mount point
+└── data/               # symlink or bind mount → /mnt/external-ssd-enclosure
 ```
 
 ---
 
 ## 3. High-Level System Topology
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Frontend Client                        │
-│             React + TanStack (Query / Router)               │
-│             MapLibre GL JS (WebGL / Vector Tiles)           │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ HTTPS / JSON REST API
-                           ▼
-                    [ Caddy Reverse Proxy ]
-                    [ Tailscale MagicDNS TLS ]
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Go Backend API  :4001                  │
-│   - Address Geocoding Handler & Pipeline Orchestrator       │
-│   - Concurrent errgroup Fan-Out & Rate Semaphores           │
-│   - In-Process Memory Cache (Divvy 5m TTL)                  │
-│   - Normalization & Weighted Factor Scoring Engine          │
-└──────────┬────────────────────────┬─────────────────────────┘
-           │                        │
-           ▼                        ▼
-┌──────────────────────────┐   ┌──────────────────────────────┐
-│  PostgreSQL 18 + PostGIS │   │  OpenTripPlanner 2 (OTP2)    │
-│  Port: 5433              │   │  Port: 4003 (JVM max 5GB)    │
-│  - CTA Stops & Routes    │   │  - CTA GTFS Schedule         │
-│  - Bike Lanes & Trails   │   │  - Cook County OSM Graph     │
-│  - CPD Crimes (12 mo)    │   │  - Pedestrian Isochrones     │
-│  - Parks & Flood Layers  │   │  - Multi-Modal Commute Times │
-│  - Spatial Grid Cache    │   └──────────────────────────────┘
-│  - Query/Transit Cache   │
-└──────────────────────────┘
+```mermaid
+graph TD
+    Client["Frontend Client<br/>• React 19 + Vite<br/>• TanStack Router & Query<br/>• Tailwind v4 + Lineicons<br/>• MapLibre GL JS (WebGL)"]
+    Proxy["Caddy Reverse Proxy<br/>Tailscale MagicDNS TLS"]
+    API["Go Backend API (:4001)<br/>• Standard Library net/http<br/>• errgroup Concurrent Fan-Out<br/>• log/slog + Prometheus /metrics<br/>• In-Memory Divvy Cache (5m TTL)"]
+    DB[("PostgreSQL 18 + PostGIS (:5433)<br/>• CTA Stops & Bike Routes<br/>• CPD Crimes (12mo)<br/>• Parks & FEMA Flood Data<br/>• 400m Spatial Grid Cache<br/>• Query & Route Cache Tables")]
+    OTP["OpenTripPlanner 2 (:4003)<br/>• CTA Static GTFS<br/>• Cook County OSM Graph<br/>• Multi-Modal Commute Times<br/>• Pedestrian Isochrones"]
+
+    Client -->|HTTPS / JSON REST API| Proxy
+    Proxy --> API
+    API -->|Spatial SQL & Persistent Cache| DB
+    API -->|HTTP Routing & Isochrones| OTP
 ```
 
 ---
@@ -146,31 +128,38 @@ Following the existing manual compose pattern (e.g., `strava-stats`, `readmeaboo
 ### 4.2 Concurrency & Pipeline Lifecycle (`errgroup`)
 Rather than a generic worker pool, address evaluation uses structured concurrency with Go's `golang.org/x/sync/errgroup`:
 
-```
-┌───────────────── http.Request (Address + Unit Meta + Weights) ─────────────────┐
-│                                                                                │
-│ 1. Geocode Address (Nominatim) ──► Lat / Lng Coordinate Point                  │
-│                                                                                │
-│ 2. Concurrent Fan-Out via errgroup (Parent Context: 8s Deadline)               │
-│    ├── go scoreTransit(ctx, pt)        [PostGIS + GTFS]                        │
-│    ├── go scoreGrocery(ctx, pt)        [PostGIS / OSM]                         │
-│    ├── go scoreThirdPlaces(ctx, pt)    [PostGIS Grid Cache / Places API]       │
-│    ├── go scoreGreenSpace(ctx, pt)     [PostGIS / Parks + Trails]              │
-│    ├── go scoreNoise(ctx, pt)          [PostGIS / Track & Arterial Buffers]    │
-│    ├── go scoreFloodRisk(ctx, pt)      [PostGIS / FEMA + 311 Sewer History]    │
-│    ├── go scorePublicSafety(ctx, pt)   [PostGIS / CPD 12mo Density]            │
-│    ├── go fetchBroadbandSpecs(ctx, pt) [PostGIS Address Cache]                 │
-│    ├── go scoreSolarExposure(meta)     [Pure Math / In-Memory]                 │
-│    └── go fetchCommuteIsochrones(ctx)  [Local OTP2 HTTP API]                   │
-│                                                                                │
-│ 3. Rate-Limiting Semaphores                                                    │
-│    External metered calls (e.g. Google Places API on cache miss) use           │
-│    buffered channel semaphores to strictly enforce rate limits.                │
-│                                                                                │
-│ 4. Graceful Degradation & Normalization                                        │
-│    If a non-critical factor times out (e.g. OTP2 takes >8s), it returns null   │
-│    and is excluded from the denominator. The report renders remaining factors. │
-└────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Frontend Client
+    participant API as Go HTTP Handler
+    participant Geo as Geocoding Service (Nominatim)
+    participant DB as PostgreSQL + PostGIS
+    participant OTP as OpenTripPlanner 2
+    participant Ext as External APIs (Places / FCC)
+
+    Client->>API: POST /api/v1/score (Address + Unit Meta + Weights)
+    API->>Geo: Resolve Address to Lat/Lng Point
+    Geo-->>API: Coordinates (lat, lng)
+
+    rect rgb(240, 245, 255)
+        note over API,Ext: Concurrent Fan-Out (Parent Context: 8s Deadline)
+        par Spatial Factors
+            API->>DB: scoreTransit, scoreGrocery, scoreGreen, scoreNoise, scoreFlood, scoreSafety
+            DB-->>API: Spatial sub-scores & POI distances
+        and Multimodal Commute
+            API->>OTP: fetchCommuteIsochrones (Loop, O'Hare, Midway, Fulton)
+            OTP-->>API: Isochrone GeoJSON & commute durations
+        and External POIs / Broadband
+            API->>Ext: scoreThirdPlaces (Places API) & fetchBroadbandSpecs (FCC)
+            Ext-->>API: Places & ISP speed profiles
+        and In-Memory Math
+            API->>API: scoreSolarExposure (SunCalc + Window Orientation)
+        end
+    end
+
+    API->>API: Normalize Weights & Calculate Composite BlockFactor (0–100)
+    API-->>Client: 200 OK (Full Livability Report JSON)
 ```
 
 ### 4.3 Geocoding Strategy
@@ -213,7 +202,7 @@ services/api/
 ### 5.1 Database Engine & Image
 * **Engine:** **PostgreSQL 18 + PostGIS** extension.
 * **Docker Context:** Runs as a dedicated container (`blockfactor-db`) isolated from any existing host database.
-* **Volume Mount:** Persisted to the dedicated NVMe SSD mount point (`/media/.../blockfactor/pgdata`).
+* **Volume Mount:** Persisted to the dedicated NVMe SSD mount point (`/mnt/external-ssd-enclosure/blockfactor/pgdata`).
 
 ### 5.2 Spatial Coordinate Standard & Types
 * **Standard Representation:** `geography(Point, 4326)` (WGS84 GPS latitude and longitude).
@@ -221,7 +210,7 @@ services/api/
 
 ### 5.3 Spatial Indexing Strategy
 * **Index Type:** `GIST` indexes on all location geometry columns (`cta_stops`, `cpd_crimes`, `parks`, `bike_routes`).
-* **Performance:** Executes radial queries across 300k+ spatial records in $<5\text{ ms}$.
+* **Performance:** Executes radial queries across 300k+ spatial records in < 5 ms.
 
 ### 5.4 Two-Tier Caching Architecture (100% Self-Contained)
 To avoid dependencies on external host Redis instances, caching is partitioned across two self-contained tiers:
@@ -250,7 +239,7 @@ To avoid dependencies on external host Redis instances, caching is partitioned a
 
 ### 6.2 Resource Controls & Persistence
 * **JVM Heap Limit:** Strictly capped at `-Xmx5G` to prevent memory contention with co-located media and automation stacks.
-* **Graph Persistence:** The graph is pre-compiled once (`otp --build data/`) and saved as `graph.obj` on the dedicated NVMe SSD. On restarts, OTP2 boots in $<15\text{ seconds}$ by loading the pre-compiled graph directly into RAM.
+* **Graph Persistence:** The graph is pre-compiled once (`otp --build data/`) and saved as `graph.obj` on the dedicated NVMe SSD (`/mnt/external-ssd-enclosure/blockfactor/otp-data/graph.obj`). On restarts, OTP2 boots in < 15 seconds by loading the pre-compiled graph directly into RAM.
 
 ---
 
@@ -260,7 +249,7 @@ To avoid dependencies on external host Redis instances, caching is partitioned a
 * **Build Tool & Framework:** **React 19 + Vite** (Single Page Application).
 * **Routing:** **TanStack Router**
   * Strict type-safe route definitions.
-  * **Search Param Serialization:** Address, unit orientation (e.g. facing, floor), and custom factor weights ($0\text{–}100\%$) are continuously synchronized to the URL query string (`/report?address=...&w_transit=35&w_grocery=25&facing=S`).
+  * **Search Param Serialization:** Address, unit orientation (e.g. facing, floor), and custom factor weights (0–100%) are continuously synchronized to the URL query string (`/report?address=...&w_transit=35&w_grocery=25&facing=S`).
   * Enables zero-friction link sharing and browser bookmarking that preserves exact report state.
 * **Server State & Caching:** **TanStack Query**
   * Automatic request deduplication, background prefetching, and client-side caching.
@@ -273,14 +262,14 @@ To enforce an analytical, high-density tool aesthetic and avoid generic AI "vibe
   * **Geometry:** Sharp, disciplined border radii (`rounded-sm` / `rounded-md`—no bubbly pill shapes).
   * **Palette:** Neutral Slate/Zinc base (`#09090b` / `#fafafa`) with zero purple/violet radial gradients.
   * **Transit Branding:** Authentic CTA Line colors for station badges (Red `#c60c30`, Blue `#00a1de`, Brown `#62361b`, Green `#009b3a`, Pink `#e27ea6`, Orange `#f9461c`, Purple `#522398`, Yellow `#f9e300`).
-  * **Score Indicators:** Emerald ($\ge 85$), Lime ($70\text{–}84$), Amber ($50\text{–}69$), Rose ($< 50$).
+  * **Score Indicators:** Emerald (≥ 85), Lime (70–84), Amber (50–69), Rose (< 50).
 * **Iconography:** **Lineicons** (14–16px, 1.5px stroke). Strictly no Lucide over-use and zero emoji slop in headers/cards.
 * **Typography:** **Inter / Geist** for body text; **Geist Mono** for all coordinates, distances (`0.28 mi`), commute times (`14 min`), and numeric scores.
 
 ### 7.3 Screen Layout & Workspace Architecture
 The primary interface is a **Split-Screen Location Intelligence Workspace**:
 * **Left Panel (Scored Analytics & Controls — Scrollable):**
-  * **Composite Score Hero Card:** Radial score ring ($0\text{–}100$) + neighborhood archetype descriptor.
+  * **Composite Score Hero Card:** Radial score ring (0–100) + neighborhood archetype descriptor.
   * **Weight Customization Drawer:** Reactive slider tray with dynamic normalization and preset chips (Car-Free, Cyclist, Remote Worker).
   * **Factor Breakdown Accordions:** 8 dense metric cards with distance pills and sub-scores.
   * **Native Affiliate Drawer:** Contextually triggered cards (ISP broadband speed check, Lemonade quote, Dolly movers).
@@ -360,12 +349,12 @@ generate:
 
 Because the home server already operates a production-grade monitoring stack (**Prometheus, Grafana, Loki, Promtail**), BlockFactor hooks directly into this infrastructure:
 
-### 10.1 Structured Logging (`log/slog` $\rightarrow$ Promtail $\rightarrow$ Loki)
+### 10.1 Structured Logging (`log/slog` → Promtail → Loki)
 * Standard library **`log/slog`** with JSON formatting (`slog.NewJSONHandler(os.Stdout, ...)`).
 * Structured fields: `trace_id`, `address`, `duration_ms`, `factor`, `cache_hit`, `status`.
 * Promtail scrapes container stdout logs directly into Loki for fast querying and debugging in Grafana dashboards.
 
-### 10.2 Metrics Collection (`/metrics` $\rightarrow$ Prometheus)
+### 10.2 Metrics Collection (`/metrics` → Prometheus)
 * Exposes a standard **`/metrics`** endpoint in the Go backend using `prometheus/client_golang`.
 * **Key Custom Metrics:**
   * `blockfactor_score_request_duration_seconds` (Histogram by address hash / status)
@@ -394,11 +383,11 @@ go run ./services/api/cmd/seed/main.go --dataset=parks,bike_routes
 
 | Dataset | Provider / Source | Ingestion Mechanism | Production Sync Cadence |
 |---|---|---|---|
-| **CTA 'L' Stops & Lines** | Chicago Data Portal (SODA API) | GeoJSON stream $\rightarrow$ `cta_stops` table | Monthly |
-| **CTA GTFS Schedules** | Chicago Transit Authority | Archive download $\rightarrow$ OTP2 graph compile | Quarterly |
-| **Protected Bike Routes** | Chicago Data Portal (SODA API) | Linestring GeoJSON $\rightarrow$ `bike_routes` table | Quarterly |
-| **Public Parks & Facilities** | Chicago Data Portal + OSM | Polygon GeoJSON $\rightarrow$ `parks` table | Quarterly |
-| **CPD Crimes (Trailing 12mo)** | Chicago Data Portal (SODA API) | Filtered SODA query (`$where=date > ...`) $\rightarrow$ `cpd_crimes` | Monthly |
+| **CTA 'L' Stops & Lines** | Chicago Data Portal (SODA API) | GeoJSON stream → `cta_stops` table | Monthly |
+| **CTA GTFS Schedules** | Chicago Transit Authority | Archive download → OTP2 graph compile | Quarterly |
+| **Protected Bike Routes** | Chicago Data Portal (SODA API) | Linestring GeoJSON → `bike_routes` table | Quarterly |
+| **Public Parks & Facilities** | Chicago Data Portal + OSM | Polygon GeoJSON → `parks` table | Quarterly |
+| **CPD Crimes (Trailing 12mo)** | Chicago Data Portal (SODA API) | Filtered SODA query (`$where=date > ...`) → `cpd_crimes` | Monthly |
 | **FEMA Flood Zones & 311s** | FEMA NFHL + City 311 SODA | Polygon shapefiles + 311 sewer incidents | Semi-annual |
 
 ### 11.3 Production Automation (Phase 1)
@@ -413,7 +402,7 @@ On the home server, a lightweight systemd timer or monthly cron job invokes `mak
 | 1 | Backend Language | **Go** | Concurrency primitives, low memory footprint, single binary deployment. | ✅ Resolved |
 | 2 | Type Contracts | **OpenAPI Spec + Codegen** | Cross-stack type safety without gRPC gateway overhead. | ✅ Resolved |
 | 3 | Concurrency Model | **`errgroup` Fan-Out + Semaphores** | Structured concurrency with 8s deadline & graceful factor degradation. | ✅ Resolved |
-| 4 | Geocoding Engine | **Public Nominatim (Dev) $\rightarrow$ Self-Hosted Nominatim + Photon (Prod)** | ToS compliance, high accuracy, and fast typeahead. | ✅ Resolved |
+| 4 | Geocoding Engine | **Public Nominatim (Dev) → Self-Hosted Nominatim + Photon (Prod)** | ToS compliance, high accuracy, and fast typeahead. | ✅ Resolved |
 | 5 | Database Engine | **PostgreSQL 18 + PostGIS** | Standard spatial engine, native GIS math, and GIST indexing. | ✅ Resolved |
 | 6 | Spatial Coordinate Standard | **WGS84 (SRID 4326) / `geography`** | Direct GPS compatibility; native meter-based radial queries without reprojection bugs. | ✅ Resolved |
 | 7 | Caching Architecture | **Self-Contained (PostgreSQL UNLOGGED + Go Memory Cache)** | Zero dependency on host Redis; $0 cost, no port conflicts. | ✅ Resolved |
@@ -422,7 +411,7 @@ On the home server, a lightweight systemd timer or monthly cron job invokes `mak
 | 10 | Map Engine | **MapLibre GL JS** | Open-source WebGL vector map rendering with $0 tile costs. | ✅ Resolved |
 | 11 | URL State & Link Sharing | **TanStack Router Search Params (Phase 1) + Go OG Previews (Phase 2)** | Deep-linkable custom weight presets now, social cards on public launch. | ✅ Resolved |
 | 12 | Reverse Proxy | **Caddy (`/etc/caddy/Caddyfile`)** | Tailscale MagicDNS TLS auto-managed; path-based routing. | ✅ Resolved |
-| 13 | Server Network Ingress | **Tailscale (Dev) $\rightarrow$ Cloudflare Tunnel (Prod)** | Zero-config private access now, secure public edge later. | ✅ Resolved |
+| 13 | Server Network Ingress | **Tailscale (Dev) → Cloudflare Tunnel (Prod)** | Zero-config private access now, secure public edge later. | ✅ Resolved |
 | 14 | DB Migration Tooling | **`goose` (Plain SQL migrations)** | Single SQL format with Up/Down, embeddable in Go binary or CLI. | ✅ Resolved |
 | 15 | Monorepo Orchestration | **Root `Makefile`** | Zero installation prerequisites; strict 1:1 parity between local dev and CI. | ✅ Resolved |
 | 16 | HTTP Router | **Standard Library `net/http` (Go 1.22+)** | Zero third-party router dependencies; clean method-based routing patterns. | ✅ Resolved |
