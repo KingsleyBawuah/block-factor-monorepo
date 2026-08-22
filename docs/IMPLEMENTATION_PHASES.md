@@ -29,7 +29,7 @@ Establish the monorepo foundation, Docker development environment, shared OpenAP
    - Prometheus `/metrics` endpoint.
    - Domain-layered package structure (`internal/api`, `internal/scoring`, `internal/spatial`, `internal/clients`, `internal/cache`).
 3. **OpenAPI 3.0 Contract (`docs/openapi.yaml`):**
-   - Strict REST request/response schemas for `/api/v1/score`, `/api/v1/geocode`, and `/api/v1/health`.
+   - Strict REST request/response schemas for `POST /api/v1/score` (accepts a raw address or pre-resolved coordinates), `GET /api/v1/geocode`, `GET /api/v1/isochrones`, and `GET /api/v1/health`.
    - Code generation scripts: Go server types via `oapi-codegen`, TypeScript client types via `openapi-typescript`.
 4. **React 19 + Vite Frontend Skeleton (`packages/web/`):**
    - Tailwind CSS v4 configured with sharp, disciplined design tokens (Slate/Zinc, CTA rail colors, zero violet glow).
@@ -52,20 +52,26 @@ Create database tables with spatial indexes and build the standalone CLI tool to
 ### Deliverables
 1. **`goose` Database Migrations (`db/migrations/`):**
    - Spatial tables with `GIST` indexes on `geography(Point, 4326)`:
-     - `cta_stops` ('L' stations and bus corridors).
+     - `cta_stops` ('L' stations).
+     - `bus_corridors` (High-frequency bus segments derived from GTFS `stop_times` AM-peak headway analysis, powering the `S_transit` bus bonus).
      - `bike_routes` (Protected lanes and off-street trails).
      - `parks` (City parks, forest preserves, community gardens).
+     - `osm_pois` (Supermarkets, convenience stores, and pharmacies from the Illinois OSM extract, powering `S_grocery`).
      - `cpd_crimes` (Trailing 12-month crime records).
+     - `safety_grid_percentiles` (~500m citywide penalty distribution powering `S_safety` normalization).
+     - `fema_flood_zones` (NFHL hazard polygons) and `sewer_311_incidents` (24-month water/sewer backup points), powering `S_flood`.
+     - `noise_sources` (Grade-tagged CTA track segments + expressway/arterial linestrings, powering `S_noise`).
      - `spatial_grid_cache` (400m bounding cells for Google Places POIs).
      - `unlogged_cache_entries` (Postgres cache table with indexed `expires_at`).
 2. **Data Ingestion CLI Tool (`services/api/cmd/seed/main.go`):**
-   - SODA API client connecting to the Chicago Data Portal.
-   - Automated parser for CTA 'L' stops, bike routes, parks, and crime incident streams.
-   - Selective CLI flags: `--dataset=cta`, `--dataset=crimes`, `--limit=1000`, `--all`.
+   - SODA API client connecting to the Chicago Data Portal (authenticated via `CHICAGO_APP_TOKEN`).
+   - Automated parsers for CTA 'L' stops, bike routes, parks, crime incidents, FEMA/311 flood data, OSM POIs, and noise geometry.
+   - Post-ingest derivation steps: GTFS `stop_times` headway analysis → `bus_corridors`; crime-grid distribution → `safety_grid_percentiles`.
+   - Selective CLI flags: `--dataset=cta`, `--dataset=crimes`, `--dataset=osm_pois`, `--dataset=flood`, `--dataset=noise`, `--dataset=derive`, `--limit=1000`, `--all`.
 
 ### Validation Criteria
 - `make migrate-up` creates all tables and spatial indexes cleanly.
-- `make seed` successfully populates PostGIS with real Chicago open data in < 60 seconds.
+- `make seed` successfully populates PostGIS with real Chicago open data (SODA datasets in < 60 seconds; the one-time OSM PBF import and derivation steps are exempt from this budget).
 - Spatial radius queries (`ST_DWithin`) execute in < 5 ms.
 
 ---
@@ -78,25 +84,30 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
 ### Deliverables
 1. **Factor Calculators (`services/api/internal/scoring/`):**
    - `factor_transit.go` (`S_transit`: 'L' station distance decay + bus bonus).
+   - `factor_commute.go` (`S_commute`: Rush-hour OTP2 point-to-point transit duration + transfer friction).
    - `factor_grocery.go` (`S_grocery`: Supermarket distance + pharmacy boost).
    - `factor_third_places.go` (`S_third_place`: Cached POI density).
    - `factor_green.go` (`S_green`: Park proximity + Lakefront/606 trail bonus).
    - `factor_noise.go` (`S_noise`: Elevated CTA track & arterial road proximity penalties).
    - `factor_flood.go` (`S_flood`: FEMA zones + 311 sewer backup penalty).
    - `factor_safety.go` (`S_safety`: 12-month violent/property penalty normalized to city percentiles).
-   - `factor_solar.go` (`S_solar`: SunCalc azimuth + window orientation + floor level).
-2. **Concurrency Orchestrator (`engine.go`):**
+   - `factor_solar.go` (`S_solar`: orientation base lookup × exposure modifier + floor bonus).
+2. **Outbound Clients (`services/api/internal/clients/`):**
+   - `places.go` — Google Places (New) Nearby Search client with 400m grid-cache fill (30-day TTL), powering `S_third_place` and the Phase 4 POI map layer.
+   - `nominatim.go` — one-shot geocoding client (public endpoint, ≤ 1 req/sec, custom `User-Agent`; no typeahead in Phase 1 per Nominatim policy).
+   - `otp.go` — **interface definition only**: `factor_commute.go` is built and unit-tested against fixture-based fakes; the live OTP2 client lands in Phase 6.
+3. **Concurrency Orchestrator (`engine.go`):**
    - `errgroup` fan-out with a hard 8-second parent context deadline.
    - Dynamic weight normalization ($\sum w_i = 100\%$).
-   - Graceful degradation: timed-out factors return `null` without failing the composite score.
-3. **HTTP Handlers (`services/api/internal/api/`):**
+   - Graceful degradation: timed-out or data-less factors return `null`, are excluded from the weight sum, and remaining weights renormalize; the response marks degraded factors.
+4. **HTTP Handlers (`services/api/internal/api/`):**
    - `POST /api/v1/score`
-   - `GET /api/v1/geocode/autocomplete`
+   - `GET /api/v1/geocode` (one-shot geocode returning coordinates; typeahead autocomplete deferred until self-hosted Photon per Nominatim policy)
    - `GET /api/v1/health`
 
 ### Validation Criteria
-- 100% unit test coverage on scoring mathematical formulas and edge cases (boundary distances, zero weights).
-- Live API response latency < 150 ms for warm cache hits.
+- 100% unit test coverage on scoring mathematical formulas and edge cases (boundary distances, zero weights, all-null factors).
+- Live API response latency < 150 ms for warm cache hits (excluding `S_commute`, which activates with OTP2 in Phase 6).
 
 ---
 
@@ -113,6 +124,7 @@ Build the GPU-accelerated interactive map workspace with custom Chicago vector s
    - **CTA Rail Layer:** Official line colors with interactive station hover cards.
    - **Protected Bike Layer:** High-visibility green linestring overlay with trail access markers.
    - **POI Density Markers:** Cafes, fitness studios, and supermarkets with distance radius rings.
+   - **Divvy Dock Layer:** Station markers with live capacity badges (display-only — Divvy is not a scored factor). Delivers `internal/clients/divvy.go` + the in-memory GBFS cache (5m TTL).
    - **Solar Ray Widget:** 3D compass orientation ray projected from the address marker.
 
 ### Validation Criteria
@@ -130,14 +142,16 @@ Assemble the high-density Split-Screen Analytics Workspace, reactive weight cust
 1. **Left Scored Analytics Panel:**
    - Hero Composite Score Ring (0–100) with archetype badge.
    - Collapsible Weight Customization Slider Drawer with instant reactive recalculation and URL search param sync.
-   - 8 Dense Factor Breakdown Cards with distance badges and sub-score progress bars.
+   - 8–9 Dense Factor Breakdown Cards (the commute card renders only when a destination is set) with distance badges and sub-score progress bars.
 2. **Contextual Affiliate Cards:**
-   - Broadband / Fiber card with available ISP speed badges (AT&T Fiber, Astound).
+   - Broadband / Fiber card with available ISP speed badges (AT&T Fiber, Astound). Delivers `internal/clients/fcc.go` + per-address cache; the card hides gracefully on FCC API failure.
    - Lemonade instant renters quote modal trigger.
    - Dolly / Unpakt moving quote comparison card.
    - ClassPass fitness studio trial card.
 3. **Bottom Multi-Address Comparison Tray:**
    - Sticky dock to pin and compare up to 3 addresses side-by-side.
+4. **Error & Empty States:**
+   - Address-not-found, geocoding failure, OTP2-unavailable, and degraded-factor (`null`) states — styled per AGENTS.md (high-density copy, no emojis).
 
 ### Validation Criteria
 - Slider adjustments immediately update scores and URL query parameters without full page reloads.
@@ -156,6 +170,7 @@ Deploy OpenTripPlanner 2 in Docker, compile the Cook County transit graph, and s
    - Dockerfile and build script pulling `chicago-gtfs.zip` and `illinois.osm.pbf`.
    - Pre-compiled graph persistence (`graph.obj`) with `-Xmx5G` JVM cap.
 2. **Go Backend OTP2 Client (`services/api/internal/clients/otp.go`):**
+   - Implements the client interface stubbed in Phase 3, activating `S_commute` and the benchmark commute pills end-to-end.
    - Multimodal travel time calculations to Loop, O'Hare, Midway, and Fulton Market.
    - GeoJSON isochrone polygon endpoint proxy (15-min walk, 30-min transit).
 3. **Frontend Isochrone Map Rendering:**
@@ -173,9 +188,12 @@ Deploy OpenTripPlanner 2 in Docker, compile the Cook County transit graph, and s
 Deploy BlockFactor to the Beelink home server behind Caddy with automated monitoring and Tailscale ingress.
 
 ### Deliverables
-1. **Caddy Reverse Proxy Configuration:**
-   - Path-based routing (`handle_path /blockfactor/*`) with automatic Tailscale TLS.
+1. **Caddy Reverse Proxy & Production Frontend Serving:**
+   - Path-based routing with automatic Tailscale TLS: `/blockfactor/api/*` → Go API (`:4001`); all other `/blockfactor/*` paths serve the static `vite build` output (the Vite dev server is not a deployment target).
+   - Sub-path hosting configured end-to-end: Vite `base`, TanStack Router `basepath`, and static asset URLs.
 2. **Monitoring Dashboards:**
    - Grafana dashboard importing BlockFactor Prometheus metrics and Loki logs.
 3. **CI/CD Self-Hosted Runner:**
    - GitHub Actions workflow running `make test` and `make lint` on local home server runner.
+4. **Data Durability:**
+   - Seeded datasets and caches are reproducible via `make seed` — no backup required in Phase 1. A nightly `pg_dump` is introduced only once user-generated state (saved reports / share links) exists in Phase 2.

@@ -45,6 +45,7 @@ Once the application reaches a quality threshold validated through personal use,
 - Hetzner CX/CAX VMs (~$8–15/month) offer substantially better price/performance than AWS EC2.
 - Cloudflare free tier covers DNS, CDN, and DDoS protection. Cloudflare Tunnels can bridge Phase 1's home server to the public internet without port forwarding.
 - AWS remains an option for specific managed services (e.g., RDS) but is not the primary compute target.
+- **Public-launch hardening (required before monetization):** rate limiting / abuse protection on the scoring endpoint (protects Google Places quota and affiliate CPA integrity), CORS lockdown to the public origin, and basic bot filtering at the Cloudflare edge.
 
 **CI/CD:**
 - Same GitHub Actions pipelines, retargeted to Hetzner via SSH deploy or container registry push.
@@ -138,23 +139,23 @@ sequenceDiagram
     participant OTP as OpenTripPlanner 2
     participant Ext as External APIs (Places / FCC)
 
-    Client->>API: POST /api/v1/score (Address + Unit Meta + Weights)
-    API->>Geo: Resolve Address to Lat/Lng Point
-    Geo-->>API: Coordinates (lat, lng)
+    Client->>API: POST /api/v1/score (Address + Optional Destination + Weights)
+    API->>Geo: Resolve Address & Destination to Coordinates
+    Geo-->>API: Coordinates (origin, dest)
 
     rect rgb(240, 245, 255)
         note over API,Ext: Concurrent Fan-Out (Parent Context: 8s Deadline)
         par Spatial Factors
             API->>DB: scoreTransit, scoreGrocery, scoreGreen, scoreNoise, scoreFlood, scoreSafety
             DB-->>API: Spatial sub-scores & POI distances
-        and Multimodal Commute
-            API->>OTP: fetchCommuteIsochrones (Loop, O'Hare, Midway, Fulton)
-            OTP-->>API: Isochrone GeoJSON & commute durations
+        and Multimodal Commute & Isochrones
+            API->>OTP: scoreCommute (if dest set) + fetchBenchmarkCommutes + fetchIsochrones
+            OTP-->>API: Door-to-door transit itineraries & isochrone GeoJSON
         and External POIs / Broadband
             API->>Ext: scoreThirdPlaces (Places API) & fetchBroadbandSpecs (FCC)
             Ext-->>API: Places & ISP speed profiles
         and In-Memory Math
-            API->>API: scoreSolarExposure (SunCalc + Window Orientation)
+            API->>API: scoreSolarExposure (Orientation & Floor Lookup)
         end
     end
 
@@ -164,6 +165,8 @@ sequenceDiagram
 
 ### 4.3 Geocoding Strategy
 * **Phase 1 (Development):** Public Nominatim API (`nominatim.openstreetmap.org`) with structured query formatting for low-volume development testing.
+  * **No typeahead against public Nominatim:** the public endpoint's usage policy explicitly prohibits autocomplete traffic. Phase 1 geocodes once on form submit; typeahead address search ships only once self-hosted Photon lands (Phase 2).
+  * **Geocode once, score with coordinates:** `POST /api/v1/score` accepts pre-resolved coordinates from the prior geocode call. Re-geocoding origin + destination inside the score request — serialized at ≤ 1 req/sec — would burn ~2s of the 8s scoring budget.
 * **Phase 2 (Production / Pre-Launch):**
   * **Self-Hosted Nominatim (PostGIS):** Ingests Illinois OSM extract for accurate, ToS-compliant address resolution and building polygon snapping.
   * **Photon (Elasticsearch/Lucene, Optional):** Lightweight search index (<2GB RAM) for low-latency (<20ms) typeahead address search in the UI input bar.
@@ -179,8 +182,9 @@ services/api/
 ├── internal/
 │   ├── api/                    # HTTP handlers, middleware, request validation
 │   ├── scoring/                # Composite scoring orchestrator & factor math
-│   │   ├── engine.go           # errgroup fan-out & weight normalization
+│   │   ├── engine.go           # errgroup fan-out & weight normalization (8 or 9 factors)
 │   │   ├── factor_transit.go   # S_transit calculation
+│   │   ├── factor_commute.go   # S_commute point-to-point calculation (optional)
 │   │   ├── factor_grocery.go   # S_grocery calculation
 │   │   ├── factor_third_places.go # S_third_place calculation
 │   │   ├── factor_green.go     # S_green calculation
@@ -222,7 +226,8 @@ To avoid dependencies on external host Redis instances, caching is partitioned a
    * Stored in `UNLOGGED` tables with an indexed `expires_at` column.
    * **Google Places 400m Grid Cache:** 30-day TTL.
    * **FCC Broadband Address Cache:** Bi-annual refresh.
-   * **OTP2 Commute Route Durations:** 7-day TTL.
+   * **OTP2 Commute Route Durations:** 7-day TTL. Cache key: origin/destination coordinates snapped to a 100m grid + mode + departure window (raw floating-point coordinates would yield near-zero hit rates).
+   * **Crash Semantics:** `UNLOGGED` tables are truncated on crash recovery — acceptable for caches, but a wiped Places grid triggers a refill burst; the outbound rate-limit semaphores bound the quota impact.
 
 ---
 
@@ -232,13 +237,13 @@ To avoid dependencies on external host Redis instances, caching is partitioned a
 * **Engine:** OpenTripPlanner 2.x running in a dedicated Docker container (`blockfactor-otp`).
 * **Inputs:**
   * CTA Static GTFS Schedule archive (`chicago-gtfs.zip`).
-  * Cook County OpenStreetMap extract (`illinois.osm.pbf`).
+  * Cook County OpenStreetMap extract — the Geofabrik Illinois `.osm.pbf` cropped to a Cook County bounding box via `osmium extract` before graph build (smaller graph, faster build, lower heap).
 * **Outputs:**
   * **Door-to-door transit commute durations** (walking + waiting + riding + transfers) to benchmark employment centers (The Loop, O'Hare, Midway, Fulton Market).
   * **Pedestrian & transit reach isochrone polygons** (e.g. 15-min and 30-min travel boundaries) streamed to MapLibre GL JS as GeoJSON.
 
 ### 6.2 Resource Controls & Persistence
-* **JVM Heap Limit:** Strictly capped at `-Xmx5G` to prevent memory contention with co-located media and automation stacks.
+* **JVM Heap Limit:** Strictly capped at `-Xmx5G` to prevent memory contention with co-located media and automation stacks. Note: graph *builds* are more memory-hungry than serving — building from the Cook County crop (rather than full Illinois) keeps the one-time build inside the same cap.
 * **Graph Persistence:** The graph is pre-compiled once (`otp --build data/`) and saved as `graph.obj` on the dedicated NVMe SSD (`/mnt/external-ssd-enclosure/blockfactor/otp-data/graph.obj`). On restarts, OTP2 boots in < 15 seconds by loading the pre-compiled graph directly into RAM.
 
 ---
@@ -270,8 +275,8 @@ To enforce an analytical, high-density tool aesthetic and avoid generic AI "vibe
 The primary interface is a **Split-Screen Location Intelligence Workspace**:
 * **Left Panel (Scored Analytics & Controls — Scrollable):**
   * **Composite Score Hero Card:** Radial score ring (0–100) + neighborhood archetype descriptor.
-  * **Weight Customization Drawer:** Reactive slider tray with dynamic normalization and preset chips (Car-Free, Cyclist, Remote Worker).
-  * **Factor Breakdown Accordions:** 8 dense metric cards with distance pills and sub-scores.
+  * **Weight Customization Drawer:** Reactive slider tray with dynamic normalization and preset chips matching the PRD personas (Remote Worker, Hybrid / In-Office Commuter).
+  * **Factor Breakdown Accordions:** 8–9 dense metric cards (9 when a custom commute destination is set) with distance pills and sub-scores.
   * **Native Affiliate Drawer:** Contextually triggered cards (ISP broadband speed check, Lemonade quote, Dolly movers).
 * **Right Panel (WebGL Map — Fixed / Full Bleed):**
   * Full-screen GPU-accelerated **MapLibre GL JS** canvas.
@@ -335,7 +340,7 @@ seed:
 
 # Regenerate OpenAPI contracts and client SDKs
 generate:
-	oapi-codegen -config api/openapi.cfg.yaml docs/openapi.yaml
+	oapi-codegen -config services/api/openapi.cfg.yaml docs/openapi.yaml
 	cd packages/web && pnpm generate-api
 ```
 
@@ -351,13 +356,14 @@ Because the home server already operates a production-grade monitoring stack (**
 
 ### 10.1 Structured Logging (`log/slog` → Promtail → Loki)
 * Standard library **`log/slog`** with JSON formatting (`slog.NewJSONHandler(os.Stdout, ...)`).
-* Structured fields: `trace_id`, `address`, `duration_ms`, `factor`, `cache_hit`, `status`.
+* Structured fields: `trace_id`, `geohash` (truncated location), `duration_ms`, `factor`, `cache_hit`, `status`.
+* **PII guardrail:** raw home/workplace addresses are never written to logs — only truncated geohashes. Addresses are the product's most sensitive input.
 * Promtail scrapes container stdout logs directly into Loki for fast querying and debugging in Grafana dashboards.
 
 ### 10.2 Metrics Collection (`/metrics` → Prometheus)
 * Exposes a standard **`/metrics`** endpoint in the Go backend using `prometheus/client_golang`.
 * **Key Custom Metrics:**
-  * `blockfactor_score_request_duration_seconds` (Histogram by address hash / status)
+  * `blockfactor_score_request_duration_seconds` (Histogram by status / cache tier — never labeled by address or address hash, which would create unbounded label cardinality)
   * `blockfactor_factor_duration_seconds` (Histogram partitioned by factor: `transit`, `grocery`, `safety`, `otp`, etc.)
   * `blockfactor_cache_hits_total` / `blockfactor_cache_misses_total` (Counter by cache domain: `places`, `otp`, `fcc`, `divvy`)
   * `blockfactor_external_api_calls_total` (Counter for Google Places and FCC API invocations to track quota consumption)
@@ -389,6 +395,10 @@ go run ./services/api/cmd/seed/main.go --dataset=parks,bike_routes
 | **Public Parks & Facilities** | Chicago Data Portal + OSM | Polygon GeoJSON → `parks` table | Quarterly |
 | **CPD Crimes (Trailing 12mo)** | Chicago Data Portal (SODA API) | Filtered SODA query (`$where=date > ...`) → `cpd_crimes` | Monthly |
 | **FEMA Flood Zones & 311s** | FEMA NFHL + City 311 SODA | Polygon shapefiles + 311 sewer incidents | Semi-annual |
+| **OSM POIs (Supermarkets & Pharmacies)** | Geofabrik Illinois Extract | Filtered PBF import → `osm_pois` table | Quarterly |
+| **Noise Geometry (Tracks & Roads)** | OSM Ways + CTA Line Geometry | Grade-tagged track segments + expressway/arterial linestrings → `noise_sources` | Quarterly |
+| **Bus Corridor Headways** | CTA Static GTFS (`stop_times`) | AM-peak headway analysis (≤ 10 min) → `bus_corridors` | Quarterly |
+| **Safety Percentile Grid** | Derived from `cpd_crimes` | ~500m citywide penalty distribution → `safety_grid_percentiles` (recomputed after each crime sync) | Monthly |
 
 ### 11.3 Production Automation (Phase 1)
 On the home server, a lightweight systemd timer or monthly cron job invokes `make seed` during off-peak hours (e.g. 3:00 AM on the 1st of each month).

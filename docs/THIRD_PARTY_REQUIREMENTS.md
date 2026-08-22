@@ -19,9 +19,10 @@ BlockFactor integrates multiple external APIs, spatial datasets, and transit fee
 ### Guardrails & Policies:
 * **Nominatim Usage Policy:**
   * The public endpoint (`nominatim.openstreetmap.org`) is strictly limited to **1 request per second** and is funded by donations for non-commercial open-source research.
+  * **Autocomplete / typeahead querying is explicitly prohibited** on the public endpoint — this is a named restriction in the Nominatim Usage Policy, independent of the rate limit.
   * Bulk scraping, automated background workers, or commercial traffic on the public endpoint violates the OSM Usage Policy.
 * **Compliance Strategy:**
-  * **Phase 1 (Development / Personal Use):** Permissible to use public Nominatim with a valid `User-Agent` header (`NOMINATIM_USER_AGENT`) and low request volume ($<1\text{ req/sec}$).
+  * **Phase 1 (Development / Personal Use):** Permissible to use public Nominatim with a valid `User-Agent` header (`NOMINATIM_USER_AGENT`) and low request volume (< 1 req/sec). Geocoding is one-shot on form submit — the UI ships no typeahead until self-hosted Photon lands.
   * **Phase 2 (Pre-Launch & Commercial):** **Must transition to a self-hosted Nominatim container** on our own hardware or cloud server. Self-hosting eliminates all external rate limits, ensures 100% ToS compliance, and removes third-party dependencies.
 * **ODbL License Attribution:**
   * Any map view or public report displaying OSM spatial data must display the attribution string: `© OpenStreetMap contributors` with a hyperlink to `https://www.openstreetmap.org/copyright`.
@@ -69,8 +70,9 @@ BlockFactor integrates multiple external APIs, spatial datasets, and transit fee
 ## 5. FCC National Broadband Map API
 
 ### Guardrails & Policies:
-* **Public Data Usage:**
-  * FCC Broadband serviceable location fabric data is public domain.
+* **Public Data Usage & Licensing Nuance:**
+  * Provider *availability* data is public. The underlying **serviceable location fabric is CostQuest-licensed — not public domain** — and must never be redistributed by BlockFactor.
+  * The broadband map's lookup endpoints are not an officially versioned public API. Treat the integration as medium-risk: isolate it behind `internal/clients/fcc.go`, degrade gracefully (the broadband card hides on failure), and never let it block scoring.
   * The dataset is officially updated bi-annually by the FCC (June and December filings).
 * **Compliance Strategy:**
   * Address broadband records are permanently cached per geocoded coordinate point and refreshed semi-annually.

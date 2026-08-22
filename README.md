@@ -6,16 +6,17 @@
 
 ## Overview
 
-BlockFactor is an analytical location-intelligence platform engineered to evaluate, score, and rank residential properties (0–100) for transit-reliant renters and urban commuters. It calculates objective composite scores across 8 environmental, logistical, and safety factors:
+BlockFactor is an analytical location-intelligence platform engineered to evaluate, score, and rank residential properties (0–100) for transit-reliant renters and urban commuters. It calculates objective composite scores across 8 base livability factors and an optional custom workplace commute factor:
 
 1. **Transit Proximity & Reliability:** CTA 'L' rapid transit and high-frequency bus corridors.
-2. **Supermarket & Grocery Access:** Walking distance to full-scale supermarkets and daily essentials.
-3. **Third Places:** Density of independent cafes, coworking spaces, and fitness studios.
-4. **Green Space & Trails:** Proximity to public parks, the Lakefront Trail, and the 606 / Bloomingdale Trail.
-5. **Acoustic Comfort:** Buffer distances from elevated CTA tracks, expressways, and high-volume arterials.
-6. **Public Safety:** Normalized 12-month crime density percentiles from the Chicago Data Portal.
-7. **Flood Risk:** FEMA hazard zones and 311 basement/sewer backup incident history.
-8. **Solar Exposure:** Deterministic natural light calculations based on unit window orientation and floor level.
+2. **Custom Commute Duration (Optional):** Door-to-door transit time & transfer friction to the user's workplace or campus.
+3. **Supermarket & Grocery Access:** Walking distance to full-scale supermarkets and daily essentials.
+4. **Third Places:** Density of independent cafes, coworking spaces, and fitness studios.
+5. **Green Space & Trails:** Proximity to public parks, the Lakefront Trail, and the 606 / Bloomingdale Trail.
+6. **Acoustic Comfort:** Buffer distances from elevated CTA tracks, expressways, and high-volume arterials.
+7. **Public Safety:** Normalized 12-month crime density percentiles from the Chicago Data Portal.
+8. **Flood Risk:** FEMA hazard zones and 311 basement/sewer backup incident history.
+9. **Solar Exposure:** Deterministic natural light calculations based on unit window orientation and floor level.
 
 ---
 
