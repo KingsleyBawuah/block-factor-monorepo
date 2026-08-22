@@ -43,3 +43,25 @@ This document establishes the behavioral and operational guidelines for AI codin
 - **Frontend Standards:** Idiomatic React 19 / TanStack patterns (Router & Query), strictly typed search params, and declarative component state.
 - **Spatial Precision:** Maintain exact PostGIS geometry conventions (SRID 4326 for WGS84 coordinates, appropriate metric spherical distance queries with `ST_DWithin`).
 - **Cost & API Consciousness:** Prioritize local calculation, caching (PostGIS spatial grid cache), and self-hosted services (OTP2, Nominatim, OSM) over metered third-party commercial APIs.
+
+---
+
+## 4. UI/UX & Anti-Vibe-Coding Standards
+
+The application must look and feel like an analytical, high-density location intelligence tool (e.g. Linear, Raycast, Citymapper, NYT Graphics)—**never a generic AI vibe-coded project**.
+
+- **No AI Clichés or "Sparkle/Purple Traps":**
+  - Strictly **no sparkle/wand icons** (`Sparkles`, `Wand`) or AI novelty gimmicks.
+  - Strictly **no violet/purple radial gradients** or generic dark-mode neon glows.
+  - Theme palette is anchored in crisp neutral slates/zincs with official CTA transit line color tokens and clean metric indicators.
+- **No Emoji Slop:**
+  - Strictly **no emojis** in headers, metric cards, table cells, or empty states.
+  - Use sharp, geometric vector icons (**Lineicons** at 14–16px, 1.5px stroke) or authentic municipal/transit badge chips.
+- **No Redundant Explanatory Fluff:**
+  - Avoid verbose, self-evident subtitles (e.g. *"Transit Score: The score that measures transit"*).
+  - Prioritize high information density: lead with the metric, entity name, and distance.
+- **Data & Typography Precision:**
+  - Use a tabular monospace font (`Geist Mono`) for all coordinates, distances, travel durations, and numeric scores.
+  - Maintain strict layout geometry: tight border-radii (`rounded-sm` or `rounded-md`), consistent padding scales (`p-4`, `p-6`), and zero bubbly floating elements.
+- **Authentic Spatial Imagery:**
+  - Never use generic abstract placeholder divs; utilize real MapLibre GL vector tiles, authentic CTA rail badges, and real spatial overlays.

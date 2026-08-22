@@ -268,15 +268,36 @@ To avoid dependencies on external host Redis instances, caching is partitioned a
   * Automatic request deduplication, background prefetching, and client-side caching.
 * **OpenAPI Client:** Generated TypeScript API client (`openapi-typescript` + `openapi-fetch`) typed directly from backend OpenAPI specs.
 
-### 7.2 Map Engine & WebGL Vector Rendering
+### 7.2 Component Library & Design System
+To enforce an analytical, high-density tool aesthetic and avoid generic AI "vibe-coded" tropes:
+* **Component Primitives:** **`shadcn/ui` (Radix UI)** copied directly into `packages/web/src/components/ui/` with custom, sharp design tokens.
+* **Styling Engine:** **Tailwind CSS v4** with a strict design token scale:
+  * **Geometry:** Sharp, disciplined border radii (`rounded-sm` / `rounded-md`—no bubbly pill shapes).
+  * **Palette:** Neutral Slate/Zinc base (`#09090b` / `#fafafa`) with zero purple/violet radial gradients.
+  * **Transit Branding:** Authentic CTA Line colors for station badges (Red `#c60c30`, Blue `#00a1de`, Brown `#62361b`, Green `#009b3a`, Pink `#e27ea6`, Orange `#f9461c`, Purple `#522398`, Yellow `#f9e300`).
+  * **Score Indicators:** Emerald ($\ge 85$), Lime ($70\text{–}84$), Amber ($50\text{–}69$), Rose ($< 50$).
+* **Iconography:** **Lineicons** (14–16px, 1.5px stroke). Strictly no Lucide over-use and zero emoji slop in headers/cards.
+* **Typography:** **Inter / Geist** for body text; **Geist Mono** for all coordinates, distances (`0.28 mi`), commute times (`14 min`), and numeric scores.
+
+### 7.3 Screen Layout & Workspace Architecture
+The primary interface is a **Split-Screen Location Intelligence Workspace**:
+* **Left Panel (Scored Analytics & Controls — Scrollable):**
+  * **Composite Score Hero Card:** Radial score ring ($0\text{–}100$) + neighborhood archetype descriptor.
+  * **Weight Customization Drawer:** Reactive slider tray with dynamic normalization and preset chips (Car-Free, Cyclist, Remote Worker).
+  * **Factor Breakdown Accordions:** 8 dense metric cards with distance pills and sub-scores.
+  * **Native Affiliate Drawer:** Contextually triggered cards (ISP broadband speed check, Lemonade quote, Dolly movers).
+* **Right Panel (WebGL Map — Fixed / Full Bleed):**
+  * Full-screen GPU-accelerated **MapLibre GL JS** canvas.
+  * Layer toggles: CTA rail lines, protected bike corridors, parks, crime heat contours, and POI clusters.
+  * Interactive 15-minute walk and 30-minute transit reach isochrone polygons.
+* **Bottom Comparison Dock (Collapsible):**
+  * Sticky drawer allowing users to pin and compare up to 3 addresses side-by-side.
+
+### 7.4 Map Engine & WebGL Vector Rendering
 * **Map Visualizer:** **MapLibre GL JS**
 * **Vector Basemap Tiles:** CartoCDN / OpenFreeMap vector styles ($0 licensing fees, GPU accelerated).
-* **Interactive Spatial Layers:**
-  * **Isochrone Polygons:** Renders 15-min and 30-min pedestrian & transit reach boundaries as semi-transparent GeoJSON polygon fills.
-  * **Protected Bike Lanes & Off-Street Trails:** Green vector linestrings with interactive hover tooltips.
-  * **POI Density Clusters:** Coffee shops, gyms, and grocery markers with radial distance circles.
 
-### 7.3 Link Sharing & Social Previews (Phasing)
+### 7.5 Link Sharing & Social Previews (Phasing)
 * **Phase 1 (Home Server / Personal Use):** Client-side URL state via TanStack Router allows immediate link sharing with identical visual configuration.
 * **Phase 2 (Public Launch):** A lightweight Go route handler (`GET /share/:report_id`) injects dynamic OpenGraph meta cards (title, summary score, static preview map snapshot) for iMessage/Slack/Twitter previews.
 

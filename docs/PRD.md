@@ -1,9 +1,14 @@
 # BlockFactor: Product Requirements Document
 
-**Version:** 1.0 (Draft / In Review)
-**Target Market:** Chicago, IL
-**Repository Structure:** Monorepo (Go API + React/TanStack Frontend + PostGIS / Docker Services)
-**License:** Proprietary / All Rights Reserved
+**Version:** 1.0 (Draft / In Review)  
+**Target Market:** Chicago, IL  
+**Repository Structure:** Monorepo (Go API + React/TanStack Frontend + PostGIS / Docker Services)  
+**License:** Proprietary / All Rights Reserved  
+
+**See also:**
+* [ARCHITECTURE.md](./ARCHITECTURE.md) — Technical Architecture Specification
+* [IMPLEMENTATION_PHASES.md](./IMPLEMENTATION_PHASES.md) — Implementation Phases & Roadmap
+* [AGENTS.md](../AGENTS.md) — Engineering Standards & Working Agreements
 
 ---
 
