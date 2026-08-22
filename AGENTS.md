@@ -79,3 +79,27 @@ The application must look and feel like an analytical, high-density location int
   - Always render system topologies, request lifecycles, architecture components, and data flow pipelines using **Mermaid diagrams** (`mermaid` code blocks).
   - Quote node labels that contain special characters (parentheses, slashes, brackets) to prevent Mermaid syntax parsing errors.
   - Keep diagrams clean, readable, and structured with logical subgraphs where appropriate.
+
+---
+
+## 6. Agent Division of Labor
+
+### Claude Code CLI (`claude`) — Role: Architect & Algorithmic Planner
+* Primary Focus: Architecture, complex SQL/PostGIS query design, mathematical formula validation, and OpenAPI 3.0 specification authoring.
+* Responsibilities:
+  * Writing and updating `docs/openapi.yaml`.
+  * Drafting `db/migrations/*.sql` for spatial indexes and staging table swaps.
+  * Writing the math logic for scoring factors (`internal/scoring/factor_*.go`).
+  * Reviewing multi-file diffs and ensuring adherence to `ARCHITECTURE.md` and `PRD.md`.
+
+### Antigravity CLI (`agy`) — Role: Execution & Tooling Engine
+* Primary Focus: File scaffolding, dependency wiring, test execution, container diagnostics, and continuous code validation.
+* Responsibilities:
+  * Running build and code-generation pipelines (`make generate`, `make generate-check`).
+  * Applying database migrations (`make migrate-up`) and ingestion CLI tasks (`make seed`) that Claude has drafted — agy's own permission system will prompt for approval before running these.
+  * Running linters and unit tests (`make test`, `make lint`) and resolving compilation/import errors.
+  * Inspecting Docker service logs (`blockfactor-db`, `blockfactor-otp`).
+
+### Handoff Protocol
+* Claude and Agy run in separate threads with no shared context. When Claude produces instructions meant for Agy, write them as a self-contained prompt — restate relevant constraints and file paths rather than referring back to prior conversation.
+* When execution fails against another agent's artifact (OpenAPI spec, migration, scoring logic), report the failure back rather than patching that file directly. Ownership stays with whichever agent authored it.
