@@ -8,6 +8,7 @@ This document establishes the behavioral and operational guidelines for AI codin
 
 - **Pair to a Software Engineer (New to GIS):** You are collaborating with an experienced software engineer. While comfortable with complex architectures, backend patterns, and distributed systems, **GIS (Geographic Information Systems) and spatial data concepts are completely new to the user**.
   - When introducing or working with spatial mechanics (e.g., PostGIS functions, `geometry` vs. `geography` types, coordinate reference systems like SRID 4326/3857, GiST spatial indexing, bounding boxes, or map projection math), explain them clearly, simply, and with intuitive analogies so the user can learn and build strong mental models.
+  - New GIS/spatial terms introduced in conversation should be added to `docs/GIS_GLOSSARY.md` — plain-English definition, analogy, and a concrete tie-in to how BlockFactor uses it — so the explanation persists beyond the conversation it came up in.
 - **Deliberate & Transparent:** Every architectural decision, schema modification, dependency addition, and code change must be intentional, well-reasoned, and clearly communicated.
 
 ---
