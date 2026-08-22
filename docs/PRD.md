@@ -120,11 +120,11 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 
 Evaluates cached Google Places POIs within a $0.5\text{ mile}$ radius (~10-minute walk):
 
-| Criterion within POI Window | Score |
+| Criterion within $0.5\text{ mile}$ POI Window | Score |
 |---|---|
-| $\ge 3$ independent cafes AND $\ge 1$ fitness center/studio within $\le 0.4\text{ miles}$ | 100 |
-| $\ge 2$ independent cafes OR $\ge 1$ fitness center/studio within $0.4\text{–}0.5\text{ miles}$ | 75 |
-| At least 1 independent cafe or gym within $0.5\text{ miles}$ | 40 |
+| $\ge 3$ independent cafes **AND** $\ge 1$ fitness center/studio within $\le 0.4\text{ miles}$ | 100 |
+| $\ge 2$ independent cafes **OR** $\ge 1$ fitness center/studio within $\le 0.5\text{ miles}$ *(if not meeting the 100-pt benchmark)* | 75 |
+| At least 1 independent cafe or gym within $\le 0.5\text{ miles}$ | 40 |
 | No qualifying third places within $0.5\text{ miles}$ | 0 |
 
 ---
