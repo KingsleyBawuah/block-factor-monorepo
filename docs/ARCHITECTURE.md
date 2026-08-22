@@ -206,7 +206,7 @@ services/api/
 ### 5.1 Database Engine & Image
 * **Engine:** **PostgreSQL 18 + PostGIS** extension.
 * **Docker Context:** Runs as a dedicated container (`blockfactor-db`) isolated from any existing host database.
-* **Volume Mount:** Persisted to the dedicated NVMe SSD mount point (`/mnt/external-ssd-enclosure/blockfactor/pgdata`).
+* **Volume Mount:** Local development uses named Docker volumes; the home server applies a `docker-compose.override.yml` that binds the dedicated NVMe SSD mount (`/mnt/external-ssd-enclosure/blockfactor/pgdata`).
 
 ### 5.2 Spatial Coordinate Standard & Types
 * **Standard Representation:** `geography(Point, 4326)` (WGS84 GPS latitude and longitude).
@@ -235,6 +235,7 @@ To avoid dependencies on external host Redis instances, caching is partitioned a
 
 ### 6.1 Role & Capabilities
 * **Engine:** OpenTripPlanner 2.x running in a dedicated Docker container (`blockfactor-otp`).
+* **API Surface:** The Go client targets OTP2's **GTFS GraphQL API** exclusively — the legacy REST plan API was removed in OTP 2.x. Isochrones come from the travel-time API. Phase 3 client fixtures are GraphQL-shaped from day one so the Phase 6 integration is not a rewrite.
 * **Inputs:**
   * CTA Static GTFS Schedule archive (`chicago-gtfs.zip`).
   * Cook County OpenStreetMap extract — the Geofabrik Illinois `.osm.pbf` cropped to a Cook County bounding box via `osmium extract` before graph build (smaller graph, faster build, lower heap).
@@ -256,9 +257,11 @@ To avoid dependencies on external host Redis instances, caching is partitioned a
   * Strict type-safe route definitions.
   * **Search Param Serialization:** Address, unit orientation (e.g. facing, floor), and custom factor weights (0–100%) are continuously synchronized to the URL query string (`/report?address=...&w_transit=35&w_grocery=25&facing=S`).
   * Enables zero-friction link sharing and browser bookmarking that preserves exact report state.
+  * **Comparison Dock State:** Pinned comparison addresses ride in a repeatable `compare` search param (`?address=...&compare=...&compare=...`, max 2 pins), validated by the same Router search schema.
 * **Server State & Caching:** **TanStack Query**
   * Automatic request deduplication, background prefetching, and client-side caching.
 * **OpenAPI Client:** Generated TypeScript API client (`openapi-typescript` + `openapi-fetch`) typed directly from backend OpenAPI specs.
+* **Dev API Access:** The Vite dev server proxies `/api` → `http://localhost:4001`, eliminating CORS in development; CORS configuration applies only to deployed environments.
 
 ### 7.2 Component Library & Design System
 To enforce an analytical, high-density tool aesthetic and avoid generic AI "vibe-coded" tropes:
@@ -274,7 +277,7 @@ To enforce an analytical, high-density tool aesthetic and avoid generic AI "vibe
 ### 7.3 Screen Layout & Workspace Architecture
 The primary interface is a **Split-Screen Location Intelligence Workspace**:
 * **Left Panel (Scored Analytics & Controls — Scrollable):**
-  * **Composite Score Hero Card:** Radial score ring (0–100) + neighborhood archetype descriptor.
+  * **Composite Score Hero Card:** Radial score ring (0–100). (Neighborhood archetype descriptor deferred to v2 — derivation rules are not yet designed.)
   * **Weight Customization Drawer:** Reactive slider tray with dynamic normalization and preset chips matching the PRD personas (Remote Worker, Hybrid / In-Office Commuter).
   * **Factor Breakdown Accordions:** 8–9 dense metric cards (9 when a custom commute destination is set) with distance pills and sub-scores.
   * **Native Affiliate Drawer:** Contextually triggered cards (ISP broadband speed check, Lemonade quote, Dolly movers).
@@ -312,7 +315,7 @@ The primary interface is a **Split-Screen Location Intelligence Workspace**:
 To ensure **100% parity between local development and GitHub Actions CI pipelines**, all high-level developer tasks and CI validation steps are driven via a root `Makefile`:
 
 ```makefile
-.PHONY: dev build test lint migrate-up seed generate
+.PHONY: dev build test lint migrate-up seed generate generate-check
 
 # Start full local development stack (DB, OTP2, Go API with hot-reload, Vite)
 dev:
@@ -342,6 +345,10 @@ seed:
 generate:
 	oapi-codegen -config services/api/openapi.cfg.yaml docs/openapi.yaml
 	cd packages/web && pnpm generate-api
+
+# Verify generated contracts are up-to-date (CI drift gate)
+generate-check: generate
+	git diff --exit-code
 ```
 
 ### 9.2 CI/CD Parity
@@ -399,9 +406,11 @@ go run ./services/api/cmd/seed/main.go --dataset=parks,bike_routes
 | **Noise Geometry (Tracks & Roads)** | OSM Ways + CTA Line Geometry | Grade-tagged track segments + expressway/arterial linestrings → `noise_sources` | Quarterly |
 | **Bus Corridor Headways** | CTA Static GTFS (`stop_times`) | AM-peak headway analysis (≤ 10 min) → `bus_corridors` | Quarterly |
 | **Safety Percentile Grid** | Derived from `cpd_crimes` | ~500m citywide penalty distribution → `safety_grid_percentiles` (recomputed after each crime sync) | Monthly |
+| **City Boundary Polygon** | Chicago Data Portal | Single-polygon import → `city_boundary` (powers the coverage hard-reject) | Static (rarely changes) |
 
 ### 11.3 Production Automation (Phase 1)
 On the home server, a lightweight systemd timer or monthly cron job invokes `make seed` during off-peak hours (e.g. 3:00 AM on the 1st of each month).
+* **Zero-Downtime Recompute:** Derived tables (notably `safety_grid_percentiles`) are rebuilt into a staging table and swapped via transactional rename, so live requests never read a partially computed distribution.
 
 ---
 
@@ -429,4 +438,28 @@ On the home server, a lightweight systemd timer or monthly cron job invokes `mak
 | 18 | Compose Topology | **Single `docker-compose.yml` with Profiles (`profiles: ["transit"]`)** | Unifies networking; decouples OTP2 build/start lifecycle from dev app restarts. | ✅ Resolved |
 | 19 | Go Internal Package Layout | **Domain-Layered (`internal/scoring`, `internal/spatial`, `internal/clients`)** | Idiomatic Go; groups by responsibility and avoids package fragmentation or circular dependencies. | ✅ Resolved |
 | 20 | Data Ingestion Pipeline | **Standalone CLI (`cmd/seed/main.go` + `make seed`)** | Decoupled from API runtime; testable, flag-selectable, and easily scheduled via cron. | ✅ Resolved |
+
+---
+
+## 13. Pre-Flight Decisions Addendum (2026-08-22)
+Final decisions locked before Phase 1 implementation begins. These supplement the Decision Log above; behavioral details live in the referenced sections.
+### 13.1 Decided
+* **Coverage:** Hard-reject addresses outside the City of Chicago boundary polygon (HTTP 422, `OUT_OF_COVERAGE`); boundary ingested at seed time. No partial scoring. (PRD 3.1)
+* **Archetype badge:** Deferred to v2 — the v1 hero card ships the score ring only. (7.3)
+* **High-frequency bus rule:** Mean scheduled headway ≤ 10 min, weekdays 7:00–9:00 AM, from GTFS `stop_times`. (PRD 5.2)
+* **Geocode UX:** One-shot geocode returns ranked candidates; ambiguous input triggers a candidate picker before scoring. (PRD 3.1)
+* **Parks source (v1):** Chicago Data Portal only; OSM supplement deferred to avoid dual-source dedup. (PRD §4)
+* **Comparison URL state:** Repeatable `compare` search param, max 2 pins. (7.1)
+* **OTP2 API:** GTFS GraphQL API only; legacy REST plan API is gone in OTP 2.x. Fixtures are GraphQL-shaped from Phase 3. (6.1)
+* **Score response contract:** Factor sub-scores are objects (`score`, `degraded` flag, distances / contributing POIs) plus benchmark commute pills; **isochrones are excluded** from the score response and fetched independently via `GET /api/v1/isochrones` — faster first paint, independently cacheable.
+* **Units:** Meters internally everywhere; imperial only at the presentation layer; every scoring threshold is a named constant in `internal/scoring`. (PRD 5.1)
+* **Toolchain pinning:** Go via the `go.mod` `toolchain` directive; Node via `.nvmrc`; pnpm via the `package.json` `packageManager` field (Corepack); Docker images pinned to exact tags (PostgreSQL 18 / PostGIS 3.6 line, latest stable OTP 2.x); `golangci-lint` version pinned in CI. Exact versions are recorded in the pin files during Phase 1 scaffolding.
+* **Dev ergonomics:** Vite dev proxy for `/api` (no CORS in development); `make generate-check` is the CI contract-drift gate. (7.1, 9.1)
+* **Derived-table recompute:** Staging table + transactional rename swap. (11.3)
+* **Benchmark hubs:** Clark/Lake, Fulton Market, O'Hare, and Midway coordinates are canonical constants in `internal/scoring`. (PRD 5.10)
+* **CI from day one:** GitHub-hosted runners run `make lint` / `make test` / `make generate-check` on every PR, with branch protection on `main`; migrates to the self-hosted runner in Phase 7.
+* **Compose split:** Named volumes for local development; a server-specific `docker-compose.override.yml` binds the NVMe SSD mounts. (5.1)
+### 13.2 Open Investigations (decide when the phase begins)
+* **Ingestion tooling per dataset (Phase 2):** FEMA NFHL ships as shapefile/GDB — GDAL `ogr2ogr` vs. a native Go shapefile library; OSM PBF parsing — `paulmach/osm` in-process vs. an `osmium` pre-filter step; GTFS `stop_times` parsing approach for headway derivation.
+* **Integration-test harness (Phase 2/3):** `testcontainers-go` (hermetic per-suite PostGIS, no external orchestration, CI-portable; slower cold starts) vs. a compose-managed test database (fast reuse, mirrors dev topology; shared state requires cleanup discipline). Either way, spatial tests run against golden GeoJSON fixtures in `testdata/`.
 

@@ -36,6 +36,10 @@ BlockFactor is an analytical, location-intelligence platform engineered to evalu
 ### 3.1 Mandatory Input
 - **Home Street Address:** Candidate residential property address (geocoded via Nominatim).
 
+> **Coverage Policy (v1):** Scoring is hard-scoped to the **City of Chicago boundary polygon** (ingested from the Chicago Data Portal at seed time). `POST /api/v1/score` rejects coordinates outside the boundary with HTTP 422 and a machine-readable `OUT_OF_COVERAGE` error code — no partial scoring.
+
+> **Geocode Disambiguation:** The geocode step returns a ranked candidate list; when input is ambiguous (e.g. "100 Main St"), the UI presents a candidate picker for confirmation before scoring rather than silently selecting the top match.
+
 ### 3.2 Optional Commute Destination (Hybrid / In-Office Commuters)
 - **Workplace / Destination Address:** Target office, coworking space (e.g. WeWork), university campus, or secondary frequent destination.
 - **Commute Mode Preference:** Transit (v1 default and the only scored mode). Biking and Walking rubrics are deferred post-v1 — the `S_commute` rubric (5.10) is transit-specific (transfers, one-seat rides).
@@ -77,7 +81,7 @@ Users can adjust individual weight sliders (0% to 100%). BlockFactor provides op
 | **Travel Times** | Commute Durations | Self-Hosted OpenTripPlanner 2.x | Local HTTP API; computed on-demand via OSM + GTFS; commute durations cached in PostGIS (7-day TTL). |
 | **Sustenance** | Supermarkets & Pharmacies | OpenStreetMap (Geofabrik Illinois extract) | Filtered POI import (`shop=supermarket`, `shop=convenience`, `amenity=pharmacy`) → PostGIS `osm_pois` table; sync quarterly. |
 | **Third Places** | Cafes, Gyms & Studios | Google Places API (New) | Nearby Search Pro; cached in PostGIS spatial grids (30-day TTL). |
-| **Green Space** | Parks & Forest Preserves | Chicago Data Portal + OSM `leisure=park` | PostGIS spatial polygon table; sync quarterly. |
+| **Green Space** | Parks & Forest Preserves | Chicago Data Portal (Parks dataset) | PostGIS spatial polygon table; sync quarterly. OSM `leisure=park` supplement deferred post-v1 (avoids dual-source dedup). |
 | **Noise Environment** | Track & Traffic Buffers | OSM Road Hierarchy + CTA Track Geometry | Deterministic spatial buffer evaluation in PostGIS. |
 | **Flood Hazard** | FEMA Zones & Basement 311s | FEMA NFHL + Chicago Data Portal 311 | PostGIS polygon overlays + 311 sewer backup incident density. |
 | **Public Safety** | Reported Incident Density | Chicago Data Portal (Crimes) | SODA-ingested into PostGIS (`cpd_crimes`, trailing 12 mo); scored via local `ST_DWithin` radial queries — no live Socrata calls at request time. |
@@ -101,7 +105,7 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 
 > **Boundary Semantics:** All distance/duration band tables in this section use half-open intervals — a value landing exactly on a shared boundary falls into the *better* (higher-scoring) band.
 
-> **Distance Measurement (v1):** Distances are geodesic straight-line (`ST_DWithin` on `geography` columns), not walking-network distances. Chicago's river branches and rail viaducts can make straight-line optimistic; thresholds are calibrated with this in mind. Network-based distances (OTP2 one-to-many) are a post-v1 refinement.
+> **Distance Measurement (v1):** Distances are geodesic straight-line (`ST_DWithin` on `geography` columns), not walking-network distances. Chicago's river branches and rail viaducts can make straight-line optimistic; thresholds are calibrated with this in mind. Network-based distances (OTP2 one-to-many) are a post-v1 refinement. Thresholds are documented in imperial units for readability — the implementation computes in **meters** internally, converts only at the presentation layer, and defines every threshold as a named constant in `internal/scoring`.
 
 > **Degraded Factors:** A factor that times out or lacks data returns `null`; its weight is excluded and the remaining weights renormalize (the same mechanism used when the commute factor is hidden). The report visually flags degraded factors. If all active weights are 0, the API rejects the request with a validation error rather than dividing by zero.
 
@@ -112,6 +116,8 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 - **100 pts** at ≤ 0.25 miles from a CTA 'L' stop (~5 min walk).
 - Linear decay to **0 pts** at 1.0 mile.
 - **+10 pt bonus** for dual-line access OR a high-frequency bus stop (≤ 10 min headways) within 0.2 miles (capped at 100 total).
+
+> **High-Frequency Definition:** A bus stop qualifies as high-frequency if at least one route serving it has a mean scheduled headway of ≤ 10 minutes between 7:00–9:00 AM on weekdays, computed from GTFS `stop_times` during ingestion.
 
 ---
 
@@ -246,6 +252,8 @@ When a user provides an optional workplace or campus address, BlockFactor querie
 > * **Fulton Market / West Loop:** e.g. `14 min (Pink Line / Bike)`
 > * **O'Hare International Airport:** e.g. `52 min (Pink → Blue at Clark/Lake)`
 > * **Midway International Airport:** e.g. `35 min (Pink → Bus 62 / Orange)`
+>
+> Hub coordinates are defined as canonical constants in `internal/scoring`; the durations above are illustrative and always computed live, never hardcoded UI copy.
 
 ---
 
