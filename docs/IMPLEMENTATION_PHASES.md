@@ -101,7 +101,7 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
 2. **Outbound Clients & Cost Defense (`services/api/internal/clients/`):**
    - [ ] `places.go` — Google Places (New) Nearby Search client with 400m grid-cache fill (30-day TTL in `cache_entries`), powering `S_third_place` and the Phase 4 POI map layer.
      - Protected by a 4-tier cost defense layer: token-bucket rate limiter (`golang.org/x/time/rate`), daily budget circuit breaker (degrading `S_third_place` to `null`), in-flight `singleflight` deduplication (`golang.org/x/sync/singleflight`), and Google Cloud hard billing quotas.
-     - ~~**TODO (prerequisite):** provision the Google Cloud project + Places API (New) key — restricted, hard daily quota cap, billing alert — before this client lands.~~ Done — see `docs/PROVISIONING.md`.
+     - ~~**TODO (prerequisite):** provision the Google Cloud project + Places API (New) key — restricted, hard daily quota cap, billing alert — before this client lands.~~ Done (key provisioned; IP restriction pending — see `docs/PROVISIONING.md`).
    - [ ] `nominatim.go` — one-shot geocoding client returning ranked candidates (public endpoint, ≤ 1 req/sec rate-limited, custom `User-Agent`; no typeahead in Phase 1 per Nominatim policy).
    - [ ] `otp.go` — **interface definition only**: `factor_commute.go` is built and unit-tested against fixture-based fakes shaped as **GTFS GraphQL API** responses (OTP 2.x removed the legacy REST plan API); the live client lands in Phase 6.
 3. **Concurrency Orchestrator (`engine.go`):**

@@ -121,7 +121,7 @@ graph TD
 * **Language:** **Go**
   * High-performance compiled binary with minimal memory footprint on shared home server hardware.
   * Native goroutine scheduling and channel primitives for concurrent I/O fan-out.
-* **Type Contracts:** **OpenAPI 3.0 / REST**
+* **Type Contracts:** **OpenAPI 3.1 / REST**
   * Single source-of-truth API specification.
   * Generates strict types for Go backend (`oapi-codegen`) and TypeScript frontend (`openapi-typescript`).
   * Avoids gRPC gateway complexity while maintaining end-to-end type safety.

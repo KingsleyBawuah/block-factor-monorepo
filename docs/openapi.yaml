@@ -192,10 +192,15 @@ components:
     ScoreRequest:
       type: object
       description: >
-        Exactly one of `address` or `origin` must be provided. If
-        `destination` or `destinationCoordinates` is omitted, the commute
-        factor is hidden and weights renormalize across the remaining 8
-        factors.
+        Exactly one of `address` or `origin` must be provided; the API
+        returns 400 if neither or both are set. Deliberately not expressed
+        as a `oneOf` in this schema — with `oapi-codegen`, `oneOf` produces
+        a wrapper type requiring `AsX`/`FromX`/`MergeX` accessor methods
+        rather than a flat struct, which is worse ergonomics than a plain
+        optional-pointer field validated in the handler. Same rule applies
+        to `destination` vs. `destinationCoordinates`; if omitted entirely,
+        the commute factor is hidden and weights renormalize across the
+        remaining 8 factors.
       properties:
         address:
           type: string
@@ -218,6 +223,7 @@ components:
 
     ContributingPoi:
       type: object
+      required: [name, distanceMeters]
       properties:
         name:
           type: string
@@ -250,6 +256,7 @@ components:
     CommutePill:
       type: object
       description: Benchmark commute duration to one of Chicago's major economic hubs, always computed live.
+      required: [destination, durationMinutes, transfers, summary]
       properties:
         destination:
           type: string
@@ -338,6 +345,11 @@ components:
               enum: [Polygon, MultiPolygon]
             coordinates:
               type: array
+              description: >
+                GeoJSON coordinate array. Left untyped because Polygon uses
+                [][][2]float64 while MultiPolygon uses [][][][2]float64 —
+                OpenAPI cannot express this union cleanly. Validated at the
+                Go layer via GeoJSON parsing.
               items: {}
 
     IsochroneResponse:
