@@ -39,6 +39,7 @@ This document establishes the behavioral and operational guidelines for AI codin
 - Breaking changes are marked with `!` before the colon (e.g., `feat(api)!: ...`) and/or a `BREAKING CHANGE:` footer describing the break.
 - Descriptions are imperative mood ("add", not "added"/"adds"), lowercase after the type, no trailing period.
 - If a change doesn't cleanly fit one type, split it into multiple commits rather than combining types in one message.
+- Branch names follow the same type vocabulary: `type/short-kebab-case-description` (e.g., `feat/scoring-engine`, `docs/gis-glossary`). The type reflects the branch's primary purpose — a branch may contain commits of other types (e.g., a stray `test` or `docs` commit on a `feat` branch), but its own name reflects the dominant intent. No scope segment in branch names.
 
 ### Rule 6: Changelog Discipline
 - `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Any commit that changes user-facing behavior, API contracts, or dependencies MUST add a corresponding entry under `## [Unreleased]` in the same commit/PR — not deferred to release time.
