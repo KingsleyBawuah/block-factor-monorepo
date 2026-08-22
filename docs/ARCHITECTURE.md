@@ -133,7 +133,6 @@ sequenceDiagram
     actor Client as Frontend Client
     participant API as Go HTTP Handler
     participant Geo as Geocoding Service (Nominatim)
-    participant FanOut as Concurrent errgroup (8s Deadline)
     participant DB as PostgreSQL + PostGIS
     participant OTP as OpenTripPlanner 2
     participant Ext as External APIs (Places / FCC)
