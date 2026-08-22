@@ -59,6 +59,12 @@ This document establishes the behavioral and operational guidelines for AI codin
 
 - At release time, rename `[Unreleased]` to the new version + ISO 8601 date (e.g., `## [0.2.0] - 2026-09-01`) and add a fresh empty `## [Unreleased]` above it.
 
+### Rule 7: Verify Library & Version Claims — Never Rely on Memory
+- Do not treat a version number, API signature, configuration option, or CLI flag recalled from training data as authoritative — training data has a cutoff, and libraries/frameworks/specs move faster than that, including via breaking changes.
+- Before pinning a version, or making any specific claim about how a library/framework/CLI/API behaves (syntax, config, flags, migration behavior), verify it using the `find-docs` skill to pull current documentation — or explicitly prompt the user to confirm — never assert it from memory.
+- This applies to language runtimes, package/dependency versions, spec versions, Docker image tags, and any specific claim about how a piece of software works.
+- Precedent: this rule exists because `docs/openapi.yaml` was initially drafted against OpenAPI 3.2.0 without verifying it, when 3.1.0 was the safer choice for actual tooling compatibility at the time.
+
 ---
 
 ## 3. Engineering & Code Standards
@@ -114,7 +120,7 @@ The application must look and feel like an analytical, high-density location int
 ## 6. Agent Division of Labor
 
 ### Claude Code CLI (`claude`) — Role: Architect & Algorithmic Planner
-* Primary Focus: Architecture, complex SQL/PostGIS query design, mathematical formula validation, and OpenAPI 3.0 specification authoring.
+* Primary Focus: Architecture, complex SQL/PostGIS query design, mathematical formula validation, and OpenAPI specification authoring.
 * Responsibilities:
   * Writing and updating `docs/openapi.yaml`.
   * Drafting `db/migrations/*.sql` for spatial indexes and staging table swaps.
