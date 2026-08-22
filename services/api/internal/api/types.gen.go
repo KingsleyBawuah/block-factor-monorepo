@@ -325,6 +325,7 @@ type ScoreResponse struct {
 
 	// Factors `commute` is present only when a destination was supplied in the request.
 	Factors struct {
+		Bike       FactorScore  `json:"bike"`
 		Commute    *FactorScore `json:"commute,omitempty"`
 		Flood      FactorScore  `json:"flood"`
 		Green      FactorScore  `json:"green"`
@@ -352,6 +353,7 @@ type UnitMetadataFacing string
 
 // WeightOverrides Optional per-factor weight overrides (0-100). Any omitted factor falls back to preset defaults; active weights are dynamically renormalized so they sum to 100%.
 type WeightOverrides struct {
+	Bike       *float32 `json:"bike,omitempty"`
 	Commute    *float32 `json:"commute,omitempty"`
 	Flood      *float32 `json:"flood,omitempty"`
 	Green      *float32 `json:"green,omitempty"`

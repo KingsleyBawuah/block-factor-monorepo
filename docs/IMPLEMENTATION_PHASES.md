@@ -58,8 +58,8 @@ Create database tables with spatial indexes and build the standalone CLI tool to
    - [ ] Spatial tables with `GIST` indexes on `geography(Point, 4326)`:
      - `cta_stops` ('L' stations).
      - `bus_corridors` (High-frequency bus segments derived from GTFS `stop_times` AM-peak headway analysis, powering the `S_transit` bus bonus).
-     - `bike_routes` (Protected lanes and off-street trails).
-     - `parks` (City parks, forest preserves, community gardens).
+     - `bike_routes` (Street-based bike infrastructure — protected lanes, buffered lanes, greenways, marked shared lanes — powering `S_bike`; off-street trails are a separate `parks` classification, not part of this table — see `docs/DATA_SOURCES.md`).
+     - `parks` (City parks, forest preserves, community gardens; `park_class = 'LINEAR PARK'` is the real source for the `S_green` off-street trail bonus — see `docs/DATA_SOURCES.md`).
      - `osm_pois` (Supermarkets, convenience stores, and pharmacies from the Illinois OSM extract, powering `S_grocery`).
      - `cpd_crimes` (Trailing 12-month crime records).
      - `safety_grid_percentiles` (~500m citywide penalty distribution powering `S_safety` normalization).
@@ -91,6 +91,7 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
 1. **Factor Calculators (`services/api/internal/scoring/`):**
    - [ ] `factor_transit.go` (`S_transit`: 'L' station distance decay + bus bonus).
    - [ ] `factor_commute.go` (`S_commute`: Rush-hour OTP2 point-to-point transit duration + transfer friction).
+   - [ ] `factor_bike.go` (`S_bike`: quality-tiered proximity decay + N-S/E-W directional network bonus).
    - [ ] `factor_grocery.go` (`S_grocery`: Supermarket distance + pharmacy boost).
    - [ ] `factor_third_places.go` (`S_third_place`: Cached POI density).
    - [ ] `factor_green.go` (`S_green`: Park proximity + Lakefront/606 trail bonus).
@@ -151,7 +152,7 @@ Assemble the high-density Split-Screen Analytics Workspace, reactive weight cust
 1. **Left Scored Analytics Panel:**
    - [ ] Hero Composite Score Ring (0–100). (Neighborhood archetype badge deferred to v2.)
    - [ ] Collapsible Weight Customization Slider Drawer with instant reactive recalculation and URL search param sync.
-   - [ ] 8–9 Dense Factor Breakdown Cards (the commute card renders only when a destination is set) with distance badges ("straight-line" qualifier) and sub-score progress bars.
+   - [ ] 9–10 Dense Factor Breakdown Cards (the commute card renders only when a destination is set) with distance badges ("straight-line" qualifier) and sub-score progress bars.
 2. **Contextual Affiliate Cards (Intent-Gated):**
    - [ ] Broadband / Fiber card with available ISP speed badges (AT&T Fiber, Astound) — always-on utility feature. Delivers `internal/clients/fcc.go` + per-address cache; hides gracefully on API failure.
    - [ ] Lemonade instant renters quote modal trigger (intent-gated: unit metadata or 2+ pinned comparisons).

@@ -104,6 +104,7 @@ export interface components {
         WeightOverrides: {
             transit?: number;
             commute?: number;
+            bike?: number;
             grocery?: number;
             thirdPlace?: number;
             green?: number;
@@ -153,6 +154,7 @@ export interface components {
             factors: {
                 transit: components["schemas"]["FactorScore"];
                 commute?: components["schemas"]["FactorScore"];
+                bike: components["schemas"]["FactorScore"];
                 grocery: components["schemas"]["FactorScore"];
                 thirdPlace: components["schemas"]["FactorScore"];
                 green: components["schemas"]["FactorScore"];
