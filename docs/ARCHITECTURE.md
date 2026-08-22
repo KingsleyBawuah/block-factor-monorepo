@@ -472,7 +472,9 @@ Final decisions locked before Phase 1 implementation begins. These supplement th
 * **Benchmark hubs:** Clark/Lake, Fulton Market, O'Hare, and Midway coordinates are canonical constants in `internal/scoring`. (PRD 5.10)
 * **CI from day one:** GitHub-hosted runners run `make lint` / `make test` / `make generate-check` on every PR, with branch protection on `main`; migrates to the self-hosted runner in Phase 7.
 * **Compose split:** Named volumes for local development; a server-specific `docker-compose.override.yml` binds the NVMe SSD mounts. (5.1)
+* **Cloud/billing identity:** Phase 1 uses a dedicated GCP project (Places API only, IP-restricted key, hard quota + billing alert) under the developer's personal Google account — project-level isolation is sufficient for API security regardless of account ownership. Revisit before Phase 2 public launch.
 ### 13.2 Open Investigations (decide when the phase begins)
+* **Public-facing identity (Phase 2 launch prep):** Whether to form a dedicated business identity (Google Workspace account, possibly an LLC) before public launch, to keep the developer's name off domain WHOIS, the Privacy Policy/ToS entity name, support contact, and the public GitHub org. Separate question from GCP project ownership, which is already resolved above.
 * **Ingestion tooling per dataset (Phase 2):** FEMA NFHL ships as shapefile/GDB — GDAL `ogr2ogr` vs. a native Go shapefile library; OSM PBF parsing — `paulmach/osm` in-process vs. an `osmium` pre-filter step; GTFS `stop_times` parsing approach for headway derivation.
 * **Integration-test harness (Phase 2/3):** `testcontainers-go` (hermetic per-suite PostGIS, no external orchestration, CI-portable; slower cold starts) vs. a compose-managed test database (fast reuse, mirrors dev topology; shared state requires cleanup discipline). Either way, spatial tests run against golden GeoJSON fixtures in `testdata/`.
 
