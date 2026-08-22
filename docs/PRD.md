@@ -219,8 +219,12 @@ Addresses the critical Chicago risk of basement and garden-unit flooding:
 ### 5.9 Public Safety Score (`S_safety`)
 
 - Performs a radial query against Chicago Data Portal crimes over the trailing 12 months.
-- **Penalty Calculation:** `Penalty = (5 × Violent Count) + (1 × Property Count)`
-  - Violent crimes (assault, robbery, homicide) are weighted 5× heavier than property crimes (theft, burglary, vandalism).
+- **Penalty Calculation:** `Penalty = (5 × Violent Count) + (5 × Sexual Count) + (1 × Property Count) + (2 × Nuisance Count)`
+  - Crimes are bucketed into four scored categories from the real `primary_type`/`iucr` classification (full mapping in `docs/DATA_SOURCES.md` "Category coverage") — a fifth, unscored "excluded" set (e.g. gambling, liquor licensing, parole/probation compliance) is dropped at ingestion rather than counted:
+    - **Violent** (5×): assault, battery, robbery, homicide, kidnapping, weapons and concealed-carry-license violations, stalking/intimidation, non-sexual child abuse/endangerment, animal abuse.
+    - **Sexual** (5×): sexual assault, sex offenses, family-member child sexual abuse, child pornography, sex-offender registration failures — weighted equal to Violent, both being crimes capable of extreme trauma or death.
+    - **Property** (1×): theft, burglary, motor vehicle theft, criminal damage, arson, vehicle-fraud offenses.
+    - **Nuisance** (2×): narcotics, prostitution, public peace violations, public indecency — real quality-of-life impact, but categorically less severe than a threat to physical safety.
 - Final score normalized against **Chicago block percentiles** — meaning the score is relative, not absolute.
 
 #### How Percentile Normalization Works

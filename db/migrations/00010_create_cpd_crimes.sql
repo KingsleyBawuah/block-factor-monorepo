@@ -11,18 +11,21 @@
 -- source_id maps to the source's `id` field (Socrata's stable row
 -- identifier), not `case_number` (a human-facing but less stable key).
 --
--- category is intentionally a closed 2-value set: primary_type has 30+ real
--- values (narcotics, gambling, liquor law violations, etc.) that are neither
--- violent nor property, and S_safety (PRD 5.9) only scores those two. The
--- ingestion CLI filters out non-matching rows before insert — see
--- docs/DATA_SOURCES.md "Category coverage".
+-- category is intentionally a closed 4-value set: primary_type (and, for the
+-- "OTHER OFFENSE"/"OFFENSE INVOLVING CHILDREN" catch-alls, the finer-grained
+-- iucr code) has 30+ real top-level values plus dozens of iucr sub-codes,
+-- many of which are neither violent, sexual, property, nor a quality-of-life
+-- nuisance relevant to S_safety (PRD 5.9) — e.g. gambling, liquor licensing,
+-- parole/probation compliance. The ingestion CLI filters those out before
+-- insert rather than storing a 5th "excluded" value — see the full mapping
+-- table in docs/DATA_SOURCES.md "Category coverage".
 CREATE TABLE cpd_crimes (
     id BIGSERIAL PRIMARY KEY,
     source_id TEXT NOT NULL UNIQUE,
     crime_date TIMESTAMPTZ NOT NULL,
     primary_type TEXT NOT NULL,
     iucr TEXT NOT NULL,
-    category TEXT NOT NULL CHECK (category IN ('violent', 'property')),
+    category TEXT NOT NULL CHECK (category IN ('violent', 'sexual', 'property', 'nuisance')),
     geom GEOGRAPHY(POINT, 4326) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
