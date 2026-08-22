@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Lint, Typecheck, Test & Contract Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          cache: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+
+      - name: Install Go toolchain dependencies
+        run: |
+          go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Install Bun dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check contract drift
+        run: make generate-check
+
+      - name: Run Linters
+        run: make lint
+
+      - name: Run Tests
+        run: make test

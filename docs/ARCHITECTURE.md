@@ -32,8 +32,8 @@ BlockFactor is initially self-hosted on a personal home server for active develo
 - Development environment only. No production hardening required yet.
 
 **CI/CD:**
-- GitHub Actions with a **self-hosted runner** on the home server.
-- PRs trigger lint, test, and build pipelines on local hardware (zero cost).
+- GitHub-hosted runners from day one (see §13.1) — zero setup while the project structure is still churning through Phases 1-6, and CI availability isn't tied to the home server's uptime while actively iterating.
+- Migrates to a self-hosted runner on the home server in Phase 7, once the app is actually deployed there and self-hosting has a clear payoff.
 
 ---
 
@@ -453,6 +453,7 @@ On the home server, a lightweight systemd timer or monthly cron job invokes `mak
 | 21 | OpenAPI Exclusivity Modeling | **Flat optional fields + handler-level validation, not `oneOf`** | `oapi-codegen` generates a wrapper type requiring `AsX`/`FromX`/`MergeX` accessors for `oneOf` rather than a flat struct — worse ergonomics here, especially since branches sharing identical properties (differing only in which field is required) don't map cleanly to oapi-codegen's union-type generation anyway. | ✅ Resolved |
 | 22 | JS Runtime & Package Manager | **Bun** (replaces Node.js + pnpm) | Significantly faster installs and a built-in bundler/test runner/TS execution reduce tooling overhead; workspace/monorepo support (`workspace:*` protocol, catalogs) is mature. Corepack does not manage Bun versions, so pinning uses `engines.bun` (local dev) + an explicit `bun-version` in the `oven-sh/setup-bun` CI step instead. | ✅ Resolved |
 | 23 | Frontend Test Runner | **`bun test`** (not Vitest) | Faster than Vitest (no separate transform layer) and consistent with the rest of the Bun toolchain; React/DOM testing is well-supported via `happy-dom` preload + `@testing-library/react`, per Bun's own docs. Tradeoff: unlike Vitest, `bun test` doesn't automatically share `vite.config.ts` (aliases, plugins) — acceptable given no exotic Vite plugins are in use. | ✅ Resolved |
+| 24 | Frontend Linter | **Biome** (not ESLint) | Rust-based, significantly faster than ESLint; ships accessibility (`a11y`) rules in its recommended preset by default, unlike the initial ESLint setup which had none configured; includes a `useExhaustiveDependencies` rule at parity with `eslint-plugin-react-hooks`. Tradeoff: Biome's own type-aware linting (e.g. `noFloatingPromises`) is inference-based and catches only ~75% of what `typescript-eslint`'s real type-checker-based rules catch, per Biome's own published benchmark — accepted as a reasonable cost for the speed and simplicity gain at this project stage. | ✅ Resolved |
 
 ---
 

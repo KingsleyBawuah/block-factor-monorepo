@@ -17,20 +17,18 @@ coverage.txt
 coverage.out
 profile.out
 
-# Node / Frontend Build Artifacts
+# Node / Bun & Frontend Build Artifacts
 node_modules/
+.bun/
 packages/web/dist/
 packages/web/.turbo/
-.pnpm-store/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+*.tsbuildinfo
 
 # Database & Persistent Volumes
 pgdata/
 *.dump
 *.sql.gz
+docker-compose.override.yml
 
 # Spatial Data & OpenTripPlanner Large Assets
 services/otp/data/*.pbf
