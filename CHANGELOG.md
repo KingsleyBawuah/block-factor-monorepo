@@ -15,3 +15,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - React 19 + Vite 8 frontend skeleton in `packages/web/` with Bun package manager, Biome linter, Tailwind CSS v4 design tokens, `shadcn/ui` primitives, and Lineicons.
   - Dual-stack OpenAPI codegen pipeline: `oapi-codegen` for Go and `openapi-typescript` for TypeScript, wired into `make generate` and `make generate-check`.
 - OpenAPI 3.1 contract (`docs/openapi.yaml`) for `POST /api/v1/score`, `GET /api/v1/geocode`, `GET /api/v1/isochrones`, and `GET /api/v1/health`.
+- Phase 2 PostGIS schema (`db/migrations/`): 13 `goose` migrations covering `city_boundary`, `cta_stops`, `bus_corridors`, `bike_routes`, `parks`, `osm_pois`, `noise_sources`, `fema_flood_zones`, `sewer_311_incidents`, `cpd_crimes`, `safety_grid_percentiles`, `spatial_grid_cache`, and `cache_entries`, informed by live verification against the real Chicago Data Portal datasets (see `docs/DATA_SOURCES.md`).
