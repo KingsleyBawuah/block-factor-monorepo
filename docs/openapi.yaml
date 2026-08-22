@@ -181,6 +181,7 @@ components:
       properties:
         transit: { type: number, minimum: 0, maximum: 100 }
         commute: { type: number, minimum: 0, maximum: 100 }
+        bike: { type: number, minimum: 0, maximum: 100 }
         grocery: { type: number, minimum: 0, maximum: 100 }
         thirdPlace: { type: number, minimum: 0, maximum: 100 }
         green: { type: number, minimum: 0, maximum: 100 }
@@ -281,10 +282,21 @@ components:
           type: object
           description: "`commute` is present only when a destination was supplied in the request."
           required:
-            [transit, grocery, thirdPlace, green, noise, safety, flood, solar]
+            [
+              transit,
+              bike,
+              grocery,
+              thirdPlace,
+              green,
+              noise,
+              safety,
+              flood,
+              solar,
+            ]
           properties:
             transit: { $ref: "#/components/schemas/FactorScore" }
             commute: { $ref: "#/components/schemas/FactorScore" }
+            bike: { $ref: "#/components/schemas/FactorScore" }
             grocery: { $ref: "#/components/schemas/FactorScore" }
             thirdPlace: { $ref: "#/components/schemas/FactorScore" }
             green: { $ref: "#/components/schemas/FactorScore" }

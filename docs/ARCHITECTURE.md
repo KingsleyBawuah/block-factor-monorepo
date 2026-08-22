@@ -182,9 +182,10 @@ services/api/
 ├── internal/
 │   ├── api/                    # HTTP handlers, middleware, request validation
 │   ├── scoring/                # Composite scoring orchestrator & factor math
-│   │   ├── engine.go           # errgroup fan-out & weight normalization (8 or 9 factors)
+│   │   ├── engine.go           # errgroup fan-out & weight normalization (9 or 10 factors)
 │   │   ├── factor_transit.go   # S_transit calculation
 │   │   ├── factor_commute.go   # S_commute point-to-point calculation (optional)
+│   │   ├── factor_bike.go      # S_bike calculation (quality-tiered decay + directional network bonus)
 │   │   ├── factor_grocery.go   # S_grocery calculation
 │   │   ├── factor_third_places.go # S_third_place calculation
 │   │   ├── factor_green.go     # S_green calculation
@@ -291,7 +292,7 @@ The primary interface is a **Split-Screen Location Intelligence Workspace**:
 * **Left Panel (Scored Analytics & Controls — Scrollable):**
   * **Composite Score Hero Card:** Radial score ring (0–100). (Neighborhood archetype descriptor deferred to v2 — derivation rules are not yet designed.)
   * **Weight Customization Drawer:** Reactive slider tray with dynamic normalization and preset chips matching the PRD personas (Remote Worker, Hybrid / In-Office Commuter).
-  * **Factor Breakdown Accordions:** 8–9 dense metric cards (9 when a custom commute destination is set) with distance pills and sub-scores.
+  * **Factor Breakdown Accordions:** 9–10 dense metric cards (10 when a custom commute destination is set) with distance pills and sub-scores.
   * **Native Affiliate Drawer:** Contextually triggered cards (ISP broadband speed check, Lemonade quote, Dolly movers).
 * **Right Panel (WebGL Map — Fixed / Full Bleed):**
   * Full-screen GPU-accelerated **MapLibre GL JS** canvas.
