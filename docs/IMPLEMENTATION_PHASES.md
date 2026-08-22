@@ -23,7 +23,7 @@ Establish the monorepo foundation, Docker development environment, shared OpenAP
 1. **Repository Tooling:**
    - [ ] Root `Makefile` with universal targets (`dev`, `test`, `lint`, `migrate-up`, `seed`, `generate`, `generate-check`).
    - [ ] Root `docker-compose.yml` with PostgreSQL 18 + PostGIS and Docker Compose Profiles (`profiles: ["transit"]` for OTP2). Named volumes for local dev; the home server binds the NVMe SSD via `docker-compose.override.yml`.
-   - [ ] Toolchain pins recorded during scaffolding: `go.mod` `toolchain` directive, `.nvmrc` + `package.json` `packageManager` (Corepack/pnpm), exact Docker image tags (PostGIS, OTP2), pinned `golangci-lint`.
+   - [ ] Toolchain pins recorded during scaffolding: `go.mod` `toolchain` directive, Bun version pinned via `engines.bun` (package.json) + explicit `bun-version` in the `oven-sh/setup-bun` CI step (Corepack does not manage Bun), exact Docker image tags (PostGIS, OTP2), pinned `golangci-lint`.
    - [ ] GitHub Actions CI (GitHub-hosted runners) running `make lint`, `make test`, and `make generate-check` on every PR, with branch protection on `main`.
 2. **Go API Backend Skeleton (`services/api/`):**
    - [ ] Standard library `net/http` server with Go 1.22+ routing patterns.
