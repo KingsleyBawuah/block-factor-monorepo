@@ -32,8 +32,8 @@ BlockFactor is initially self-hosted on a personal home server for active develo
 - Development environment only. No production hardening required yet.
 
 **CI/CD:**
-- GitHub Actions with a **self-hosted runner** on the home server.
-- PRs trigger lint, test, and build pipelines on local hardware (zero cost).
+- GitHub-hosted runners from day one (see §13.1) — zero setup while the project structure is still churning through Phases 1-6, and CI availability isn't tied to the home server's uptime while actively iterating.
+- Migrates to a self-hosted runner on the home server in Phase 7, once the app is actually deployed there and self-hosting has a clear payoff.
 
 ---
 
