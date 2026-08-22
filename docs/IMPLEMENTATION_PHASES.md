@@ -67,7 +67,7 @@ Create database tables with spatial indexes and build the standalone CLI tool to
      - `noise_sources` (Grade-tagged CTA track segments + expressway/arterial linestrings, powering `S_noise`).
      - `city_boundary` (City of Chicago boundary polygon powering the `OUT_OF_COVERAGE` hard-reject).
      - `spatial_grid_cache` (400m bounding cells for Google Places POIs).
-     - `unlogged_cache_entries` (Postgres cache table with indexed `expires_at`).
+     - `cache_entries` (standard LOGGED Postgres cache table with indexed `expires_at`).
 2. **Data Ingestion CLI Tool (`services/api/cmd/seed/main.go`):**
    - SODA API client connecting to the Chicago Data Portal (authenticated via `CHICAGO_APP_TOKEN`).
    - Automated parsers for CTA 'L' stops, bike routes, parks, crime incidents, FEMA/311 flood data, OSM POIs, noise geometry, and the city boundary polygon.
@@ -98,10 +98,11 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
    - `factor_flood.go` (`S_flood`: FEMA zones + 311 sewer backup penalty).
    - `factor_safety.go` (`S_safety`: 12-month violent/property penalty normalized to city percentiles).
    - `factor_solar.go` (`S_solar`: orientation base lookup × exposure modifier + floor bonus).
-2. **Outbound Clients (`services/api/internal/clients/`):**
-   - `places.go` — Google Places (New) Nearby Search client with 400m grid-cache fill (30-day TTL), powering `S_third_place` and the Phase 4 POI map layer.
+2. **Outbound Clients & Cost Defense (`services/api/internal/clients/`):**
+   - `places.go` — Google Places (New) Nearby Search client with 400m grid-cache fill (30-day TTL in `cache_entries`), powering `S_third_place` and the Phase 4 POI map layer.
+     - Protected by a 4-tier cost defense layer: token-bucket rate limiter (`golang.org/x/time/rate`), daily budget circuit breaker (degrading `S_third_place` to `null`), in-flight `singleflight` deduplication (`golang.org/x/sync/singleflight`), and Google Cloud hard billing quotas.
      - **TODO (prerequisite):** provision the Google Cloud project + Places API (New) key — restricted, hard daily quota cap, billing alert — before this client lands.
-   - `nominatim.go` — one-shot geocoding client returning ranked candidates (public endpoint, ≤ 1 req/sec, custom `User-Agent`; no typeahead in Phase 1 per Nominatim policy).
+   - `nominatim.go` — one-shot geocoding client returning ranked candidates (public endpoint, ≤ 1 req/sec rate-limited, custom `User-Agent`; no typeahead in Phase 1 per Nominatim policy).
    - `otp.go` — **interface definition only**: `factor_commute.go` is built and unit-tested against fixture-based fakes shaped as **GTFS GraphQL API** responses (OTP 2.x removed the legacy REST plan API); the live client lands in Phase 6.
 3. **Concurrency Orchestrator (`engine.go`):**
    - `errgroup` fan-out with a hard 8-second parent context deadline.
@@ -114,6 +115,7 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
 
 ### Validation Criteria
 - 100% unit test coverage on scoring mathematical formulas and edge cases (boundary distances, zero weights, all-null factors).
+- Golden barrier-adjacent test suite executed against known edge properties (Goose Island, Pilsen along the river/I-55, West of Kennedy trench, East Side rail yards) to verify scores maintain acceptable bounds under physical barriers.
 - Live API response latency < 150 ms for warm cache hits (excluding `S_commute`, which activates with OTP2 in Phase 6).
 
 ---
@@ -149,15 +151,17 @@ Assemble the high-density Split-Screen Analytics Workspace, reactive weight cust
 1. **Left Scored Analytics Panel:**
    - Hero Composite Score Ring (0–100). (Neighborhood archetype badge deferred to v2.)
    - Collapsible Weight Customization Slider Drawer with instant reactive recalculation and URL search param sync.
-   - 8–9 Dense Factor Breakdown Cards (the commute card renders only when a destination is set) with distance badges and sub-score progress bars.
-2. **Contextual Affiliate Cards:**
-   - Broadband / Fiber card with available ISP speed badges (AT&T Fiber, Astound). Delivers `internal/clients/fcc.go` + per-address cache; the card hides gracefully on FCC API failure.
-   - Lemonade instant renters quote modal trigger.
-   - Dolly / Unpakt moving quote comparison card.
-   - ClassPass fitness studio trial card.
-3. **Bottom Multi-Address Comparison Tray:**
+   - 8–9 Dense Factor Breakdown Cards (the commute card renders only when a destination is set) with distance badges ("straight-line" qualifier) and sub-score progress bars.
+2. **Contextual Affiliate Cards (Intent-Gated):**
+   - Broadband / Fiber card with available ISP speed badges (AT&T Fiber, Astound) — always-on utility feature. Delivers `internal/clients/fcc.go` + per-address cache; hides gracefully on API failure.
+   - Lemonade instant renters quote modal trigger (intent-gated: unit metadata or 2+ pinned comparisons).
+   - Dolly / Unpakt moving quote comparison card (intent-gated: destination address or unit metadata).
+   - ClassPass fitness studio trial card (displayed alongside `S_third_place` gym counts).
+3. **Affiliate Click Instrumentation:**
+   - Prometheus counter metric `blockfactor_affiliate_clicks_total{partner, placement, intent_level}` + subid/UTM passthrough to affiliate links for conversion & EPC tracking.
+4. **Bottom Multi-Address Comparison Tray:**
    - Sticky dock to pin and compare up to 3 addresses side-by-side.
-4. **Error & Empty States:**
+5. **Error & Empty States:**
    - Address-not-found, ambiguous-address candidate picker, out-of-coverage (422 `OUT_OF_COVERAGE`), geocoding failure, OTP2-unavailable, and degraded-factor (`null`) states — styled per AGENTS.md (high-density copy, no emojis).
 
 ### Validation Criteria

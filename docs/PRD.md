@@ -105,7 +105,9 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 
 > **Boundary Semantics:** All distance/duration band tables in this section use half-open intervals — a value landing exactly on a shared boundary falls into the *better* (higher-scoring) band.
 
-> **Distance Measurement (v1):** Distances are geodesic straight-line (`ST_DWithin` on `geography` columns), not walking-network distances. Chicago's river branches and rail viaducts can make straight-line optimistic; thresholds are calibrated with this in mind. Network-based distances (OTP2 one-to-many) are a post-v1 refinement. Thresholds are documented in imperial units for readability — the implementation computes in **meters** internally, converts only at the presentation layer, and defines every threshold as a named constant in `internal/scoring`.
+> **Distance Measurement (v1):** Distances are geodesic straight-line (`ST_DWithin` on `geography` columns), not walking-network distances. Chicago's river branches and rail viaducts can make straight-line optimistic; thresholds are calibrated with this in mind. Network-based distances (OTP2 one-to-many) are a post-v1 refinement. Thresholds are documented in imperial units for readability — the implementation computes in **meters** internally, converts only at the presentation layer, and defines every threshold as a named constant in `internal/scoring`. Distance pills in the UI carry a "straight-line" qualifier to set expectations.
+
+> **Barrier-Crossing Penalty (Post-v1 Refinement):** In Phase 2+, straight-line POI distances can be penalized when the line crosses a physical barrier (Chicago River, expressway trenches, rail yards via OSM `waterway` and `noise_sources` geometries). A barrier crossing applies a ~1.5× distance multiplier or disqualifies the POI. This refinement is deferred post-v1 to keep Phase 3 scoring unblocked; v1 scoring accepts the occasional "0.2 mi" grocery across the river as the cost of simplicity.
 
 > **Degraded Factors:** A factor that times out or lacks data returns `null`; its weight is excluded and the remaining weights renormalize (the same mechanism used when the commute factor is hidden). The report visually flags degraded factors. If all active weights are 0, the API rejects the request with a validation error rather than dividing by zero.
 
@@ -261,19 +263,31 @@ When a user provides an optional workplace or campus address, BlockFactor querie
 
 BlockFactor integrates non-intrusive, context-triggered **Native Affiliate Cards** into the address report.
 
-### 6.1 Active v1 Affiliate Partners
+### 6.1 Affiliate Intent Signaling & Conversion Mechanics
+Native affiliate cards fire based on **intent signals** detected from the user's input profile, not purely on page-load visibility:
+
+| Intent Signal | Triggered Cards | Rationale |
+|---|---|---|
+| Workplace/destination address entered | Commute-relevant services (moving, relocation) | User is actively lease-shopping with a known employer. |
+| Unit metadata filled (floor/facing) | Insurance, storage optimization | User has toured or is seriously evaluating. |
+| 2+ addresses pinned in comparison dock | All affiliate cards | Active decision-making stage — highest conversion intent. |
+| Address only (no commute/metadata) | Broadband only (utility feature) | Casual research phase — avoid ad fatigue. |
+
+**Click Instrumentation (Phase 5 Deliverable):** All affiliate card clicks carry a `click_event` metric (logged for funnel analysis) + UTM/subid passthrough to affiliate partners. This enables EPC (earnings per click) measurement and partner pruning in Phase 2.
+
+### 6.2 Active v1 Affiliate Partners
 
 | Category | Partner(s) | Trigger / Context | Compensation Model |
 |---|---|---|---|
-| **Broadband & Fiber** | AT&T Fiber, Astound Broadband, Comcast/Xfinity | FCC broadband card showing available ISP speeds & fiber lines | $50 – $120 CPA per activation |
-| **Insurance (Multi-Product)** | **Lemonade** (Renters, Pet, Condo/Home) | Standard report summary, with dynamic pet bundle option | $10 – $25 CPA per policy bound |
+| **Broadband & Fiber** | AT&T Fiber, Astound Broadband, Comcast/Xfinity | FCC broadband card showing available ISP speeds & fiber lines (always-on, intent-agnostic) | $50 – $120 CPA per activation |
+| **Insurance (Multi-Product)** | **Lemonade** (Renters, Pet, Condo/Home) | Standard report summary, with dynamic pet bundle option (intent-gated: metadata or 2+ compares) | $10 – $25 CPA per policy bound |
 | **On-Demand Moving Help** | **Dolly** | "Moving to this address?" CTA for local/micro apartment moves | ~$15 CPA per completed job |
-| **Moving Quote Aggregator** | **Unpakt** | Full-service moving quote comparison card | $10 – $25 CPA per verified quote |
-| **Container & Self-Move** | **PODS / U-Box** (U-Haul) | Relocation comparison modal for mid-to-long distance moves | 5% – 15% booking rev-share |
+| **Moving Quote Aggregator** | **Unpakt** | Full-service moving quote comparison card (intent-gated: dest or metadata) | $10 – $25 CPA per verified quote |
+| **Container & Self-Move** | **PODS / U-Box** (U-Haul) | Relocation comparison modal for mid-to-long distance moves (intent-gated: dest) | 5% – 15% booking rev-share |
 | **Off-Site Storage** | **CubeSmart / Extra Space Storage** | Unit size/lifestyle section (apartment storage optimization) | $20 – $50 CPA per unit rental |
 | **Fitness & Third Places** | **ClassPass** | Displayed next to `S_third_place` fitness studio / gym count | $30 – $60 CPA per trial/membership |
 
-### 6.2 Future Expansion Roadmap (Buyer Mode)
+### 6.3 Future Expansion Roadmap (Buyer Mode)
 
 When buyer mode is activated, high-ticket mortgage and homeowner services will augment the affiliate drawer:
 - **Digital Mortgage Origination:** Better.com ($100 – $200+ CPA per closed loan)

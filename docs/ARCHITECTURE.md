@@ -222,12 +222,24 @@ To avoid dependencies on external host Redis instances, caching is partitioned a
 1. **In-Process Go Cache (Volatile Tier):**
    * Stored in-memory in Go (`sync.Map` / bounded LRU with TTL).
    * Used for high-frequency, ultra-short data: **Divvy GBFS dock & e-bike availability** (5-minute TTL).
-2. **PostgreSQL Cache Tables (Persistent Tier):**
-   * Stored in `UNLOGGED` tables with an indexed `expires_at` column.
+2. **PostgreSQL Cache Tables (Persistent Tier — LOGGED):**
+   * Stored in standard **LOGGED** tables (`cache_entries`) with an indexed `expires_at` column.
+   * **Why LOGGED (Durability & Cost Math):** Cache writes occur only on cache misses — write volume is near-zero in Phase 1 and modest in Phase 2. `UNLOGGED` tables truncate on unclean restarts (power loss, JVM OOM-kill), introducing severe asymmetric risk: refilling the Google Places 400m grid costs actual money (~$35/1000 calls), and FCC reference data has a 6-month lifecycle. Standard WAL-logged tables protect against thundering-herd refill spikes on crash recovery with negligible write overhead. (If extreme write volume ever dictates, it is a one-line reversible migration: `ALTER TABLE cache_entries SET UNLOGGED`).
    * **Google Places 400m Grid Cache:** 30-day TTL.
    * **FCC Broadband Address Cache:** Bi-annual refresh.
-   * **OTP2 Commute Route Durations:** 7-day TTL. Cache key: origin/destination coordinates snapped to a 100m grid + mode + departure window (raw floating-point coordinates would yield near-zero hit rates).
-   * **Crash Semantics:** `UNLOGGED` tables are truncated on crash recovery — acceptable for caches, but a wiped Places grid triggers a refill burst; the outbound rate-limit semaphores bound the quota impact.
+   * **OTP2 Commute Route Durations:** 7-day TTL. Cache key: origin/destination coordinates snapped to a 100m grid + mode + departure window.
+
+### 5.5 Outbound API Protection & Cost Defense
+To prevent runaway third-party API costs or thundering-herd spikes during cold cache refills, the Go backend enforces four defensive layers:
+
+1. **Token-Bucket Rate Limiting (`golang.org/x/time/rate`):**
+   * Per-client outbound rate limiters cap requests/sec to external services (Google Places, FCC, Public Nominatim) regardless of inbound traffic bursts.
+2. **Daily Budget Circuit Breaker:**
+   * Tracks daily outbound billable calls (via `blockfactor_external_api_calls_total`). If the configured daily quota threshold is reached, the breaker trips: outbound calls halt, and `S_third_place` gracefully returns `null` (triggering automatic weight renormalization).
+3. **In-Flight Singleflight Deduplication (`golang.org/x/sync/singleflight`):**
+   * Concurrent requests querying the same cold 400m grid cell or address execute exactly one upstream API call; all waiting goroutines share the resolved result.
+4. **Provider-Side Hard Quotas & Billing Alerts:**
+   * Hard monthly spending caps and budget alert webhooks configured directly within the Google Cloud Platform and external provider consoles.
 
 ---
 
@@ -424,7 +436,7 @@ On the home server, a lightweight systemd timer or monthly cron job invokes `mak
 | 4 | Geocoding Engine | **Public Nominatim (Dev) → Self-Hosted Nominatim + Photon (Prod)** | ToS compliance, high accuracy, and fast typeahead. | ✅ Resolved |
 | 5 | Database Engine | **PostgreSQL 18 + PostGIS** | Standard spatial engine, native GIS math, and GIST indexing. | ✅ Resolved |
 | 6 | Spatial Coordinate Standard | **WGS84 (SRID 4326) / `geography`** | Direct GPS compatibility; native meter-based radial queries without reprojection bugs. | ✅ Resolved |
-| 7 | Caching Architecture | **Self-Contained (PostgreSQL UNLOGGED + Go Memory Cache)** | Zero dependency on host Redis; $0 cost, no port conflicts. | ✅ Resolved |
+| 7 | Caching Architecture | **Self-Contained (PostgreSQL LOGGED + Go Memory Cache)** | Zero dependency on host Redis; $0 cost; LOGGED tables protect against paid Places API refill spikes on unclean reboots with trivial WAL overhead. | ✅ Resolved |
 | 8 | Transit Engine | **OpenTripPlanner 2.x (Docker, capped at 5GB JVM)** | Gold standard for transit scheduling, transfers, and native GeoJSON isochrones. | ✅ Resolved |
 | 9 | Frontend Stack | **React + Vite + TanStack (Router/Query)** | Lightweight SPA, zero Node server runtime, native WebGL map support. | ✅ Resolved |
 | 10 | Map Engine | **MapLibre GL JS** | Open-source WebGL vector map rendering with $0 tile costs. | ✅ Resolved |
@@ -446,6 +458,7 @@ Final decisions locked before Phase 1 implementation begins. These supplement th
 ### 13.1 Decided
 * **Coverage:** Hard-reject addresses outside the City of Chicago boundary polygon (HTTP 422, `OUT_OF_COVERAGE`); boundary ingested at seed time. No partial scoring. (PRD 3.1)
 * **Archetype badge:** Deferred to v2 — the v1 hero card ships the score ring only. (7.3)
+* **Cache durability & Outbound Defense:** PostgreSQL cache tables are standard `LOGGED` (`cache_entries`); outbound client is defended by token-bucket rate limiting (`golang.org/x/time/rate`), a daily budget breaker (degrading `S_third_place` to `null`), in-flight `singleflight` deduplication, and GCP quota caps. (5.4, 5.5)
 * **High-frequency bus rule:** Mean scheduled headway ≤ 10 min, weekdays 7:00–9:00 AM, from GTFS `stop_times`. (PRD 5.2)
 * **Geocode UX:** One-shot geocode returns ranked candidates; ambiguous input triggers a candidate picker before scoring. (PRD 3.1)
 * **Parks source (v1):** Chicago Data Portal only; OSM supplement deferred to avoid dual-source dedup. (PRD §4)
