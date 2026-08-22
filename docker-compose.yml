@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgis/postgis:18-3.6-alpine
+    container_name: blockfactor-db
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: blockfactor
+      POSTGRES_USER: blockfactor
+      POSTGRES_PASSWORD: blockfactor_dev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blockfactor -d blockfactor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  otp:
+    image: opentripplanner/opentripplanner:2.9.0
+    container_name: blockfactor-otp
+    profiles:
+      - transit
+    restart: unless-stopped
+    ports:
+      - "4003:8080"
+    environment:
+      JAVA_OPTS: "-Xmx5G"
+    volumes:
+      - otp-data:/var/opentripplanner
+
+volumes:
+  pgdata:
+  otp-data:

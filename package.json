@@ -1,0 +1,10 @@
+{
+  "name": "blockfactor-monorepo",
+  "private": true,
+  "engines": {
+    "bun": "1.4.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ]
+}

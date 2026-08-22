@@ -21,26 +21,26 @@ Establish the monorepo foundation, Docker development environment, shared OpenAP
 
 ### Deliverables
 1. **Repository Tooling:**
-   - [ ] Root `Makefile` with universal targets (`dev`, `test`, `lint`, `migrate-up`, `seed`, `generate`, `generate-check`).
-   - [ ] Root `docker-compose.yml` with PostgreSQL 18 + PostGIS and Docker Compose Profiles (`profiles: ["transit"]` for OTP2). Named volumes for local dev; the home server binds the NVMe SSD via `docker-compose.override.yml`.
-   - [ ] Toolchain pins recorded during scaffolding: `go.mod` `toolchain` directive, Bun version pinned via `engines.bun` (package.json) + explicit `bun-version` in the `oven-sh/setup-bun` CI step (Corepack does not manage Bun), exact Docker image tags (PostGIS, OTP2), pinned `golangci-lint`.
-   - [ ] GitHub Actions CI (GitHub-hosted runners) running `make lint`, `make test`, and `make generate-check` on every PR, with branch protection on `main`.
+   - [x] Root `Makefile` with universal targets (`dev`, `test`, `lint`, `migrate-up`, `seed`, `generate`, `generate-check`).
+   - [x] Root `docker-compose.yml` with PostgreSQL 18 + PostGIS and Docker Compose Profiles (`profiles: ["transit"]` for OTP2). Named volumes for local dev; the home server binds the NVMe SSD via `docker-compose.override.yml`.
+   - [x] Toolchain pins recorded during scaffolding: `go.mod` `toolchain` directive, Bun version pinned via `engines.bun` (package.json) + explicit `bun-version` in the `oven-sh/setup-bun` CI step (Corepack does not manage Bun), exact Docker image tags (PostGIS, OTP2), pinned `golangci-lint`.
+   - [x] GitHub Actions CI (GitHub-hosted runners) running `make lint`, `make test`, and `make generate-check` on every PR, with branch protection on `main`.
 2. **Go API Backend Skeleton (`services/api/`):**
-   - [ ] Standard library `net/http` server with Go 1.22+ routing patterns.
-   - [ ] `log/slog` JSON logging configured for Promtail/Loki.
-   - [ ] Prometheus `/metrics` endpoint.
-   - [ ] Domain-layered package structure (`internal/api`, `internal/scoring`, `internal/spatial`, `internal/clients`, `internal/cache`).
+   - [x] Standard library `net/http` server with Go 1.22+ routing patterns.
+   - [x] `log/slog` JSON logging configured for Promtail/Loki.
+   - [x] Prometheus `/metrics` endpoint.
+   - [x] Domain-layered package structure (`internal/api`, `internal/scoring`, `internal/spatial`, `internal/clients`, `internal/cache`).
 3. **OpenAPI 3.1 Contract (`docs/openapi.yaml`):**
    - [x] Strict REST request/response schemas for `POST /api/v1/score` (accepts a raw address or pre-resolved coordinates), `GET /api/v1/geocode`, `GET /api/v1/isochrones`, and `GET /api/v1/health`.
    - [x] Score response contract: factor sub-scores as objects (`score`, `degraded` flag, distances / contributing POIs) plus benchmark commute pills; isochrones are excluded and served only by `GET /api/v1/isochrones` (faster first paint, independent caching). Out-of-coverage requests return 422 `OUT_OF_COVERAGE`.
-   - [ ] Code generation scripts: Go server types via `oapi-codegen`, TypeScript client types via `openapi-typescript`.
+   - [x] Code generation scripts: Go server types via `oapi-codegen`, TypeScript client types via `openapi-typescript`.
 4. **React 19 + Vite Frontend Skeleton (`packages/web/`):**
-   - [ ] Tailwind CSS v4 configured with sharp, disciplined design tokens (Slate/Zinc, CTA rail colors, zero violet glow).
-   - [ ] `shadcn/ui` (Radix UI) component primitives.
-   - [ ] **Lineicons** icon library integration.
-   - [ ] TanStack Router with type-safe search param validation schema.
-   - [ ] TanStack Query client setup.
-   - [ ] Vite dev proxy (`/api` → `http://localhost:4001`) — no CORS in development.
+   - [x] Tailwind CSS v4 configured with sharp, disciplined design tokens (Slate/Zinc, CTA rail colors, zero violet glow).
+   - [x] `shadcn/ui` (Radix UI) component primitives.
+   - [x] **Lineicons** icon library integration.
+   - [x] TanStack Router with type-safe search param validation schema.
+   - [x] TanStack Query client setup.
+   - [x] Vite dev proxy (`/api` → `http://localhost:4001`) — no CORS in development.
 
 ### Validation Criteria
 - `make test` and `make lint` pass across both Go and TypeScript workspaces.
