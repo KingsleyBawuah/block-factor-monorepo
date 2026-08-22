@@ -34,7 +34,12 @@ This document establishes the behavioral and operational guidelines for AI codin
 
 ## 3. Engineering & Code Standards
 
-- **Type Safety & Contracts:** Strict type definitions across Go backend and TypeScript frontend.
-- **Idiomatic Patterns:** Follow standard Go project layouts, clean separation of concerns (internal packages, bounded contexts), and idiomatic React/TanStack patterns.
-- **Spatial Precision:** Maintain exact PostGIS geometry conventions (SRID 4326 for WGS84 coordinates, appropriate metric projections/spheroids for distance queries).
+- **Idiomatic Go Standard:**
+  - Adhere strictly to Effective Go, standard library idioms, and the Go Code Review Comments style guide.
+  - Favor standard library packages (`net/http`, `log/slog`, `context`, `sync`) over heavy third-party framework dependencies.
+  - Keep packages cohesive and flat (avoid deep inheritance-like hierarchies or premature abstraction).
+  - Explicit error handling: wrap errors with context (`fmt.Errorf("...: %w", err)`), never swallow errors, and avoid naked returns or unhandled goroutine panics.
+- **Type Safety & Contracts:** Strict type definitions across Go backend and TypeScript frontend generated from a single OpenAPI contract.
+- **Frontend Standards:** Idiomatic React 19 / TanStack patterns (Router & Query), strictly typed search params, and declarative component state.
+- **Spatial Precision:** Maintain exact PostGIS geometry conventions (SRID 4326 for WGS84 coordinates, appropriate metric spherical distance queries with `ST_DWithin`).
 - **Cost & API Consciousness:** Prioritize local calculation, caching (PostGIS spatial grid cache), and self-hosted services (OTP2, Nominatim, OSM) over metered third-party commercial APIs.

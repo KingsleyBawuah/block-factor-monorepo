@@ -181,6 +181,33 @@ Rather than a generic worker pool, address evaluation uses structured concurrenc
   * **Self-Hosted Nominatim (PostGIS):** Ingests Illinois OSM extract for accurate, ToS-compliant address resolution and building polygon snapping.
   * **Photon (Elasticsearch/Lucene, Optional):** Lightweight search index (<2GB RAM) for low-latency (<20ms) typeahead address search in the UI input bar.
 
+### 4.4 Idiomatic Go Package Layout
+The Go backend follows a cohesive, domain-layered package structure that avoids fragmentation while maintaining testability:
+
+```text
+services/api/
+├── cmd/
+│   ├── server/main.go          # HTTP API entry point (net/http ServeMux wiring)
+│   └── seed/main.go            # Open dataset ingestion CLI (CTA, CPD Crimes, Parks)
+├── internal/
+│   ├── api/                    # HTTP handlers, middleware, request validation
+│   ├── scoring/                # Composite scoring orchestrator & factor math
+│   │   ├── engine.go           # errgroup fan-out & weight normalization
+│   │   ├── factor_transit.go   # S_transit calculation
+│   │   ├── factor_grocery.go   # S_grocery calculation
+│   │   ├── factor_third_places.go # S_third_place calculation
+│   │   ├── factor_green.go     # S_green calculation
+│   │   ├── factor_noise.go     # S_noise calculation
+│   │   ├── factor_flood.go     # S_flood calculation
+│   │   ├── factor_safety.go    # S_safety percentile calculation
+│   │   └── factor_solar.go     # S_solar deterministic math
+│   ├── spatial/                # PostGIS queries (ST_DWithin, GIST indexes, grid cells)
+│   ├── clients/                # Outbound HTTP clients (Nominatim, OTP2, Places, FCC)
+│   └── cache/                  # Postgres UNLOGGED cache + in-memory sync.Map
+├── go.mod
+└── go.sum
+```
+
 ---
 
 ## 5. Spatial Database & Caching Architecture
@@ -329,7 +356,38 @@ Because the home server already operates a production-grade monitoring stack (**
 
 ---
 
-## 11. Architecture Decision Log
+## 11. Data Ingestion Pipeline (`cmd/seed`)
+
+### 11.1 Design & Execution Model
+Open city datasets are ingested via a dedicated, standalone Go CLI tool (`services/api/cmd/seed/main.go`). This keeps the HTTP API server completely stateless and avoids resource contention during live user requests:
+
+```bash
+# Ingest all Chicago open datasets into PostGIS
+make seed
+
+# Or run specific dataset imports with flags
+go run ./services/api/cmd/seed/main.go --dataset=cta
+go run ./services/api/cmd/seed/main.go --dataset=crimes --limit=10000
+go run ./services/api/cmd/seed/main.go --dataset=parks,bike_routes
+```
+
+### 11.2 Ingested Datasets & Sync Strategy
+
+| Dataset | Provider / Source | Ingestion Mechanism | Production Sync Cadence |
+|---|---|---|---|
+| **CTA 'L' Stops & Lines** | Chicago Data Portal (SODA API) | GeoJSON stream $\rightarrow$ `cta_stops` table | Monthly |
+| **CTA GTFS Schedules** | Chicago Transit Authority | Archive download $\rightarrow$ OTP2 graph compile | Quarterly |
+| **Protected Bike Routes** | Chicago Data Portal (SODA API) | Linestring GeoJSON $\rightarrow$ `bike_routes` table | Quarterly |
+| **Public Parks & Facilities** | Chicago Data Portal + OSM | Polygon GeoJSON $\rightarrow$ `parks` table | Quarterly |
+| **CPD Crimes (Trailing 12mo)** | Chicago Data Portal (SODA API) | Filtered SODA query (`$where=date > ...`) $\rightarrow$ `cpd_crimes` | Monthly |
+| **FEMA Flood Zones & 311s** | FEMA NFHL + City 311 SODA | Polygon shapefiles + 311 sewer incidents | Semi-annual |
+
+### 11.3 Production Automation (Phase 1)
+On the home server, a lightweight systemd timer or monthly cron job invokes `make seed` during off-peak hours (e.g. 3:00 AM on the 1st of each month).
+
+---
+
+## 12. Architecture Decision Log
 
 | # | Topic | Decision | Rationale | Status |
 |---|---|---|---|---|
@@ -350,7 +408,7 @@ Because the home server already operates a production-grade monitoring stack (**
 | 15 | Monorepo Orchestration | **Root `Makefile`** | Zero installation prerequisites; strict 1:1 parity between local dev and CI. | ✅ Resolved |
 | 16 | HTTP Router | **Standard Library `net/http` (Go 1.22+)** | Zero third-party router dependencies; clean method-based routing patterns. | ✅ Resolved |
 | 17 | Observability & Logging | **`log/slog` (JSON) + Prometheus `/metrics`** | Hooks directly into existing host Loki & Prometheus monitoring stack. | ✅ Resolved |
-| 18 | Compose Topology | Split Compose (`docker-compose.yml` + `docker-compose.otp.yml`) vs. Single Stack | OTP2 graph build takes 15 min; separating keeps API rapid to restart. | 🔲 Open Question |
-| 19 | Go Internal Package Layout | Granular factor packages (`internal/transit`, `internal/solar`) vs. Domain modules | Balance separation of concerns with idiomatic Go package design. | 🔲 Open Question |
-| 20 | Data Ingestion Pipeline | CLI Seed tool (`cmd/seed`) vs. Background Cron Jobs | How monthly CTA/Crime dataset updates are ingested into PostGIS. | 🔲 Open Question |
+| 18 | Compose Topology | **Single `docker-compose.yml` with Profiles (`profiles: ["transit"]`)** | Unifies networking; decouples OTP2 build/start lifecycle from dev app restarts. | ✅ Resolved |
+| 19 | Go Internal Package Layout | **Domain-Layered (`internal/scoring`, `internal/spatial`, `internal/clients`)** | Idiomatic Go; groups by responsibility and avoids package fragmentation or circular dependencies. | ✅ Resolved |
+| 20 | Data Ingestion Pipeline | **Standalone CLI (`cmd/seed/main.go` + `make seed`)** | Decoupled from API runtime; testable, flag-selectable, and easily scheduled via cron. | ✅ Resolved |
 
