@@ -1,0 +1,55 @@
+# Environments & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# Go Binaries & Artifacts
+services/api/bin/
+bin/
+dist/
+*.exe
+*.test
+*.out
+coverage.txt
+coverage.out
+profile.out
+
+# Node / Frontend Build Artifacts
+node_modules/
+packages/web/dist/
+packages/web/.turbo/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Database & Persistent Volumes
+pgdata/
+*.dump
+*.sql.gz
+
+# Spatial Data & OpenTripPlanner Large Assets
+services/otp/data/*.pbf
+services/otp/data/*.obj
+services/otp/data/*.zip
+*.osm.pbf
+*.graph.obj
+
+# IDEs & Editor Configuration
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+# Allow custom Zed tasks/settings if desired, ignore local state
+.zed/local_settings.json
+
+# Temporary & Cache Directories
+tmp/
+.tmp/
+.cache/
