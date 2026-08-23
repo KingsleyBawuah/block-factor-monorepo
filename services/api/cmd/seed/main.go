@@ -51,6 +51,7 @@ func main() {
 
 	soda := clients.NewSODAClient(os.Getenv("CHICAGO_APP_TOKEN"))
 	overpass := clients.NewOverpassClient()
+	fema := clients.NewFEMAClient()
 	c := cache.New(pool)
 
 	// Every dataset implemented so far ingests its entire source in one
@@ -67,6 +68,7 @@ func main() {
 		{"crimes", func(ctx context.Context) error { return ingestCrimes(ctx, soda, pool) }},
 		{"osm_pois", func(ctx context.Context) error { return ingestOSMPOIs(ctx, overpass, c, pool) }},
 		{"noise", func(ctx context.Context) error { return ingestNoiseSources(ctx, overpass, c, pool) }},
+		{"flood_zones", func(ctx context.Context) error { return ingestFloodZones(ctx, fema, c, pool) }},
 	}
 
 	ran := false
