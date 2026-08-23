@@ -25,10 +25,18 @@ type parkRow struct {
 }
 
 // ingestParks replaces parks with the current Chicago Data Portal park
-// boundaries. Some smaller parks come back as a plain GeoJSON Polygon
-// rather than MultiPolygon, so the geometry is wrapped in ST_Multi() --
-// a no-op if it's already a MultiPolygon -- to match the parks table's
-// GEOGRAPHY(MULTIPOLYGON, 4326) column.
+// boundaries. Two geometry fixups are applied on the way in:
+//   - ST_MakeValid() repairs self-intersecting rings -- a real data-quality
+//     issue in the source's largest, most complex boundaries (Washington
+//     Park, Grant Park, Lincoln Park, and others), confirmed by auditing
+//     the ingested data: 11 of 617 parks failed ST_IsValid before this fix,
+//     including 3 LINEAR PARK rows that S_green's off-street trail bonus
+//     depends on.
+//   - ST_Multi() -- a no-op if the geometry is already a MultiPolygon --
+//     handles the separate case of smaller parks coming back as a plain
+//     GeoJSON Polygon, to match the parks table's GEOGRAPHY(MULTIPOLYGON,
+//     4326) column. Applied after ST_MakeValid since repairing a
+//     self-intersecting Polygon can itself produce a MultiPolygon.
 func ingestParks(ctx context.Context, soda *clients.SODAClient, pool *pgxpool.Pool) error {
 	var rows []parkRow
 	params := url.Values{"$limit": {"5000"}} // source has 617 rows; well above that
@@ -48,7 +56,7 @@ func ingestParks(ctx context.Context, soda *clients.SODAClient, pool *pgxpool.Po
 
 	const insertSQL = `
 		INSERT INTO parks (source_id, park_name, park_class, acres, geom)
-		VALUES ($1, $2, $3, NULLIF($4, '')::numeric, ST_Multi(ST_GeomFromGeoJSON($5))::geography)
+		VALUES ($1, $2, $3, NULLIF($4, '')::numeric, ST_Multi(ST_MakeValid(ST_GeomFromGeoJSON($5)))::geography)
 	`
 	for _, row := range rows {
 		if _, err := tx.Exec(ctx, insertSQL, row.ParkNo, row.Park, row.ParkClass, row.Acres, row.TheGeom); err != nil {
