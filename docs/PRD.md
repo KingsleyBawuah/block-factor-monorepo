@@ -124,6 +124,8 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 
 > **High-Frequency Definition:** A bus stop qualifies as high-frequency if at least one route serving it has a mean scheduled headway of ≤ 10 minutes between 7:00–9:00 AM on weekdays, computed from GTFS `stop_times` during ingestion.
 
+> **Future Consideration — Metra Proximity (Post-v1):** `S_transit` currently only counts CTA 'L' stops and buses; Metra (Chicago's suburban commuter rail) isn't modeled as a standalone proximity amenity at all yet, even though a nearby Metra station is a real asset — particularly for commuting to the suburbs, which CTA doesn't reach. Unlike the §5.10 `S_commute` consideration below, this would need real new work: no Metra ingestion path exists yet (station locations, line data), and it'd mean either extending this factor's radius/bonus logic or designing a separate one. Not started.
+
 ---
 
 ### 5.3 Grocery Score (`S_grocery`)
@@ -263,6 +265,8 @@ When a user provides an optional workplace or campus address, BlockFactor querie
 > * **Midway International Airport:** e.g. `35 min (Pink → Bus 62 / Orange)`
 >
 > Hub coordinates are defined as canonical constants in `internal/scoring`; the durations above are illustrative and always computed live, never hardcoded UI copy.
+
+> **Future Consideration — Metra in OTP2 Routing (Post-v1):** Unlike §5.2's Metra proximity idea, this one is close to free: `S_commute` already plans to query OpenTripPlanner 2 (Phase 6) for real door-to-door itineraries. If Metra's GTFS feed gets loaded into that same OTP2 graph alongside CTA's, a commute to a suburban workplace would automatically route via Metra whenever it's genuinely the fastest option — no new scoring logic in this factor, just one more GTFS feed added to routing infrastructure already being built. Metra specifically matters here since it's Chicago's suburban commuter rail — exactly the kind of trip CTA (city-only) can't serve. Not started; contingent on Phase 6.
 
 ---
 
