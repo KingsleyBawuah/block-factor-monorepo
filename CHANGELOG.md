@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `.env.example`'s `DATABASE_URL` had the database name and password swapped relative to `docker-compose.yml`'s actual `POSTGRES_DB`/`POSTGRES_PASSWORD` values, which would have caused `make migrate-up` and the API's own DB connection to fail with an auth error.
+- `docker-compose.yml`'s `db` service mounted the `pgdata` volume at `/var/lib/postgresql/data`, which PostgreSQL 18+ images no longer use — the `postgis/postgis:18-3.6-alpine` image expects the volume at `/var/lib/postgresql`, and the container would fail its healthcheck and error-loop indefinitely without this.
 
 ### Added
 
