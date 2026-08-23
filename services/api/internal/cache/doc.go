@@ -1,2 +1,3 @@
-// Package cache will implement the two-tier caching layer in Phase 2/3.
+// Package cache implements a generic, Postgres-backed key-value cache with
+// a TTL, against the cache_entries table.
 package cache
