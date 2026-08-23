@@ -405,6 +405,11 @@ go run ./services/api/cmd/seed/main.go --dataset=crimes --limit=10000
 go run ./services/api/cmd/seed/main.go --dataset=parks,bike_routes
 ```
 
+**GDAL runtime dependency (Decision Log row 25):** `cmd/seed` shells out to `ogr2ogr` for shapefile and OSM PBF ingestion, so GDAL is a required local prerequisite alongside Go and Bun — installed via the OS package manager (`dnf install gdal` on Fedora; `apt install gdal-bin` on Debian/Ubuntu). This splits across three environments rather than needing to be solved everywhere at once:
+* **Local dev (now):** GDAL installed natively on the developer machine; `os/exec` finds `ogr2ogr` on `PATH`.
+* **CI:** Not needed yet — compiling and unit-testing `cmd/seed` doesn't invoke `ogr2ogr`, since the dependency is a runtime `os/exec` call, not a cgo build-time one. A CI `apt-get install -y gdal-bin` step (GitHub Actions runners are Ubuntu) only becomes necessary once a real ingestion test exercises `ogr2ogr` against a fixture.
+* **Home server (Phase 7):** Containerizing the seed CLI so its image ships GDAL — instead of a manual per-server install — is deliberately deferred to Phase 7, which owns the home-server deployment topology (`docker-compose.override.yml`). There's no second server target to containerize against yet.
+
 ### 11.2 Ingested Datasets & Sync Strategy
 
 | Dataset | Provider / Source | Ingestion Mechanism | Production Sync Cadence |
