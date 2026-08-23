@@ -50,15 +50,40 @@ func main() {
 
 	soda := clients.NewSODAClient(os.Getenv("CHICAGO_APP_TOKEN"))
 
-	if *all || *dataset == "boundary" {
-		if *limit > 0 {
-			logger.Warn("--limit is ignored for the boundary dataset (always exactly 1 row)")
+	// Every dataset implemented so far ingests its entire source in one
+	// pass and doesn't yet respect --limit; each new entry here should
+	// revisit that once a dataset actually needs partial ingestion.
+	datasets := []struct {
+		name string
+		run  func(context.Context) error
+	}{
+		{"boundary", func(ctx context.Context) error { return ingestBoundary(ctx, soda, pool) }},
+		{"cta", func(ctx context.Context) error { return ingestCTAStops(ctx, soda, pool) }},
+		{"bike_routes", func(ctx context.Context) error { return ingestBikeRoutes(ctx, soda, pool) }},
+		{"parks", func(ctx context.Context) error { return ingestParks(ctx, soda, pool) }},
+	}
+
+	ran := false
+	for _, d := range datasets {
+		if !*all && *dataset != d.name {
+			continue
 		}
-		logger.Info("ingesting dataset", slog.String("dataset", "boundary"))
-		if err := ingestBoundary(ctx, soda, pool); err != nil {
-			logger.Error("boundary ingestion failed", slog.String("error", err.Error()))
+		ran = true
+
+		if *limit > 0 {
+			logger.Warn("--limit is ignored for this dataset", slog.String("dataset", d.name))
+		}
+
+		logger.Info("ingesting dataset", slog.String("dataset", d.name))
+		if err := d.run(ctx); err != nil {
+			logger.Error("dataset ingestion failed", slog.String("dataset", d.name), slog.String("error", err.Error()))
 			os.Exit(1)
 		}
-		logger.Info("dataset ingestion complete", slog.String("dataset", "boundary"))
+		logger.Info("dataset ingestion complete", slog.String("dataset", d.name))
+	}
+
+	if !ran && !*all {
+		logger.Error("unknown dataset", slog.String("dataset", *dataset))
+		os.Exit(1)
 	}
 }

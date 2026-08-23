@@ -49,6 +49,10 @@ The standard file format transit agencies (like the CTA) publish schedules in �
 
 Transit jargon for "how long you wait between vehicles" — a bus with a 10-minute headway shows up roughly every 10 minutes. It's the transit-scheduling equivalent of a traffic light's cycle time. BlockFactor computes headway from GTFS data to decide whether a bus stop is frequent enough to boost a property's transit score.
 
+## Invalid Geometry (Self-Intersection)
+
+A polygon is only "valid" if its boundary is a clean, non-crossing loop — like a rubber band laid flat with no twists. A self-intersecting polygon is what happens when that boundary line crosses back over itself somewhere, like the rubber band got a twist in it and formed a little figure-eight pinch instead of a simple loop. At that crossing point, "inside" and "outside" the shape become ambiguous, which breaks spatial math like computing area or checking whether a point falls inside it. It's a common real-world defect in government GIS data — usually from boundaries digitized by hand over decades, especially for large or complex shapes where a point was traced slightly out of order or two merged boundary pieces don't line up exactly. `ST_MakeValid()` is PostGIS's repair function for this. BlockFactor hit this for real: 11 of Chicago's 617 park boundaries — including Washington Park, Grant Park, and Lincoln Park — have this defect in the source data, fixed at ingestion time (see `docs/DATA_SOURCES.md` "Parks").
+
 ## Isochrone
 
 A boundary drawn on a map showing everywhere reachable within a fixed amount of time from a starting point (from "iso" = same, "chrone" = time). Picture a stone dropped in a pond — the ripple's edge at any given second shows "how far the wave has traveled by now." An isochrone is that same idea applied to travel, but it follows the real street/transit network rather than a straight-line radius: it bulges out along a fast route (like next to a train line) and pinches in where movement is blocked or slow (a river with no bridge). BlockFactor renders a 15-minute walk isochrone and a 30-minute transit isochrone per address as shaded polygons on the map.
@@ -56,6 +60,10 @@ A boundary drawn on a map showing everywhere reachable within a fixed amount of 
 ## PBF (Protocolbuffer Binary Format)
 
 A compact binary encoding OpenStreetMap uses for its data extracts, as an alternative to the older plain-text `.osm` XML format — same nodes/ways/relations and tags, just packed far more densely, so a regional extract is a fraction of the size and much faster to parse. Think of it as the difference between a verbose XML export and a zipped binary log of the same records. BlockFactor ingests a Chicago-area `.osm.pbf` extract (from a provider like Geofabrik) to pull out POIs (points of interest) — grocery stores, pharmacies, etc. — identified by their OSM tags (`shop=supermarket`, `amenity=pharmacy`).
+
+## Polygon
+
+A shape made from a closed loop of straight lines: connect a series of coordinate points one after another, then draw one final line back to where you started, and whatever's enclosed is the polygon. It's how GIS represents anything with an *area* — a park, a lake, a city boundary — as opposed to a single location (a Point) or a path (a LineString). A MultiPolygon is just a polygon record allowed to be more than one separate piece at once: BlockFactor's own `city_boundary` is technically a MultiPolygon because O'Hare Airport sits detached from the rest of Chicago, making "the city" two disconnected pieces stored as one record. BlockFactor stores parks, flood zones, and the city boundary as (Multi)Polygons — distinct from points like CTA stations or lines like bike routes.
 
 ## ST_DWithin
 
@@ -68,3 +76,7 @@ A numeric ID that names a specific coordinate reference system — similar to ho
 ## WGS84
 
 The specific real-world reference system that defines what "latitude 41.8781, longitude -87.6298" actually means — the standard GPS satellites and virtually all consumer mapping software use. When people say "regular GPS coordinates," they mean WGS84. It's what SRID `4326` refers to.
+
+## WKB / WKT / GeoJSON
+
+The same coordinates, stored or shown three different ways for three different audiences. **WKB** ("Well-Known Binary") is what's actually sitting in a `geom` column — a compact binary encoding of the geometry type, SRID, and raw coordinate numbers, never converted to text just to run a spatial query. **WKT** ("Well-Known Text") is its human-readable form, e.g. `POINT(-87.672892 42.019063)` — purely a debugging convenience, never sent over a wire in production. **GeoJSON** — `{"type":"Point","coordinates":[-87.672892,42.019063]}` — is the one that actually matters outside the database: it's the near-universal web standard for spatial data, understood natively by MapLibre GL (BlockFactor's map library) and virtually every other mapping tool. BlockFactor's spatial math (PostGIS running `ST_DWithin` etc.) operates on the raw binary and never touches the other two; whenever the API needs to hand something to the frontend to actually draw on a map, it converts to GeoJSON first (`ST_AsGeoJSON()`).
