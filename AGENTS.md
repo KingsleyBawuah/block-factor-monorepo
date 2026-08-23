@@ -129,6 +129,12 @@ The application must look and feel like an analytical, high-density location int
   * Writing the math logic for scoring factors (`internal/scoring/factor_*.go`).
   * Reviewing multi-file diffs and ensuring adherence to `ARCHITECTURE.md` and `PRD.md`.
 
+### Postgres MCP (Claude Code only)
+* A `crystaldba/postgres-mcp` server ("Postgres MCP Pro") runs locally as a Docker container (`postgres-mcp`, SSE transport on `localhost:8000`), connected to the local `blockfactor-db` container. It gives Claude direct schema introspection, `EXPLAIN`/query-plan analysis, health checks (`analyze_db_health`), slow-query reporting (`get_top_queries`, via `pg_stat_statements`), and index-tuning recommendations (`analyze_query_indexes`/`analyze_workload_indexes`, using a DTA — Database Tuning Advisor — algorithm that simulates candidate indexes with `hypopg` before recommending them).
+* The server runs in **`--access-mode=restricted`**, which enforces read-only transactions with SQL parsing and execution timeouts at the server level — `execute_sql` cannot run DDL/DML even if asked. Use it for schema exploration, query plans, health checks, and index analysis.
+* Schema changes still go exclusively through `db/migrations/*.sql` (goose), drafted by Claude and applied by Agy via `make migrate-up` — this MCP is diagnostic-only and does not change that division of labor from the Handoff Protocol below.
+* An index recommendation from the DTA tools is a proposal, not a migration: if one is adopted, write it into a proper goose migration file rather than attempting to apply it directly (which restricted mode would reject anyway).
+
 ### Antigravity CLI (`agy`) — Role: Execution & Tooling Engine
 * Primary Focus: File scaffolding, dependency wiring, test execution, container diagnostics, and continuous code validation.
 * Responsibilities:
