@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -52,7 +53,11 @@ func (c *SODAClient) GetJSON(ctx context.Context, resourceID string, params url.
 	defer resp.Body.Close() //nolint:errcheck // response already consumed by the time this runs
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("clients: SODA request to %s returned status %d", resourceID, resp.StatusCode)
+		// Socrata returns a JSON error body ({"message": ..., "errorCode": ...})
+		// that's invaluable for debugging a bad/missing token (403) or rate
+		// limiting (429) — worth the extra read over just the status code.
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("clients: SODA request to %s returned status %d: %s", resourceID, resp.StatusCode, body)
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(dest); err != nil {

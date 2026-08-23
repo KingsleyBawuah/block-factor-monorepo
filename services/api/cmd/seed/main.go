@@ -51,6 +51,9 @@ func main() {
 	soda := clients.NewSODAClient(os.Getenv("CHICAGO_APP_TOKEN"))
 
 	if *all || *dataset == "boundary" {
+		if *limit > 0 {
+			logger.Warn("--limit is ignored for the boundary dataset (always exactly 1 row)")
+		}
 		logger.Info("ingesting dataset", slog.String("dataset", "boundary"))
 		if err := ingestBoundary(ctx, soda, pool); err != nil {
 			logger.Error("boundary ingestion failed", slog.String("error", err.Error()))
