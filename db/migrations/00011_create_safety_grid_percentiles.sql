@@ -4,7 +4,10 @@
 -- from cpd_crimes each ingestion cycle via a staging-table + transactional
 -- rename swap (ARCHITECTURE 11.3) — no source_id, no upserts, the whole
 -- table is replaced atomically so live requests never read a partially
--- computed distribution.
+-- computed distribution. No spatial uniqueness constraint on cell_geom for
+-- the same reason: uniqueness of the ~500m grid is guaranteed by the
+-- generation algorithm, not enforced by the DB, since the whole table is
+-- discarded and regenerated each cycle rather than upserted.
 --
 -- Raw per-category counts are stored alongside the combined penalty_score
 -- (same "keep the raw inputs, not just the derived value" principle as

@@ -16,7 +16,7 @@ CREATE TABLE noise_sources (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT noise_sources_grade_only_for_cta CHECK (
         (source_type = 'cta_track' AND grade IS NOT NULL)
-        OR (source_type != 'cta_track' AND grade IS NULL)
+        OR (source_type <> 'cta_track' AND grade IS NULL)
     )
 );
 -- +goose StatementEnd
