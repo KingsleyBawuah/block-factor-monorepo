@@ -76,3 +76,7 @@ A numeric ID that names a specific coordinate reference system — similar to ho
 ## WGS84
 
 The specific real-world reference system that defines what "latitude 41.8781, longitude -87.6298" actually means — the standard GPS satellites and virtually all consumer mapping software use. When people say "regular GPS coordinates," they mean WGS84. It's what SRID `4326` refers to.
+
+## WKB / WKT / GeoJSON
+
+The same coordinates, stored or shown three different ways for three different audiences. **WKB** ("Well-Known Binary") is what's actually sitting in a `geom` column — a compact binary encoding of the geometry type, SRID, and raw coordinate numbers, never converted to text just to run a spatial query. **WKT** ("Well-Known Text") is its human-readable form, e.g. `POINT(-87.672892 42.019063)` — purely a debugging convenience, never sent over a wire in production. **GeoJSON** — `{"type":"Point","coordinates":[-87.672892,42.019063]}` — is the one that actually matters outside the database: it's the near-universal web standard for spatial data, understood natively by MapLibre GL (BlockFactor's map library) and virtually every other mapping tool. BlockFactor's spatial math (PostGIS running `ST_DWithin` etc.) operates on the raw binary and never touches the other two; whenever the API needs to hand something to the frontend to actually draw on a map, it converts to GeoJSON first (`ST_AsGeoJSON()`).
