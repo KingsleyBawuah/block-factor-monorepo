@@ -180,6 +180,8 @@ Evaluates acoustic livability by detecting proximity to major urban noise genera
 
 > **Scope (v1):** Metra rail, freight corridors, and O'Hare/Midway flight paths are not yet modeled as noise sources.
 
+> **Future Factor — `S_stroad` / Street Safety (Post-v1):** Distinct from pure acoustic noise: a "stroad" (Strong Towns terminology — a street/road hybrid, designed for through-traffic speed but lined with frequent commercial driveways and turning conflicts) is dangerous and unpleasant to live near even when it isn't especially loud. To avoid a costly re-ingest later, `noise_sources` rows for `arterial`/`expressway` ways carry `lanes`, `maxspeed`, and a `has_turn_lane` flag from OSM at ingestion time (Phase 2) even though no scoring logic uses them yet. Road geometry (fast + wide + frequent turn lanes) is only a proxy for actual danger, though — a well-grounded factor should ideally combine it with real pedestrian/cyclist crash data (Chicago's Vision Zero dataset — raised as a candidate, entirely unresearched so far, see `docs/DATA_SOURCES.md` "Future / Under Consideration") rather than geometry alone, since a street with genuinely high crash rates nearby is worth surfacing directly regardless of its lane count. Scope, weighting, and whether this becomes its own factor or an `S_noise` enhancement are all still open.
+
 ---
 
 ### 5.7 Flood Risk Score (`S_flood`)
