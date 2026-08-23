@@ -24,7 +24,7 @@ migrate-up:
 
 # Ingest and seed Chicago base datasets
 seed:
-	go run ./services/api/cmd/seed/main.go
+	go run ./services/api/cmd/seed $(ARGS)
 
 # Regenerate OpenAPI contracts and client SDKs
 generate:

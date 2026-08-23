@@ -69,10 +69,10 @@ Create database tables with spatial indexes and build the standalone CLI tool to
      - `spatial_grid_cache` (400m bounding cells for Google Places POIs).
      - `cache_entries` (standard LOGGED Postgres cache table with indexed `expires_at`).
 2. **Data Ingestion CLI Tool (`services/api/cmd/seed/main.go`):**
-   - [ ] SODA API client connecting to the Chicago Data Portal (authenticated via `CHICAGO_APP_TOKEN`).
-   - [ ] Automated parsers for CTA 'L' stops, bike routes, parks, crime incidents, FEMA/311 flood data, OSM POIs, noise geometry, and the city boundary polygon.
+   - [x] SODA API client connecting to the Chicago Data Portal (authenticated via `CHICAGO_APP_TOKEN`).
+   - [ ] Automated parsers for CTA 'L' stops, bike routes, parks, crime incidents, FEMA/311 flood data, OSM POIs, noise geometry, and the city boundary polygon. (City boundary done; the rest are separate follow-up PRs.)
    - [ ] Post-ingest derivation steps: GTFS `stop_times` headway analysis → `bus_corridors`; crime-grid distribution → `safety_grid_percentiles` (staging-table + rename swap per ARCHITECTURE 11.3).
-   - [ ] Ingestion tooling per dataset (GDAL `ogr2ogr` vs. Go shapefile lib, PBF parsing, GTFS parsing) resolved at phase start per ARCHITECTURE 13.2.
+   - [x] Ingestion tooling per dataset (GDAL `ogr2ogr` vs. Go shapefile lib, PBF parsing, GTFS parsing) resolved at phase start per ARCHITECTURE 13.2.
    - [ ] Selective CLI flags: `--dataset=cta`, `--dataset=crimes`, `--dataset=osm_pois`, `--dataset=flood`, `--dataset=noise`, `--dataset=derive`, `--limit=1000`, `--all`.
 
 ### Validation Criteria

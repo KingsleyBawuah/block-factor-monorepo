@@ -1,2 +1,2 @@
-// Package spatial will implement PostGIS spatial queries and index operations in Phase 2/3.
+// Package spatial implements the PostGIS connection pool and spatial queries.
 package spatial

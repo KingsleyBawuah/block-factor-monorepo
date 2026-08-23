@@ -1,2 +1,2 @@
-// Package clients will implement outbound HTTP clients for external services in Phase 3/5/6.
+// Package clients implements outbound HTTP clients for external services.
 package clients
