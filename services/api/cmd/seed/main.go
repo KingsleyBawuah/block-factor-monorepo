@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/cache"
 	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/clients"
 	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/spatial"
 )
@@ -49,6 +50,8 @@ func main() {
 	defer pool.Close()
 
 	soda := clients.NewSODAClient(os.Getenv("CHICAGO_APP_TOKEN"))
+	overpass := clients.NewOverpassClient()
+	c := cache.New(pool)
 
 	// Every dataset implemented so far ingests its entire source in one
 	// pass and doesn't yet respect --limit; each new entry here should
@@ -62,6 +65,7 @@ func main() {
 		{"bike_routes", func(ctx context.Context) error { return ingestBikeRoutes(ctx, soda, pool) }},
 		{"parks", func(ctx context.Context) error { return ingestParks(ctx, soda, pool) }},
 		{"crimes", func(ctx context.Context) error { return ingestCrimes(ctx, soda, pool) }},
+		{"osm_pois", func(ctx context.Context) error { return ingestOSMPOIs(ctx, overpass, c, pool) }},
 	}
 
 	ran := false
