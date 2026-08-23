@@ -55,7 +55,7 @@ Create database tables with spatial indexes and build the standalone CLI tool to
 
 ### Deliverables
 1. **`goose` Database Migrations (`db/migrations/`):**
-   - [ ] Spatial tables with `GIST` indexes on `geography(Point, 4326)`:
+   - [x] Spatial tables with `GIST` indexes on `geography(Point, 4326)`:
      - `cta_stops` ('L' stations).
      - `bus_corridors` (High-frequency bus segments derived from GTFS `stop_times` AM-peak headway analysis, powering the `S_transit` bus bonus).
      - `bike_routes` (Street-based bike infrastructure — protected lanes, buffered lanes, greenways, marked shared lanes — powering `S_bike`; off-street trails are a separate `parks` classification, not part of this table — see `docs/DATA_SOURCES.md`).

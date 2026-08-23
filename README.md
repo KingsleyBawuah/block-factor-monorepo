@@ -32,6 +32,7 @@ BlockFactor is an analytical location-intelligence platform engineered to evalua
 | **[Privacy & PII Data Handling](docs/PRIVACY_AND_DATA_HANDLING.md)** | Data minimization principles, PII guardrails, third-party data flow map, and retention policy. |
 | **[External Service Provisioning](docs/PROVISIONING.md)** | Setup runbook for external accounts, API keys, and budget/cost controls (Google Cloud, Chicago Data Portal). |
 | **[GIS & Spatial Concepts Glossary](docs/GIS_GLOSSARY.md)** | Plain-English definitions of GIS/spatial terms used throughout the project (SRID, GiST, isochrones, etc.). |
+| **[Data Source Reference](docs/DATA_SOURCES.md)** | Verified real-world field names, resource IDs, and category values for each ingested dataset — the ground truth behind the migration schemas. |
 | **[Agent Guidelines & Working Agreements](AGENTS.md)** | Pair programming standards, permission gates, idiomatic Go standards, and anti-vibe-coding UI rules. |
 | **[Open Data Attribution](ATTRIBUTION.md)** | OpenStreetMap, CTA, City of Chicago, FEMA, and FCC data attribution notices. |
 | **[License](LICENSE)** | Proprietary / Closed-Source License. |
