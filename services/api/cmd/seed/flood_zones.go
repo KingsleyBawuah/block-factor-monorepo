@@ -68,6 +68,19 @@ var knownFloodZones = map[string]bool{
 // Zones" for why this uses FEMA's ArcGIS REST service directly instead of
 // a downloaded shapefile/GDB extract.
 func ingestFloodZones(ctx context.Context, fema *clients.FEMAClient, c *cache.Cache, pool *pgxpool.Pool) error {
+	// The insert below filters candidates against city_boundary via
+	// ST_Intersects; if that table is empty, the predicate evaluates to
+	// NULL (not true) for every row, silently filtering out all of them
+	// rather than erroring -- same risk already guarded against in
+	// ingestOSMPOIs. Fail loudly instead of shipping an empty table.
+	var boundaryCount int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM city_boundary").Scan(&boundaryCount); err != nil {
+		return fmt.Errorf("check city_boundary is populated: %w", err)
+	}
+	if boundaryCount == 0 {
+		return fmt.Errorf("city_boundary is empty; run --dataset=boundary first")
+	}
+
 	var features []clients.FEMAFeature
 	cached, err := c.Get(ctx, floodZonesCacheKey, &features)
 	if err != nil {
@@ -120,7 +133,8 @@ func ingestFloodZones(ctx context.Context, fema *clients.FEMAClient, c *cache.Ca
 
 	batch := &pgx.Batch{}
 	queued := 0
-	var unparseableProps, unknownZone int
+	seenSourceIDs := make(map[string]bool, len(features))
+	var unparseableProps, unknownZone, duplicateID int
 	for _, f := range features {
 		var props floodZoneProperties
 		if err := json.Unmarshal(f.Properties, &props); err != nil {
@@ -132,6 +146,18 @@ func ingestFloodZones(ctx context.Context, fema *clients.FEMAClient, c *cache.Ca
 			slog.Warn("unrecognized FEMA flood zone designation", slog.String("fld_zone", props.FldZone), slog.String("fld_ar_id", props.FldArID))
 			continue
 		}
+		// FLD_AR_ID was confirmed unique across all 291 Chicago-area zones
+		// in live testing, but that's not a guarantee the ArcGIS REST
+		// service makes contractually -- QueryLayer now orders by
+		// OBJECTID for stable pagination (see FEMAClient), but a defensive
+		// dedup here is cheap and turns a would-be unique-violation that
+		// aborts the whole transaction into a logged, skipped row instead.
+		if seenSourceIDs[props.FldArID] {
+			duplicateID++
+			slog.Warn("duplicate FEMA flood zone source_id, skipping", slog.String("fld_ar_id", props.FldArID))
+			continue
+		}
+		seenSourceIDs[props.FldArID] = true
 
 		batch.Queue(insertSQL, props.FldArID, props.FldZone, string(f.Geometry))
 		queued++
@@ -163,6 +189,7 @@ func ingestFloodZones(ctx context.Context, fema *clients.FEMAClient, c *cache.Ca
 		slog.Int64("outside_chicago", int64(queued)-inserted),
 		slog.Int("unparseable_properties", unparseableProps),
 		slog.Int("unknown_zone", unknownZone),
+		slog.Int("duplicate_id", duplicateID),
 	)
 
 	return nil

@@ -18,7 +18,7 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	dataset := flag.String("dataset", "", "Specific dataset to ingest (boundary, cta, crimes, parks, bike_routes, flood, noise, osm_pois, derive)")
+	dataset := flag.String("dataset", "", "Specific dataset to ingest (boundary, cta, crimes, parks, bike_routes, flood_zones, noise, osm_pois, derive)")
 	limit := flag.Int("limit", 0, "Limit number of records to ingest (0 = all)")
 	all := flag.Bool("all", false, "Ingest all datasets")
 	flag.Parse()
