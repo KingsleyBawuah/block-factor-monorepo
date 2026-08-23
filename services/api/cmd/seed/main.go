@@ -61,6 +61,7 @@ func main() {
 		{"cta", func(ctx context.Context) error { return ingestCTAStops(ctx, soda, pool) }},
 		{"bike_routes", func(ctx context.Context) error { return ingestBikeRoutes(ctx, soda, pool) }},
 		{"parks", func(ctx context.Context) error { return ingestParks(ctx, soda, pool) }},
+		{"crimes", func(ctx context.Context) error { return ingestCrimes(ctx, soda, pool) }},
 	}
 
 	ran := false

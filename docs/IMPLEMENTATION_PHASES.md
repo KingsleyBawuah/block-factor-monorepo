@@ -70,14 +70,14 @@ Create database tables with spatial indexes and build the standalone CLI tool to
      - `cache_entries` (standard LOGGED Postgres cache table with indexed `expires_at`).
 2. **Data Ingestion CLI Tool (`services/api/cmd/seed/main.go`):**
    - [x] SODA API client connecting to the Chicago Data Portal (authenticated via `CHICAGO_APP_TOKEN`).
-   - [ ] Automated parsers for CTA 'L' stops, bike routes, parks, crime incidents, FEMA/311 flood data, OSM POIs, noise geometry, and the city boundary polygon. (City boundary, CTA stops, bike routes, and parks done; crimes, flood, OSM POIs, and noise remain as follow-up PRs.)
+   - [ ] Automated parsers for CTA 'L' stops, bike routes, parks, crime incidents, FEMA/311 flood data, OSM POIs, noise geometry, and the city boundary polygon. (City boundary, CTA stops, bike routes, parks, and crimes done; flood, OSM POIs, and noise remain as follow-up PRs.)
    - [ ] Post-ingest derivation steps: GTFS `stop_times` headway analysis → `bus_corridors`; crime-grid distribution → `safety_grid_percentiles` (staging-table + rename swap per ARCHITECTURE 11.3).
    - [x] Ingestion tooling per dataset (GDAL `ogr2ogr` vs. Go shapefile lib, PBF parsing, GTFS parsing) resolved at phase start per ARCHITECTURE 13.2.
    - [ ] Selective CLI flags: `--dataset=cta`, `--dataset=crimes`, `--dataset=osm_pois`, `--dataset=flood`, `--dataset=noise`, `--dataset=derive`, `--limit=1000`, `--all`.
 
 ### Validation Criteria
 - `make migrate-up` creates all tables and spatial indexes cleanly.
-- `make seed` successfully populates PostGIS with real Chicago open data (SODA datasets in < 60 seconds; the one-time OSM PBF import and derivation steps are exempt from this budget).
+- `make seed` successfully populates PostGIS with real Chicago open data (SODA datasets in < 60 seconds; the trailing-12-month crimes dataset — ~225K rows, ~80 seconds in practice — the one-time OSM PBF import, and derivation steps are exempt from this budget).
 - Spatial radius queries (`ST_DWithin`) execute in < 5 ms.
 
 ---
@@ -206,6 +206,7 @@ Deploy BlockFactor to the Beelink home server behind Caddy with automated monito
    - [ ] Sub-path hosting configured end-to-end: Vite `base`, TanStack Router `basepath`, and static asset URLs.
 2. **Monitoring Dashboards:**
    - [ ] Grafana dashboard importing BlockFactor Prometheus metrics and Loki logs.
+   - [ ] Loki alert rule on the seed CLI's "unrecognized crime classification" `WARN` log line (`cmd/seed/crimes.go`) — the ingestion CLI already logs and skips any `primary_type`/`iucr` combination outside the documented taxonomy (`docs/DATA_SOURCES.md` "Category coverage") rather than guessing, but nothing currently surfaces that beyond the log line itself. Deferred here rather than built in Phase 2 since it needs the Loki/Grafana stack this phase sets up.
 3. **CI/CD Self-Hosted Runner:**
    - [ ] Migrates the Phase 1 GitHub-hosted workflows (`make lint` / `make test` / `make generate-check`) to the local home-server runner.
 4. **Data Durability:**
