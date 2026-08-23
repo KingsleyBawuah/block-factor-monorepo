@@ -21,6 +21,10 @@ The smallest rectangle that fully contains a shape, described by its min/max lat
 
 A CRS defines how a flat pair of numbers (like `41.8781, -87.6298`) maps onto an actual physical location on Earth. It's the difference between "3 inches from the top-left corner of this piece of paper" and "this exact spot in the real world" — the CRS is the agreed-upon rulebook that makes coordinates meaningful and comparable. BlockFactor uses one CRS throughout: WGS84 (see below), identified by its SRID `4326`.
 
+## GDAL / ogr2ogr
+
+GDAL (Geospatial Data Abstraction Library) is the standard open-source toolkit for reading and converting between spatial file formats — think of it as `ffmpeg`, but for geospatial data instead of video. `ogr2ogr` is its command-line format-converter: point it at an input (a shapefile, a GeoPackage, a FileGDB) and an output (PostGIS, GeoJSON, another shapefile), and it translates one into the other, optionally reprojecting coordinates or filtering features along the way. BlockFactor's Phase 2 datasets that ship as shapefiles (bike routes, parks — see `DATA_SOURCES.md`) are the reason this term came up: shelling out to `ogr2ogr` to load them straight into PostGIS is one of the two options being weighed for the ARCHITECTURE.md §13.2 ingestion-tooling decision, against parsing the shapefile format directly in Go.
+
 ## Geocoding
 
 Turning a human-readable address ("233 S Wacker Dr, Chicago, IL") into a coordinate pair (`41.8789, -87.6359`) a computer can do math with. Reverse geocoding goes the other direction — coordinate back to address. BlockFactor geocodes once per request (via Nominatim) and does all scoring math on the resulting coordinates — the raw address string is never persisted (see `PRIVACY_AND_DATA_HANDLING.md`).
@@ -48,6 +52,10 @@ Transit jargon for "how long you wait between vehicles" — a bus with a 10-minu
 ## Isochrone
 
 A boundary drawn on a map showing everywhere reachable within a fixed amount of time from a starting point (from "iso" = same, "chrone" = time). Picture a stone dropped in a pond — the ripple's edge at any given second shows "how far the wave has traveled by now." An isochrone is that same idea applied to travel, but it follows the real street/transit network rather than a straight-line radius: it bulges out along a fast route (like next to a train line) and pinches in where movement is blocked or slow (a river with no bridge). BlockFactor renders a 15-minute walk isochrone and a 30-minute transit isochrone per address as shaded polygons on the map.
+
+## PBF (Protocolbuffer Binary Format)
+
+A compact binary encoding OpenStreetMap uses for its data extracts, as an alternative to the older plain-text `.osm` XML format — same nodes/ways/relations and tags, just packed far more densely, so a regional extract is a fraction of the size and much faster to parse. Think of it as the difference between a verbose XML export and a zipped binary log of the same records. BlockFactor ingests a Chicago-area `.osm.pbf` extract (from a provider like Geofabrik) to pull out POIs (points of interest) — grocery stores, pharmacies, etc. — identified by their OSM tags (`shop=supermarket`, `amenity=pharmacy`).
 
 ## ST_DWithin
 
