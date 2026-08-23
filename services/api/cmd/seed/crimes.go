@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -21,6 +22,10 @@ const (
 	// crimesPageSize balances request count against per-request payload
 	// size for a ~225K-row trailing-12-month window (~45 requests).
 	crimesPageSize = 5000
+	// crimesInsertBatchSize caps how many statements go into a single
+	// pgx.Batch, so one round trip stays a bounded size even though the
+	// whole insert phase covers ~225K rows.
+	crimesInsertBatchSize = 5000
 )
 
 type crimeRow struct {
@@ -30,6 +35,17 @@ type crimeRow struct {
 	IUCR        string `json:"iucr"`
 	Latitude    string `json:"latitude"`
 	Longitude   string `json:"longitude"`
+}
+
+// crimeInsert is a crimeRow that has already been validated and classified,
+// ready to insert.
+type crimeInsert struct {
+	sourceID    string
+	date        time.Time
+	primaryType string
+	iucr        string
+	category    string
+	lon, lat    float64
 }
 
 // ingestCrimes replaces cpd_crimes with the trailing 12 months of Chicago
@@ -42,32 +58,38 @@ type crimeRow struct {
 // in the dataset's own column metadata, so numeric ordering is safe. See
 // docs/DATA_SOURCES.md "Crimes" "Pagination".
 //
-// Each page is classified and inserted immediately as one pgx.Batch, rather
-// than accumulating all ~225K rows in memory first -- the whole run still
-// commits as a single transaction, so a failure partway through leaves
-// cpd_crimes untouched rather than half-replaced.
+// The ~45-page fetch happens entirely before any database transaction
+// opens: earlier revisions ran DELETE+insert inside one transaction that
+// stayed open for the whole ~80s fetch, which is bad practice regardless of
+// the exact MVCC visibility details -- it needlessly holds locks and a
+// snapshot open for the duration of 45 sequential external HTTP calls, and
+// ties transaction length to that API's reliability rather than to the
+// (fast) DB work. Classified rows are accumulated in memory (~225K rows,
+// tens of MB) instead, and the transaction that follows only does DB work:
+// TRUNCATE, then batched inserts, then commit -- seconds, not a minute-plus.
 func ingestCrimes(ctx context.Context, soda *clients.SODAClient, pool *pgxpool.Pool) error {
 	cutoff := time.Now().AddDate(-1, 0, 0).Format("2006-01-02T15:04:05")
 
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck // no-op once committed
-
-	if _, err := tx.Exec(ctx, "DELETE FROM cpd_crimes"); err != nil {
-		return fmt.Errorf("clear existing crimes: %w", err)
-	}
-
 	var (
-		lastID                                                     int64
-		fetched, inserted, skippedNoCoords, excluded, unrecognized int
-		unrecognizedCounts                                         = map[string]int{} // "primary_type|iucr" -> count
+		lastID                                           int64
+		fetched, skippedNoCoords, excluded, unrecognized int
+		unrecognizedCounts                               = map[string]int{} // "primary_type|iucr" -> count
+		toInsert                                         []crimeInsert
+		page                                             int
 	)
 
 	for {
 		var rows []crimeRow
 		params := url.Values{
+			// cutoff and lastID are both self-produced (formatted
+			// time.Now() and a previously-fetched numeric id), never
+			// external input -- Socrata has no parameterized-query
+			// mechanism, so this $where is built via Sprintf rather than
+			// bind parameters. Keep it that way: if this clause is ever
+			// extended with a value that originates outside this
+			// function (e.g. a future --primary-type flag), it must be
+			// validated/allowlisted before landing here, not interpolated
+			// directly.
 			"$where": {fmt.Sprintf("date > '%s' AND id > %d", cutoff, lastID)},
 			"$order": {"id"},
 			"$limit": {strconv.Itoa(crimesPageSize)},
@@ -79,9 +101,8 @@ func ingestCrimes(ctx context.Context, soda *clients.SODAClient, pool *pgxpool.P
 			break
 		}
 		fetched += len(rows)
+		page++
 
-		batch := &pgx.Batch{}
-		queued := 0
 		for _, row := range rows {
 			id, err := strconv.ParseInt(row.ID, 10, 64)
 			if err != nil {
@@ -115,34 +136,36 @@ func ingestCrimes(ctx context.Context, soda *clients.SODAClient, pool *pgxpool.P
 			if err != nil {
 				return fmt.Errorf("parse latitude for crime %s: %w", row.ID, err)
 			}
-			// date is Socrata's floating_timestamp (no timezone attached).
-			// Parsed and stored as UTC -- exact time-of-day precision isn't
-			// meaningful for S_safety's trailing-12-month window bucketing.
-			crimeDate, err := time.Parse("2006-01-02T15:04:05.000", row.Date)
+			// date is Socrata's floating_timestamp (no timezone attached),
+			// e.g. "2026-08-15T00:00:00.000". The fractional-second
+			// component's digit count isn't guaranteed by Socrata's docs
+			// (and a fixed-width layout like "...05.000" requires an exact
+			// digit count to parse, confirmed by testing against Go's
+			// time.Parse directly -- it does NOT make fractional digits
+			// optional the way a literal reading of the layout might
+			// suggest). Stripping everything from the first "." onward
+			// sidesteps the whole question: exact time-of-day precision
+			// isn't meaningful for S_safety's trailing-12-month window
+			// bucketing anyway.
+			datePart, _, _ := strings.Cut(row.Date, ".")
+			crimeDate, err := time.Parse("2006-01-02T15:04:05", datePart)
 			if err != nil {
 				return fmt.Errorf("parse date for crime %s: %w", row.ID, err)
 			}
 
-			batch.Queue(
-				`INSERT INTO cpd_crimes (source_id, crime_date, primary_type, iucr, category, geom)
-				 VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326)::geography)`,
-				row.ID, crimeDate, row.PrimaryType, row.IUCR, category, lon, lat,
-			)
-			queued++
+			toInsert = append(toInsert, crimeInsert{
+				sourceID:    row.ID,
+				date:        crimeDate,
+				primaryType: row.PrimaryType,
+				iucr:        row.IUCR,
+				category:    category,
+				lon:         lon,
+				lat:         lat,
+			})
 		}
 
-		if queued > 0 {
-			results := tx.SendBatch(ctx, batch)
-			for i := 0; i < queued; i++ {
-				if _, err := results.Exec(); err != nil {
-					results.Close() //nolint:errcheck // already returning the real error
-					return fmt.Errorf("insert crime batch (item %d of %d): %w", i+1, queued, err)
-				}
-			}
-			if err := results.Close(); err != nil {
-				return fmt.Errorf("close crime batch results: %w", err)
-			}
-			inserted += queued
+		if page%10 == 0 {
+			slog.Info("crimes fetch progress", slog.Int("pages", page), slog.Int("fetched", fetched))
 		}
 
 		if len(rows) < crimesPageSize {
@@ -150,13 +173,13 @@ func ingestCrimes(ctx context.Context, soda *clients.SODAClient, pool *pgxpool.P
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
+	if err := insertCrimes(ctx, pool, toInsert); err != nil {
+		return err
 	}
 
 	slog.Info("crimes ingestion summary",
 		slog.Int("fetched", fetched),
-		slog.Int("inserted", inserted),
+		slog.Int("inserted", len(toInsert)),
 		slog.Int("skipped_no_coords", skippedNoCoords),
 		slog.Int("excluded", excluded),
 		slog.Int("unrecognized", unrecognized),
@@ -168,6 +191,56 @@ func ingestCrimes(ctx context.Context, soda *clients.SODAClient, pool *pgxpool.P
 	// this line.
 	for key, count := range unrecognizedCounts {
 		slog.Warn("unrecognized crime classification", slog.String("primary_type|iucr", key), slog.Int("count", count))
+	}
+
+	return nil
+}
+
+// insertCrimes replaces cpd_crimes with rows in a single transaction whose
+// only work is DB-local: TRUNCATE, then batched inserts, then commit. Using
+// TRUNCATE instead of DELETE avoids WAL entries proportional to the
+// (typically 200K+) row count being replaced; its stronger ACCESS EXCLUSIVE
+// lock (which briefly blocks readers too, unlike DELETE) is an acceptable
+// trade here specifically because this transaction is now short -- seconds,
+// not the ~80s the fetch phase takes.
+func insertCrimes(ctx context.Context, pool *pgxpool.Pool, rows []crimeInsert) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op once committed
+
+	if _, err := tx.Exec(ctx, "TRUNCATE cpd_crimes"); err != nil {
+		return fmt.Errorf("truncate existing crimes: %w", err)
+	}
+
+	const insertSQL = `
+		INSERT INTO cpd_crimes (source_id, crime_date, primary_type, iucr, category, geom)
+		VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326)::geography)
+	`
+	for start := 0; start < len(rows); start += crimesInsertBatchSize {
+		end := min(start+crimesInsertBatchSize, len(rows))
+		chunk := rows[start:end]
+
+		batch := &pgx.Batch{}
+		for _, r := range chunk {
+			batch.Queue(insertSQL, r.sourceID, r.date, r.primaryType, r.iucr, r.category, r.lon, r.lat)
+		}
+
+		results := tx.SendBatch(ctx, batch)
+		for i := range chunk {
+			if _, err := results.Exec(); err != nil {
+				results.Close() //nolint:errcheck // already returning the real error
+				return fmt.Errorf("insert crime batch (item %d of %d): %w", i+1, len(chunk), err)
+			}
+		}
+		if err := results.Close(); err != nil {
+			return fmt.Errorf("close crime batch results: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
 	}
 
 	return nil
