@@ -66,7 +66,11 @@ This document records the *real, verified* shape of each external dataset BlockF
 
 ### 311 Service Requests (sewer/water backup)
 - **Resource ID:** `v6vf-nfxy` ("311 Service Requests" — the unified post-2018 system; a `legacy_record` column flags older pre-2018 rows folded in).
-- **Confirmed real `sr_type` value:** `"Water in Basement Complaint"` — exact string match needed for ingestion filtering. Adjacent but distinct types also exist: `"Sewer Cave-In Inspection Request"`, `"Sewer Cleaning Inspection Request"`, `"Alley Sewer Inspection Request"` (infrastructure maintenance requests, not necessarily actual backup incidents — worth a judgment call at ingestion time on whether to include these or filter to `"Water in Basement Complaint"` only).
+- **Confirmed real `sr_type` value:** `"Water in Basement Complaint"` — exact string match needed for ingestion filtering. Powers the sewer backup penalty half of `S_flood` (PRD §5.7).
+- **Key fields:** `sr_number` (unique service request ID used as `source_id`), `created_date` (SODA floating timestamp, stripped of fractional seconds), `duplicate` (boolean), `latitude`/`longitude` (WGS84 EPSG:4326).
+- **Duplicate filtering:** 1,180 of ~27K trailing 24-month rows (4.4%) have `duplicate = true`, referencing a `parent_sr_number`. Auditing parent/child pairs (e.g. `SR19-01327672` and `SR19-01329269` at 2325 E 68th St) confirmed that `duplicate = true` marks subsequent citizen calls for the *same ongoing basement flooding event* at the same property. Ingestion filters to `duplicate = false` so that multiple calls for a single event do not multiply the local flood penalty.
+- **Pagination & Volume:** Trailing 24 months contains ~25.8K records. Paged via `sr_number` keyset pagination (`ORDER BY sr_number`, `WHERE sr_number > <last_seen>`) with page size 5,000 (~6 HTTP requests).
+- **Missing coordinates:** ~0.04% of trailing-24-month rows (12 of 25,773) lack `latitude`/`longitude` and are skipped at ingestion. Ingests ~25.7K rows in < 1 minute.
 
 ---
 

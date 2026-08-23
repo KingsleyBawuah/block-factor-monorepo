@@ -18,7 +18,7 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	dataset := flag.String("dataset", "", "Specific dataset to ingest (boundary, cta, crimes, parks, bike_routes, flood_zones, noise, osm_pois, derive)")
+	dataset := flag.String("dataset", "", "Specific dataset to ingest (boundary, cta, crimes, parks, bike_routes, flood_zones, sewer_311, noise, osm_pois, derive)")
 	limit := flag.Int("limit", 0, "Limit number of records to ingest (0 = all)")
 	all := flag.Bool("all", false, "Ingest all datasets")
 	flag.Parse()
@@ -69,6 +69,7 @@ func main() {
 		{"osm_pois", func(ctx context.Context) error { return ingestOSMPOIs(ctx, overpass, c, pool) }},
 		{"noise", func(ctx context.Context) error { return ingestNoiseSources(ctx, overpass, c, pool) }},
 		{"flood_zones", func(ctx context.Context) error { return ingestFloodZones(ctx, fema, c, pool) }},
+		{"sewer_311", func(ctx context.Context) error { return ingestSewer311(ctx, soda, pool) }},
 	}
 
 	ran := false
