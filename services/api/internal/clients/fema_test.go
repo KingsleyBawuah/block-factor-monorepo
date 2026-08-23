@@ -64,6 +64,72 @@ func TestFEMACount(t *testing.T) {
 	}
 }
 
+func TestFEMACount_RetriesTransientFailureThenSucceeds(t *testing.T) {
+	withNoFEMABackoffWait(t)
+
+	var calls int32
+	withFEMATestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		n := atomic.AddInt32(&calls, 1)
+		if n == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("temporarily unavailable"))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"count":2541}`))
+	})
+
+	c := NewFEMAClient()
+	count, err := c.Count(context.Background(), 28, 41.6, -87.9, 42.0, -87.5)
+	if err != nil {
+		t.Fatalf("expected success after one retry, got error: %v", err)
+	}
+	if count != 2541 {
+		t.Fatalf("Count() = %d, want 2541", count)
+	}
+	if calls != 2 {
+		t.Fatalf("expected exactly 2 attempts, got %d", calls)
+	}
+}
+
+func TestFEMACount_GivesUpAfterMaxRetries(t *testing.T) {
+	withNoFEMABackoffWait(t)
+
+	var calls int32
+	withFEMATestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("always failing"))
+	})
+
+	c := NewFEMAClient()
+	_, err := c.Count(context.Background(), 28, 41.6, -87.9, 42.0, -87.5)
+	if err == nil {
+		t.Fatal("expected an error when Count always fails")
+	}
+	if calls != femaMaxRetryAttempts {
+		t.Fatalf("expected exactly %d attempts, got %d", femaMaxRetryAttempts, calls)
+	}
+}
+
+func TestFEMACount_DoesNotRetryNonRetryableError(t *testing.T) {
+	var calls int32
+	withFEMATestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("bad request"))
+	})
+
+	c := NewFEMAClient()
+	_, err := c.Count(context.Background(), 28, 41.6, -87.9, 42.0, -87.5)
+	if err == nil {
+		t.Fatal("expected an error for a 400 response")
+	}
+	if calls != 1 {
+		t.Fatalf("expected exactly 1 call (no retry on a non-retryable 4xx), got %d", calls)
+	}
+}
+
 func TestQueryLayer_SimplePagination(t *testing.T) {
 	// total=25, pageSize=10 -> pages of 10, 10, 5.
 	var calls int32
@@ -152,6 +218,69 @@ func TestQueryLayer_FailsClearlyBelowMinPageSize(t *testing.T) {
 	}
 }
 
+func TestQueryLayer_BacksOffOnRateLimitWithoutShrinking(t *testing.T) {
+	withNoFEMABackoffWait(t)
+
+	// The first two page requests are rate limited; the third succeeds. The
+	// requested page size must stay the same across all three (429 must not
+	// trigger window shrinking, only backoff-and-retry).
+	var pageCalls int32
+	var sawSizes []string
+	withFEMATestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("returnCountOnly") == "true" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"count":10}`))
+			return
+		}
+		sawSizes = append(sawSizes, r.URL.Query().Get("resultRecordCount"))
+		n := atomic.AddInt32(&pageCalls, 1)
+		if n <= 2 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte("rate limited"))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(featureCollectionJSON(10)))
+	})
+
+	c := NewFEMAClient()
+	features, err := c.QueryLayer(context.Background(), 28, 41.6, -87.9, 42.0, -87.5, "FLD_ZONE", 50)
+	if err != nil {
+		t.Fatalf("expected success after backing off on 429s, got error: %v", err)
+	}
+	if len(features) != 10 {
+		t.Fatalf("expected 10 features, got %d", len(features))
+	}
+	if pageCalls != 3 {
+		t.Fatalf("expected exactly 3 page requests (2 rate limited + 1 success), got %d", pageCalls)
+	}
+	for _, s := range sawSizes {
+		if s != "50" {
+			t.Fatalf("expected resultRecordCount to stay 50 across 429 retries (no shrinking), saw %v", sawSizes)
+		}
+	}
+}
+
+func TestQueryLayer_GivesUpAfterMaxRateLimitRetries(t *testing.T) {
+	withNoFEMABackoffWait(t)
+
+	withFEMATestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("returnCountOnly") == "true" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"count":10}`))
+			return
+		}
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte("rate limited"))
+	})
+
+	c := NewFEMAClient()
+	_, err := c.QueryLayer(context.Background(), 28, 41.6, -87.9, 42.0, -87.5, "FLD_ZONE", 50)
+	if err == nil {
+		t.Fatal("expected an error when every retry attempt is rate limited")
+	}
+}
+
 func TestQueryLayer_DoesNotShrinkOnNonRetryableError(t *testing.T) {
 	var calls int32
 	withFEMATestServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -172,6 +301,40 @@ func TestQueryLayer_DoesNotShrinkOnNonRetryableError(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("expected exactly 1 call (no shrink-retry on a non-retryable 4xx), got %d", calls)
+	}
+}
+
+func TestQueryLayer_OrdersByObjectIDForStablePagination(t *testing.T) {
+	var gotOrderBy []string
+	withFEMATestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("returnCountOnly") == "true" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"count":15}`))
+			return
+		}
+		gotOrderBy = append(gotOrderBy, r.URL.Query().Get("orderByFields"))
+		n, _ := strconv.Atoi(r.URL.Query().Get("resultRecordCount"))
+		offset, _ := strconv.Atoi(r.URL.Query().Get("resultOffset"))
+		remaining := 15 - offset
+		if n > remaining {
+			n = remaining
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(featureCollectionJSON(n)))
+	})
+
+	c := NewFEMAClient()
+	_, err := c.QueryLayer(context.Background(), 28, 41.6, -87.9, 42.0, -87.5, "FLD_ZONE", 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(gotOrderBy) == 0 {
+		t.Fatal("expected at least one page request")
+	}
+	for _, ob := range gotOrderBy {
+		if ob != "OBJECTID" {
+			t.Fatalf("expected every page request to set orderByFields=OBJECTID for stable pagination, got %q", ob)
+		}
 	}
 }
 
