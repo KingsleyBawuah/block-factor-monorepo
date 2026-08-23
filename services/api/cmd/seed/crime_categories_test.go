@@ -140,3 +140,41 @@ func TestClassifyCrime_CatchAllPrimaryTypesAreExactlyDocumented(t *testing.T) {
 		}
 	}
 }
+
+// TestClassifyCrime_ExhaustivePrimaryTypeCoverage walks every entry in
+// crimePrimaryTypeCategory directly and confirms it round-trips through
+// classifyCrime -- a structural guard so a future edit to the map can't
+// silently drift from what classifyCrime actually returns, without needing
+// the hand-maintained list in TestClassifyCrime_PrimaryTypes to stay
+// exhaustive on its own.
+func TestClassifyCrime_ExhaustivePrimaryTypeCoverage(t *testing.T) {
+	for primaryType, want := range crimePrimaryTypeCategory {
+		got, ok := classifyCrime(primaryType, "0000")
+		if !ok {
+			t.Errorf("classifyCrime(%q, _) = not ok, want ok with category %q", primaryType, want)
+			continue
+		}
+		if got != want {
+			t.Errorf("classifyCrime(%q, _) = %q, want %q", primaryType, got, want)
+		}
+	}
+}
+
+// TestClassifyCrime_ExhaustiveIUCRSubCodeCoverage does the same for every
+// entry in crimeIUCRSubCategory, under both catch-all primary_types (since
+// classification only depends on iucr for those, not which catch-all type
+// carried it).
+func TestClassifyCrime_ExhaustiveIUCRSubCodeCoverage(t *testing.T) {
+	for iucr, want := range crimeIUCRSubCategory {
+		for primaryType := range crimeCatchAllPrimaryTypes {
+			got, ok := classifyCrime(primaryType, iucr)
+			if !ok {
+				t.Errorf("classifyCrime(%q, %q) = not ok, want ok with category %q", primaryType, iucr, want)
+				continue
+			}
+			if got != want {
+				t.Errorf("classifyCrime(%q, %q) = %q, want %q", primaryType, iucr, got, want)
+			}
+		}
+	}
+}
