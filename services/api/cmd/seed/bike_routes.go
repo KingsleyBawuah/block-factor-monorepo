@@ -26,7 +26,10 @@ type bikeRouteRow struct {
 }
 
 // ingestBikeRoutes replaces bike_routes with the current Chicago Data
-// Portal bike infrastructure segments.
+// Portal bike infrastructure segments. Geometry is wrapped in ST_Multi() --
+// a no-op on an already-multi geometry -- as a defensive guard in case the
+// source ever returns a plain LineString for a single-segment route; the
+// column requires GEOGRAPHY(MULTILINESTRING, 4326).
 func ingestBikeRoutes(ctx context.Context, soda *clients.SODAClient, pool *pgxpool.Pool) error {
 	var rows []bikeRouteRow
 	params := url.Values{
@@ -49,7 +52,7 @@ func ingestBikeRoutes(ctx context.Context, soda *clients.SODAClient, pool *pgxpo
 
 	const insertSQL = `
 		INSERT INTO bike_routes (source_id, route_type, street_name, geom)
-		VALUES ($1, $2, $3, ST_GeomFromGeoJSON($4)::geography)
+		VALUES ($1, $2, $3, ST_Multi(ST_GeomFromGeoJSON($4))::geography)
 	`
 	for _, row := range rows {
 		if _, err := tx.Exec(ctx, insertSQL, row.SourceID, row.DisplayRoute, row.Street, row.TheGeom); err != nil {
