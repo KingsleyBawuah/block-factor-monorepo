@@ -54,15 +54,20 @@ type OverpassLatLon struct {
 	Lon float64 `json:"lon"`
 }
 
-// OverpassElement is one node or way from an Overpass QL "out tags center"
-// result.
+// OverpassElement is one node or way from an Overpass QL result. Center and
+// Geometry are populated only if the query asked for them ("out center" /
+// "out geom" respectively) -- both are commonly used for ways, but serve
+// different purposes: Center is a single representable point (e.g. for a
+// POI), Geometry is the full ordered coordinate sequence (e.g. for a road
+// or rail line).
 type OverpassElement struct {
-	Type   string            `json:"type"` // "node" or "way"
-	ID     int64             `json:"id"`
-	Lat    float64           `json:"lat"`    // node only
-	Lon    float64           `json:"lon"`    // node only
-	Center *OverpassLatLon   `json:"center"` // way only
-	Tags   map[string]string `json:"tags"`
+	Type     string            `json:"type"` // "node" or "way"
+	ID       int64             `json:"id"`
+	Lat      float64           `json:"lat"`      // node only
+	Lon      float64           `json:"lon"`      // node only
+	Center   *OverpassLatLon   `json:"center"`   // way only, requires "out center"
+	Geometry []OverpassLatLon  `json:"geometry"` // way only, requires "out geom"
+	Tags     map[string]string `json:"tags"`
 }
 
 // Point returns the element's representable point: its own coordinates for

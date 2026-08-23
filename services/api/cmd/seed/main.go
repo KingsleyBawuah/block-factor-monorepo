@@ -66,6 +66,7 @@ func main() {
 		{"parks", func(ctx context.Context) error { return ingestParks(ctx, soda, pool) }},
 		{"crimes", func(ctx context.Context) error { return ingestCrimes(ctx, soda, pool) }},
 		{"osm_pois", func(ctx context.Context) error { return ingestOSMPOIs(ctx, overpass, c, pool) }},
+		{"noise", func(ctx context.Context) error { return ingestNoiseSources(ctx, overpass, c, pool) }},
 	}
 
 	ran := false
