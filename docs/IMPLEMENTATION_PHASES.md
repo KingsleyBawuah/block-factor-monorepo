@@ -206,6 +206,7 @@ Deploy BlockFactor to the Beelink home server behind Caddy with automated monito
    - [ ] Sub-path hosting configured end-to-end: Vite `base`, TanStack Router `basepath`, and static asset URLs.
 2. **Monitoring Dashboards:**
    - [ ] Grafana dashboard importing BlockFactor Prometheus metrics and Loki logs.
+   - [ ] Loki alert rule on the seed CLI's "unrecognized crime classification" `WARN` log line (`cmd/seed/crimes.go`) — the ingestion CLI already logs and skips any `primary_type`/`iucr` combination outside the documented taxonomy (`docs/DATA_SOURCES.md` "Category coverage") rather than guessing, but nothing currently surfaces that beyond the log line itself. Deferred here rather than built in Phase 2 since it needs the Loki/Grafana stack this phase sets up.
 3. **CI/CD Self-Hosted Runner:**
    - [ ] Migrates the Phase 1 GitHub-hosted workflows (`make lint` / `make test` / `make generate-check`) to the local home-server runner.
 4. **Data Durability:**
