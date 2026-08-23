@@ -18,7 +18,7 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	dataset := flag.String("dataset", "", "Specific dataset to ingest (boundary, cta, crimes, parks, bike_routes, flood, noise, osm_pois, derive)")
+	dataset := flag.String("dataset", "", "Specific dataset to ingest (boundary, cta, crimes, parks, bike_routes, flood_zones, noise, osm_pois, derive)")
 	limit := flag.Int("limit", 0, "Limit number of records to ingest (0 = all)")
 	all := flag.Bool("all", false, "Ingest all datasets")
 	flag.Parse()
@@ -51,6 +51,7 @@ func main() {
 
 	soda := clients.NewSODAClient(os.Getenv("CHICAGO_APP_TOKEN"))
 	overpass := clients.NewOverpassClient()
+	fema := clients.NewFEMAClient()
 	c := cache.New(pool)
 
 	// Every dataset implemented so far ingests its entire source in one
@@ -67,6 +68,7 @@ func main() {
 		{"crimes", func(ctx context.Context) error { return ingestCrimes(ctx, soda, pool) }},
 		{"osm_pois", func(ctx context.Context) error { return ingestOSMPOIs(ctx, overpass, c, pool) }},
 		{"noise", func(ctx context.Context) error { return ingestNoiseSources(ctx, overpass, c, pool) }},
+		{"flood_zones", func(ctx context.Context) error { return ingestFloodZones(ctx, fema, c, pool) }},
 	}
 
 	ran := false

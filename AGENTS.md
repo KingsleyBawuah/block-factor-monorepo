@@ -130,20 +130,20 @@ The application must look and feel like an analytical, high-density location int
   * Writing the math logic for scoring factors (`internal/scoring/factor_*.go`).
   * Reviewing multi-file diffs and ensuring adherence to `ARCHITECTURE.md` and `PRD.md`.
 
-### Postgres MCP (Claude Code only)
+<!--### Postgres MCP (Claude Code only)
 * A `crystaldba/postgres-mcp` server ("Postgres MCP Pro") runs locally as a Docker container (`postgres-mcp`, SSE transport on `localhost:8000`), connected to the local `blockfactor-db` container. It gives Claude direct schema introspection, `EXPLAIN`/query-plan analysis, health checks (`analyze_db_health`), slow-query reporting (`get_top_queries`, via `pg_stat_statements`), and index-tuning recommendations (`analyze_query_indexes`/`analyze_workload_indexes`, using a DTA — Database Tuning Advisor — algorithm that simulates candidate indexes with `hypopg` before recommending them).
 * The server runs in **`--access-mode=restricted`**, which enforces read-only transactions with SQL parsing and execution timeouts at the server level — `execute_sql` cannot run DDL/DML even if asked. Use it for schema exploration, query plans, health checks, and index analysis.
 * Schema changes still go exclusively through `db/migrations/*.sql` (goose), drafted by Claude and applied by Agy via `make migrate-up` — this MCP is diagnostic-only and does not change that division of labor from the Handoff Protocol below.
-* An index recommendation from the DTA tools is a proposal, not a migration: if one is adopted, write it into a proper goose migration file rather than attempting to apply it directly (which restricted mode would reject anyway).
+* An index recommendation from the DTA tools is a proposal, not a migration: if one is adopted, write it into a proper goose migration file rather than attempting to apply it directly (which restricted mode would reject anyway).-->
 * **Known limitation — PostGIS functions:** `execute_sql`'s restricted-mode validator recognizes plain columns, `count(*)`, and core Postgres built-ins (`upper()`, `now()`, etc.), but rejects any call to a PostGIS extension function (`ST_Area`, `ST_GeometryType`, `ST_IsValid`, `ST_DWithin`, ...) — confirmed by testing directly. Since this project's actual spatial data only gets interesting through those functions, use `docker exec blockfactor-db psql -U blockfactor -d blockfactor -c "..."` as the fallback whenever a query needs to call one.
 
-### Antigravity CLI (`agy`) — Role: Execution & Tooling Engine
+<!--### Antigravity CLI (`agy`) — Role: Execution & Tooling Engine
 * Primary Focus: File scaffolding, dependency wiring, test execution, container diagnostics, and continuous code validation.
 * Responsibilities:
   * Running build and code-generation pipelines (`make generate`, `make generate-check`).
   * Applying database migrations (`make migrate-up`) and ingestion CLI tasks (`make seed`) that Claude has drafted — agy's own permission system will prompt for approval before running these.
   * Running linters and unit tests (`make test`, `make lint`) and resolving compilation/import errors.
-  * Inspecting Docker service logs (`blockfactor-db`, `blockfactor-otp`).
+  * Inspecting Docker service logs (`blockfactor-db`, `blockfactor-otp`).-->
 
 ### Handoff Protocol
 * Claude and Agy run in separate threads with no shared context. When Claude produces instructions meant for Agy, write them as a self-contained prompt — restate relevant constraints and file paths rather than referring back to prior conversation.
