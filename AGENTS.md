@@ -134,6 +134,7 @@ The application must look and feel like an analytical, high-density location int
 * The server runs in **`--access-mode=restricted`**, which enforces read-only transactions with SQL parsing and execution timeouts at the server level — `execute_sql` cannot run DDL/DML even if asked. Use it for schema exploration, query plans, health checks, and index analysis.
 * Schema changes still go exclusively through `db/migrations/*.sql` (goose), drafted by Claude and applied by Agy via `make migrate-up` — this MCP is diagnostic-only and does not change that division of labor from the Handoff Protocol below.
 * An index recommendation from the DTA tools is a proposal, not a migration: if one is adopted, write it into a proper goose migration file rather than attempting to apply it directly (which restricted mode would reject anyway).
+* **Known limitation — PostGIS functions:** `execute_sql`'s restricted-mode validator recognizes plain columns, `count(*)`, and core Postgres built-ins (`upper()`, `now()`, etc.), but rejects any call to a PostGIS extension function (`ST_Area`, `ST_GeometryType`, `ST_IsValid`, `ST_DWithin`, ...) — confirmed by testing directly. Since this project's actual spatial data only gets interesting through those functions, use `docker exec blockfactor-db psql -U blockfactor -d blockfactor -c "..."` as the fallback whenever a query needs to call one.
 
 ### Antigravity CLI (`agy`) — Role: Execution & Tooling Engine
 * Primary Focus: File scaffolding, dependency wiring, test execution, container diagnostics, and continuous code validation.
