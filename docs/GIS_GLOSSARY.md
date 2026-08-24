@@ -13,7 +13,12 @@ This is a plain-English glossary of the GIS (Geographic Information Systems) and
 
 ---
 
+## Azimuth (ST_Azimuth)
+
+The horizontal angle (bearing) of a directional line segment measured clockwise in degrees from true North ($0^\circ$). In simple terms, it's a 360-degree compass needle pointing along the direction of travel: $0^\circ$/$360^\circ$ is due North, $90^\circ$ is East, $180^\circ$ is South, and $270^\circ$ is West. BlockFactor uses PostGIS's `ST_Azimuth` on bike route linestrings to bucket nearby bike infrastructure into North-South vs. East-West orientations, awarding the dual-axis network bonus for the $S_{\text{bike}}$ factor if protected corridors exist in both orthogonal directions.
+
 ## Bounding Box
+
 
 The smallest rectangle that fully contains a shape, described by its min/max latitude and longitude edges — like the rectangular crop tool in an image editor, snapped tight around whatever you're framing. BlockFactor uses this idea for the 400m spatial grid cache: Google Places results are cached per grid cell (a small bounding box) rather than per exact address, so many nearby addresses share the same cached data instead of each triggering a fresh paid API call.
 
@@ -88,6 +93,11 @@ A computational geometry test that determines whether a given point location fal
 ## Polygon
 
 A shape made from a closed loop of straight lines: connect a series of coordinate points one after another, then draw one final line back to where you started, and whatever's enclosed is the polygon. It's how GIS represents anything with an *area* — a park, a lake, a city boundary — as opposed to a single location (a Point) or a path (a LineString). A MultiPolygon is just a polygon record allowed to be more than one separate piece at once: BlockFactor's own `city_boundary` is technically a MultiPolygon because O'Hare Airport sits detached from the rest of Chicago, making "the city" two disconnected pieces stored as one record. BlockFactor stores parks, flood zones, and the city boundary as (Multi)Polygons — distinct from points like CTA stations or lines like bike routes.
+
+## Polygon Boundary Distance (ST_Distance on MultiPolygons)
+
+Measuring the distance from a coordinate point to the **nearest boundary edge** of a polygon, rather than to its geometric center (centroid). For large geographic features like Lincoln Park (which spans over 1,200 acres across several miles), measuring to the centroid would falsely report that an apartment right across the street is "1.5 miles away from the park." PostGIS `ST_Distance(geom::geography, point::geography)` calculates the shortest metric distance directly to the closest perimeter vertex or edge, accurately scoring 100 points for any home bordering the park. BlockFactor uses this for the $S_{\text{green}}$ park factor.
+
 
 ## Projected Coordinate System (UTM Zone 16N / EPSG:32616)
 
