@@ -90,7 +90,7 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
 ### Deliverables
 1. **Factor Calculators (`services/api/internal/scoring/`):**
    - [x] `factor_transit.go` (`S_transit`: 'L' station distance decay + bus bonus).
-   - [ ] `factor_commute.go` (`S_commute`: Rush-hour OTP2 point-to-point transit duration + transfer friction).
+   - [x] `factor_commute.go` (`S_commute`: Rush-hour OTP2 point-to-point transit duration + transfer friction).
    - [x] `factor_bike.go` (`S_bike`: quality-tiered proximity decay + N-S/E-W directional network bonus).
    - [x] `factor_grocery.go` (`S_grocery`: Supermarket distance + pharmacy boost).
    - [x] `factor_third_places.go` (`S_third_place`: Cached POI density).
@@ -105,7 +105,7 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
      - Protected by a 4-tier cost defense layer: token-bucket rate limiter (`golang.org/x/time/rate`), daily budget circuit breaker (degrading `S_third_place` to `null`), in-flight `singleflight` deduplication (`golang.org/x/sync/singleflight`), and Google Cloud hard billing quotas.
      - ~~**TODO (prerequisite):** provision the Google Cloud project + Places API (New) key — restricted, hard daily quota cap, billing alert — before this client lands.~~ Done (key provisioned; IP restriction pending — see `docs/PROVISIONING.md`).
    - [x] `nominatim.go` — one-shot geocoding client returning ranked candidates (public endpoint, ≤ 1 req/sec rate-limited, custom `User-Agent`; no typeahead in Phase 1 per Nominatim policy).
-   - [ ] `otp.go` — **interface definition only**: `factor_commute.go` is built and unit-tested against fixture-based fakes shaped as **GTFS GraphQL API** responses (OTP 2.x removed the legacy REST plan API); the live client lands in Phase 6.
+   - [x] `otp.go` — **interface definition only**: `factor_commute.go` is built and unit-tested against fixture-based fakes shaped as **GTFS GraphQL API** responses (OTP 2.x removed the legacy REST plan API); the live client lands in Phase 6.
 3. **Concurrency Orchestrator (`engine.go`):**
    - [x] `errgroup` / goroutine fan-out with a hard 8-second parent context deadline.
    - [x] Dynamic weight normalization ($\sum w_i = 100\%$).
