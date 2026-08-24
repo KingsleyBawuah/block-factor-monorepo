@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `.env.example`'s `DATABASE_URL` had the database name and password swapped relative to `docker-compose.yml`'s actual `POSTGRES_DB`/`POSTGRES_PASSWORD` values, which would have caused `make migrate-up` and the API's own DB connection to fail with an auth error.
 - `docker-compose.yml`'s `db` service mounted the `pgdata` volume at `/var/lib/postgresql/data`, which PostgreSQL 18+ images no longer use — the `postgis/postgis:18-3.6-alpine` image expects the volume at `/var/lib/postgresql`, and the container would fail its healthcheck and error-loop indefinitely without this.
+- `bus_corridors`' GTFS headway derivation (`cmd/seed/bus_corridors.go`) pooled trips across multiple back-to-back `service_id` schedule "seasons" instead of only the one currently valid, since it filtered `calendar.txt` by day-of-week flags alone with no `start_date`/`end_date` check — CTA's live feed republishes a near-identical weekday schedule under a new `service_id` roughly every 2-4 weeks (132 of 133 live routes affected), so every computed `mean_headway_minutes` was roughly half of what any single real day actually runs. Caught before any deployment while building the `cta_line_service` derivation below. See `ARCHITECTURE.md` Decision Log row 28.
 
 ### Added
 
