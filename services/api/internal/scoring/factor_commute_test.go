@@ -61,10 +61,7 @@ func TestNextTuesdayAt830AM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := nextTuesdayAt830AM(tt.now, "America/Chicago")
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			got := nextTuesdayAt830AM(tt.now, chicago)
 			if !got.Equal(tt.want) {
 				t.Errorf("expected %v, got %v", tt.want, got)
 			}
@@ -75,10 +72,20 @@ func TestNextTuesdayAt830AM(t *testing.T) {
 	}
 }
 
-func TestNextTuesdayAt830AM_InvalidTimeZone(t *testing.T) {
-	_, err := nextTuesdayAt830AM(time.Now(), "Not/A_Real_Zone")
-	if err == nil {
-		t.Fatal("expected error for invalid timezone, got nil")
+func TestLoadCommuteChicagoLocation_CachesAcrossCalls(t *testing.T) {
+	loc1, err := loadCommuteChicagoLocation()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	loc2, err := loadCommuteChicagoLocation()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if loc1 != loc2 {
+		t.Errorf("expected the same cached *time.Location pointer across calls (loading zoneinfo is not free), got two different pointers")
+	}
+	if loc1.String() != "America/Chicago" {
+		t.Errorf("expected America/Chicago, got %v", loc1)
 	}
 }
 
@@ -121,12 +128,16 @@ func TestCalculateCommuteScore_Scenarios(t *testing.T) {
 }
 
 type mockCommuteQuerier struct {
-	itinerary         *clients.Itinerary
-	err               error
-	capturedDeparture time.Time
+	itinerary           *clients.Itinerary
+	err                 error
+	capturedOrigin      api.Coordinates
+	capturedDestination api.Coordinates
+	capturedDeparture   time.Time
 }
 
-func (m *mockCommuteQuerier) PlanTrip(_ context.Context, _, _ api.Coordinates, departure time.Time) (*clients.Itinerary, error) {
+func (m *mockCommuteQuerier) PlanTrip(_ context.Context, origin, destination api.Coordinates, departure time.Time) (*clients.Itinerary, error) {
+	m.capturedOrigin = origin
+	m.capturedDestination = destination
 	m.capturedDeparture = departure
 	if m.err != nil {
 		return nil, m.err
@@ -143,9 +154,10 @@ func TestCommuteCalculator_Calculate_Success(t *testing.T) {
 		t.Errorf("expected name %q, got %q", FactorCommute, calc.Name())
 	}
 
+	origin := api.Coordinates{Lat: 41.8781, Lon: -87.6298}
 	dest := api.Coordinates{Lat: 41.8858, Lon: -87.6353}
 	res, err := calc.Calculate(context.Background(), ScoreParams{
-		Origin:                 api.Coordinates{Lat: 41.8781, Lon: -87.6298},
+		Origin:                 origin,
 		DestinationCoordinates: &dest,
 	})
 	if err != nil {
@@ -159,6 +171,13 @@ func TestCommuteCalculator_Calculate_Success(t *testing.T) {
 	}
 	if querier.capturedDeparture.Weekday() != time.Tuesday {
 		t.Errorf("expected departure to be a Tuesday, got %v", querier.capturedDeparture.Weekday())
+	}
+	// Guards against an origin/destination argument swap in Calculate.
+	if querier.capturedOrigin != origin {
+		t.Errorf("expected origin %+v passed through unchanged, got %+v", origin, querier.capturedOrigin)
+	}
+	if querier.capturedDestination != dest {
+		t.Errorf("expected destination %+v passed through unchanged, got %+v", dest, querier.capturedDestination)
 	}
 }
 
@@ -174,6 +193,9 @@ func TestCommuteCalculator_Calculate_NoDestinationDegradesWithoutError(t *testin
 	}
 	if !res.Degraded {
 		t.Errorf("expected degraded=true with no destination set")
+	}
+	if res.Score != nil {
+		t.Errorf("expected Score nil when degraded, got %v", *res.Score)
 	}
 }
 
@@ -192,6 +214,9 @@ func TestCommuteCalculator_Calculate_NoItineraryFoundDegradesWithoutError(t *tes
 	if !res.Degraded {
 		t.Errorf("expected degraded=true when no itinerary is found")
 	}
+	if res.Score != nil {
+		t.Errorf("expected Score nil when degraded, got %v", *res.Score)
+	}
 }
 
 func TestCommuteCalculator_Calculate_QuerierErrorDegrades(t *testing.T) {
@@ -209,6 +234,9 @@ func TestCommuteCalculator_Calculate_QuerierErrorDegrades(t *testing.T) {
 	if !res.Degraded {
 		t.Errorf("expected degraded=true on querier error")
 	}
+	if res.Score != nil {
+		t.Errorf("expected Score nil when degraded, got %v", *res.Score)
+	}
 }
 
 func TestCommuteCalculator_Calculate_NotConfigured(t *testing.T) {
@@ -221,6 +249,35 @@ func TestCommuteCalculator_Calculate_NotConfigured(t *testing.T) {
 	}
 	if !res.Degraded {
 		t.Errorf("expected degraded=true when unconfigured")
+	}
+	if res.Score != nil {
+		t.Errorf("expected Score nil when degraded, got %v", *res.Score)
+	}
+}
+
+func TestCommuteCalculator_Calculate_NilNowFallsBackToRealClock(t *testing.T) {
+	// A CommuteCalculator built via struct literal rather than
+	// NewCommuteCalculator leaves `now` nil -- Calculate must not panic.
+	i := itinerary(18, 0)
+	querier := &mockCommuteQuerier{itinerary: &i}
+	calc := &CommuteCalculator{querier: querier}
+
+	dest := api.Coordinates{Lat: 41.8858, Lon: -87.6353}
+	res, err := calc.Calculate(context.Background(), ScoreParams{
+		Origin:                 api.Coordinates{Lat: 41.8781, Lon: -87.6298},
+		DestinationCoordinates: &dest,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Degraded {
+		t.Errorf("expected not degraded")
+	}
+	if querier.capturedDeparture.Weekday() != time.Tuesday {
+		t.Errorf("expected departure to be a Tuesday, got %v", querier.capturedDeparture.Weekday())
+	}
+	if querier.capturedDeparture.Before(time.Now()) {
+		t.Errorf("expected a departure resolved from the real clock to be in the future, got %v", querier.capturedDeparture)
 	}
 }
 

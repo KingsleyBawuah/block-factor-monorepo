@@ -72,4 +72,12 @@ func TestItinerary_DecodesRealisticGraphQLShapedResponse(t *testing.T) {
 	if railLeg.Route.ShortName != "Pink" || railLeg.Route.LongName != "Pink Line" {
 		t.Errorf("unexpected route: %+v", railLeg.Route)
 	}
+
+	finalWalkLeg := itinerary.Legs[2]
+	if finalWalkLeg.Mode != "WALK" || finalWalkLeg.DurationSeconds != 180 || finalWalkLeg.Route != nil {
+		t.Errorf("unexpected final walk leg: %+v", finalWalkLeg)
+	}
+	if finalWalkLeg.From.Name != "Clark/Lake" || finalWalkLeg.To.Name != "Destination" {
+		t.Errorf("unexpected final walk leg endpoints: %+v", finalWalkLeg)
+	}
 }

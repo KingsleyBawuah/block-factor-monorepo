@@ -3,9 +3,17 @@ package scoring
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
+	"sync"
 	"time"
+
+	// Embeds the full IANA timezone database in the binary so
+	// time.LoadLocation(commuteTimeZone) succeeds even on a minimal
+	// container image with no host /usr/share/zoneinfo (e.g. distroless or
+	// Alpine without tzdata installed) -- this app's deployment target
+	// isn't decided yet (see ARCHITECTURE.md Phase 7), so this is cheap
+	// insurance rather than a fix for a known-broken environment.
+	_ "time/tzdata"
 
 	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/api"
 	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/clients"
@@ -63,13 +71,31 @@ type CommuteQuerier interface {
 type CommuteCalculator struct {
 	querier CommuteQuerier
 	// now is overridable in tests so departure-time resolution doesn't
-	// depend on the real wall clock.
+	// depend on the real wall clock. Left nil-safe in Calculate (falls back
+	// to time.Now) so a CommuteCalculator built via struct literal rather
+	// than NewCommuteCalculator still works.
 	now func() time.Time
 }
 
 // NewCommuteCalculator creates a new CommuteCalculator.
 func NewCommuteCalculator(querier CommuteQuerier) *CommuteCalculator {
 	return &CommuteCalculator{querier: querier, now: time.Now}
+}
+
+var (
+	commuteLocationOnce sync.Once
+	commuteLocation     *time.Location
+	commuteLocationErr  error
+)
+
+// loadCommuteChicagoLocation lazily loads and caches America/Chicago --
+// this app's only service area -- once per process, rather than re-reading
+// zoneinfo on every single commute-scored request.
+func loadCommuteChicagoLocation() (*time.Location, error) {
+	commuteLocationOnce.Do(func() {
+		commuteLocation, commuteLocationErr = time.LoadLocation(commuteTimeZone)
+	})
+	return commuteLocation, commuteLocationErr
 }
 
 // Name returns FactorCommute.
@@ -89,10 +115,16 @@ func (c *CommuteCalculator) Calculate(ctx context.Context, params ScoreParams) (
 		return FactorResult{Name: FactorCommute, Degraded: true}, nil
 	}
 
-	departure, err := nextTuesdayAt830AM(c.now(), commuteTimeZone)
+	loc, err := loadCommuteChicagoLocation()
 	if err != nil {
 		return FactorResult{Name: FactorCommute, Degraded: true}, err
 	}
+
+	now := c.now
+	if now == nil {
+		now = time.Now
+	}
+	departure := nextTuesdayAt830AM(now(), loc)
 
 	itinerary, err := c.querier.PlanTrip(ctx, params.Origin, *params.DestinationCoordinates, departure)
 	if err != nil {
@@ -113,18 +145,13 @@ func (c *CommuteCalculator) Calculate(ctx context.Context, params ScoreParams) (
 }
 
 // nextTuesdayAt830AM resolves PRD §5.10's simulated rush-hour departure:
-// the next Tuesday 8:30 AM in the given IANA timezone, computed from now.
-// If now itself falls on a Tuesday before 8:30 AM, that same day qualifies;
-// otherwise it rolls to the following Tuesday. Whether that date also falls
-// inside the live GTFS feed's service validity window is a live-data
-// concern the Phase 6 querier implementation is responsible for -- this
-// function only resolves the calendar date.
-func nextTuesdayAt830AM(now time.Time, timeZone string) (time.Time, error) {
-	loc, err := time.LoadLocation(timeZone)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("scoring: load %s location: %w", timeZone, err)
-	}
-
+// the next Tuesday 8:30 AM in loc, computed from now. If now itself falls
+// on a Tuesday before 8:30 AM, that same day qualifies; otherwise it rolls
+// to the following Tuesday. Whether that date also falls inside the live
+// GTFS feed's service validity window is a live-data concern the Phase 6
+// querier implementation is responsible for -- this function only resolves
+// the calendar date.
+func nextTuesdayAt830AM(now time.Time, loc *time.Location) time.Time {
 	local := now.In(loc)
 	daysUntilTuesday := (int(time.Tuesday) - int(local.Weekday()) + 7) % 7
 	candidate := time.Date(local.Year(), local.Month(), local.Day(), commuteDepartureHour, commuteDepartureMinute, 0, 0, loc).
@@ -134,7 +161,7 @@ func nextTuesdayAt830AM(now time.Time, timeZone string) (time.Time, error) {
 		candidate = candidate.AddDate(0, 0, 7)
 	}
 
-	return candidate, nil
+	return candidate
 }
 
 // CalculateCommuteScore computes the commute livability factor based on
