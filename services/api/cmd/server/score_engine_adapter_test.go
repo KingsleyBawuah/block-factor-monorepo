@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"testing"
 
@@ -72,22 +73,32 @@ func TestScoreEngineAdapter_Score_PassesParamsThrough(t *testing.T) {
 	}, slog.New(slog.DiscardHandler))
 	adapter := &scoreEngineAdapter{engine: engine}
 
+	address := "233 S Wacker Dr, Chicago, IL"
 	dest := api.Coordinates{Lat: 41.8858, Lon: -87.6353}
 	weights := &api.WeightOverrides{Transit: floatPtr(20)}
+	unit := &api.UnitMetadata{Floor: intPtr(3)}
 	_, _, err := adapter.Score(context.Background(), api.ScoreEngineParams{
+		Address:                &address,
 		Origin:                 api.Coordinates{Lat: 41.8781, Lon: -87.6298},
 		DestinationCoordinates: &dest,
+		Unit:                   unit,
 		Weights:                weights,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	if capturedParams.Address == nil || *capturedParams.Address != address {
+		t.Errorf("unexpected address: %v", capturedParams.Address)
+	}
 	if capturedParams.Origin.Lat != 41.8781 || capturedParams.Origin.Lon != -87.6298 {
 		t.Errorf("unexpected origin: %+v", capturedParams.Origin)
 	}
 	if capturedParams.DestinationCoordinates == nil || *capturedParams.DestinationCoordinates != dest {
 		t.Errorf("unexpected destination: %+v", capturedParams.DestinationCoordinates)
+	}
+	if capturedParams.Unit != unit {
+		t.Errorf("expected unit passed through unchanged")
 	}
 	if capturedParams.Weights != weights {
 		t.Errorf("expected weights passed through unchanged")
@@ -95,8 +106,12 @@ func TestScoreEngineAdapter_Score_PassesParamsThrough(t *testing.T) {
 }
 
 func TestScoreEngineAdapter_Score_PropagatesEngineError(t *testing.T) {
-	// An engine with only a zero-weight active factor forces
-	// ComputeCompositeScore's "all active weights sum to zero" error.
+	// Zero calculators registered means the results map stays empty, so
+	// ComputeCompositeScore's own "all active factors are degraded or
+	// missing data" path fires (distinct from the earlier
+	// ErrInvalidWeights check, which only fires when the *resolved
+	// weights themselves* are all zero -- the default weights here are
+	// not).
 	engine := scoring.NewEngine(nil, slog.New(slog.DiscardHandler))
 	adapter := &scoreEngineAdapter{engine: engine}
 
@@ -105,6 +120,29 @@ func TestScoreEngineAdapter_Score_PropagatesEngineError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected an error when no calculators are registered, got nil")
+	}
+	if errors.Is(err, api.ErrInvalidWeights) {
+		t.Error("expected a generic engine error, not api.ErrInvalidWeights, for an all-factors-degraded scenario")
+	}
+}
+
+func TestScoreEngineAdapter_Score_TranslatesInvalidWeightsError(t *testing.T) {
+	zero := float32(0)
+	overrides := &api.WeightOverrides{
+		Transit: &zero, Bike: &zero, Grocery: &zero, ThirdPlace: &zero,
+		Green: &zero, Noise: &zero, Safety: &zero, Flood: &zero, Solar: &zero,
+	}
+	engine := scoring.NewEngine([]scoring.FactorCalculator{
+		&stubCalculator{name: scoring.FactorTransit, result: scoring.FactorResult{Name: scoring.FactorTransit}},
+	}, slog.New(slog.DiscardHandler))
+	adapter := &scoreEngineAdapter{engine: engine}
+
+	_, _, err := adapter.Score(context.Background(), api.ScoreEngineParams{
+		Origin:  api.Coordinates{Lat: 41.8781, Lon: -87.6298},
+		Weights: overrides,
+	})
+	if !errors.Is(err, api.ErrInvalidWeights) {
+		t.Fatalf("expected api.ErrInvalidWeights, got: %v", err)
 	}
 }
 
@@ -129,3 +167,5 @@ func factorKeys(m map[string]api.ScoreFactorResult) []string {
 }
 
 func floatPtr(v float32) *float32 { return &v }
+
+func intPtr(v int) *int { return &v }

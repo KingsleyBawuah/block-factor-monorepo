@@ -1,6 +1,19 @@
 package api
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrInvalidWeights is the api-owned sentinel a ScoreEngine implementation
+// should wrap/return when the request's resolved active weights sum to
+// zero before any factor was even computed -- a genuine client input
+// problem (e.g. every weight explicitly overridden to 0), mapped by
+// ScoreAddress to 400 VALIDATION_ERROR. This mirrors
+// internal/scoring.ErrInvalidWeights but is declared separately for the
+// same import-cycle reason as ScoreEngineParams/ScoreFactorResult; the
+// cmd/server adapter translates one into the other.
+var ErrInvalidWeights = errors.New("api: active weights sum to zero")
 
 // ScoreEngineParams are the inputs to a composite score computation.
 //

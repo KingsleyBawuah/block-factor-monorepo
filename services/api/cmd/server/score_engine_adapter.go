@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 
 	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/api"
 	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/scoring"
@@ -25,6 +26,9 @@ func (a *scoreEngineAdapter) Score(ctx context.Context, params api.ScoreEnginePa
 		Weights:                params.Weights,
 	})
 	if err != nil {
+		if errors.Is(err, scoring.ErrInvalidWeights) {
+			return 0, nil, api.ErrInvalidWeights
+		}
 		return 0, nil, err
 	}
 

@@ -169,6 +169,35 @@ func TestEngine_Score_ConcurrentExecution(t *testing.T) {
 	}
 }
 
+func TestEngine_Score_AllWeightsZeroReturnsErrInvalidWeightsWithoutRunningCalculators(t *testing.T) {
+	var called bool
+	calcTransit := &mockCalculator{
+		name: scoring.FactorTransit,
+		calcFunc: func(_ context.Context, _ scoring.ScoreParams) (scoring.FactorResult, error) {
+			called = true
+			return scoring.FactorResult{Name: scoring.FactorTransit, Score: ptr(float32(100.0))}, nil
+		},
+	}
+	engine := scoring.NewEngine([]scoring.FactorCalculator{calcTransit}, slog.New(slog.DiscardHandler))
+
+	zero := ptr(float32(0))
+	params := scoring.ScoreParams{
+		Origin: api.Coordinates{Lat: 41.8781, Lon: -87.6298},
+		Weights: &api.WeightOverrides{
+			Transit: zero, Bike: zero, Grocery: zero, ThirdPlace: zero,
+			Green: zero, Noise: zero, Safety: zero, Flood: zero, Solar: zero,
+		},
+	}
+
+	_, _, err := engine.Score(context.Background(), params)
+	if !errors.Is(err, scoring.ErrInvalidWeights) {
+		t.Fatalf("expected scoring.ErrInvalidWeights, got: %v", err)
+	}
+	if called {
+		t.Error("expected the fan-out to be skipped entirely when weights are all zero, but a calculator ran")
+	}
+}
+
 func TestEngine_Score_CalculatorFailureDegrades(t *testing.T) {
 	calcTransit := &mockCalculator{
 		name: scoring.FactorTransit,

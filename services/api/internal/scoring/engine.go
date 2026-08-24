@@ -16,6 +16,14 @@ const (
 	defaultParentDeadline = 8 * time.Second
 )
 
+// ErrInvalidWeights is returned when the resolved active weights (defaults
+// merged with any user overrides) sum to zero before a single calculator
+// has even run -- a genuine client input problem (e.g. every weight
+// explicitly overridden to 0), distinct from ComputeCompositeScore's own
+// zero-sum case below, which means every factor degraded at runtime (a
+// server-side problem, not a bad request).
+var ErrInvalidWeights = errors.New("scoring: active weights sum to zero -- at least one factor weight must be positive")
+
 // GetDefaultWeights returns the default weight preset based on PRD §3.4.
 func GetDefaultWeights(hasDestination bool) map[FactorName]float64 {
 	if hasDestination {
@@ -118,7 +126,7 @@ func ComputeCompositeScore(results map[FactorName]FactorResult, activeWeights ma
 	}
 
 	if sumActiveWeights == 0 {
-		return 0, errors.New("scoring: all active factor weights sum to zero")
+		return 0, errors.New("scoring: all active factors are degraded or missing data")
 	}
 
 	composite := sumWeightedScores / sumActiveWeights
@@ -156,6 +164,14 @@ func NewEngine(calculators []FactorCalculator, logger *slog.Logger) *Engine {
 func (e *Engine) Score(ctx context.Context, params ScoreParams) (float32, map[FactorName]FactorResult, error) {
 	hasDestination := params.DestinationCoordinates != nil
 	activeWeights := ResolveActiveWeights(params.Weights, hasDestination)
+
+	var totalWeight float64
+	for _, w := range activeWeights {
+		totalWeight += w
+	}
+	if totalWeight <= 0 {
+		return 0, nil, ErrInvalidWeights
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, e.timeout)
 	defer cancel()

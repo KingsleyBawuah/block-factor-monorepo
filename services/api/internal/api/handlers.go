@@ -125,9 +125,17 @@ var (
 	errAddressNotFound     = errors.New("address could not be resolved to any coordinates")
 )
 
+// maxScoreRequestBodyBytes caps the POST /api/v1/score request body --
+// legitimate payloads (an address string, optional coordinates/weights/unit
+// metadata) are at most a few hundred bytes, so this is a generous ceiling
+// purely to stop an oversized body from forcing an unbounded json.Decode
+// allocation.
+const maxScoreRequestBodyBytes = 1 << 20 // 1 MiB
+
 // ScoreAddress handles POST /api/v1/score.
 func (s *Server) ScoreAddress(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	r.Body = http.MaxBytesReader(w, r.Body, maxScoreRequestBodyBytes)
 
 	var req ScoreRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -139,8 +147,16 @@ func (s *Server) ScoreAddress(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Exactly one of 'address' or 'origin' must be provided")
 		return
 	}
+	if req.Address != nil && strings.TrimSpace(*req.Address) == "" {
+		s.writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "'address' cannot be empty")
+		return
+	}
 	if req.Destination != nil && req.DestinationCoordinates != nil {
 		s.writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "'destination' and 'destinationCoordinates' are mutually exclusive")
+		return
+	}
+	if req.Destination != nil && strings.TrimSpace(*req.Destination) == "" {
+		s.writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "'destination' cannot be empty")
 		return
 	}
 
@@ -160,8 +176,12 @@ func (s *Server) ScoreAddress(w http.ResponseWriter, r *http.Request) {
 
 	within, err := s.boundaryChecker.IsWithinCityBoundary(ctx, origin.Lat, origin.Lon)
 	if err != nil {
+		// This is our own PostGIS query failing, not an upstream/gateway
+		// call -- 500, not 502, and SCORING_ERROR (an internal fault)
+		// rather than SERVICE_UNAVAILABLE (which this codebase otherwise
+		// reserves for "a dependency was never configured at all").
 		s.logger.Error("boundary check failed", slog.String("error", err.Error()))
-		s.writeError(w, http.StatusBadGateway, "SERVICE_UNAVAILABLE", "Failed to verify service coverage")
+		s.writeError(w, http.StatusInternalServerError, "SCORING_ERROR", "Failed to verify service coverage")
 		return
 	}
 	if !within {
@@ -186,6 +206,10 @@ func (s *Server) ScoreAddress(w http.ResponseWriter, r *http.Request) {
 		Weights:                req.Weights,
 	})
 	if err != nil {
+		if errors.Is(err, ErrInvalidWeights) {
+			s.writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "At least one active factor weight must be greater than zero")
+			return
+		}
 		s.logger.Error("score computation failed", slog.String("error", err.Error()))
 		s.writeError(w, http.StatusInternalServerError, "SCORING_ERROR", "Failed to compute score")
 		return
@@ -246,14 +270,27 @@ func (s *Server) respondCoordinateResolutionError(w http.ResponseWriter, field s
 func factorScoreFromMap(factors map[string]ScoreFactorResult, name string) FactorScore {
 	fr, ok := factors[name]
 	if !ok {
-		return FactorScore{Degraded: true, ContributingPois: &[]ContributingPoi{}}
+		return FactorScore{Degraded: true}
 	}
 	return FactorScore{
 		Score:            fr.Score,
 		Degraded:         fr.Degraded,
 		DistanceMeters:   fr.DistanceMeters,
-		ContributingPois: &fr.ContributingPois,
+		ContributingPois: contributingPoisOrOmit(fr.ContributingPois),
 	}
+}
+
+// contributingPoisOrOmit returns nil (which json's "omitempty" drops from
+// the response entirely) rather than a pointer to a nil/empty slice --
+// *[]T with "omitempty" only checks the pointer's nilness, so
+// &[]ContributingPoi(nil) would otherwise serialize as
+// "contributingPois": null, which docs/openapi.yaml's plain (non-nullable)
+// `type: array` schema for this field doesn't permit.
+func contributingPoisOrOmit(pois []ContributingPoi) *[]ContributingPoi {
+	if len(pois) == 0 {
+		return nil
+	}
+	return &pois
 }
 
 // GeocodeAddress handles GET /api/v1/geocode.
@@ -282,7 +319,10 @@ func (s *Server) GeocodeAddress(w http.ResponseWriter, r *http.Request, params G
 
 	results, err := s.geocoder.Geocode(r.Context(), query)
 	if err != nil {
-		s.logger.Error("geocoding failed", slog.String("query", query), slog.String("error", err.Error()))
+		// Deliberately excludes the raw query string -- PRIVACY_AND_DATA_HANDLING.md
+		// §5: structured logs never carry raw addresses. Pre-existing bug in
+		// this handler, fixed here rather than left for a separate PR.
+		s.logger.Error("geocoding failed", slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusBadGateway)
 		_ = json.NewEncoder(w).Encode(Error{
 			Code:    "GEOCODING_ERROR",
