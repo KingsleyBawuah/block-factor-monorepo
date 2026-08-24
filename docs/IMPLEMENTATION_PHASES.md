@@ -89,7 +89,7 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
 
 ### Deliverables
 1. **Factor Calculators (`services/api/internal/scoring/`):**
-   - [ ] `factor_transit.go` (`S_transit`: 'L' station distance decay + bus bonus).
+   - [x] `factor_transit.go` (`S_transit`: 'L' station distance decay + bus bonus).
    - [ ] `factor_commute.go` (`S_commute`: Rush-hour OTP2 point-to-point transit duration + transfer friction).
    - [x] `factor_bike.go` (`S_bike`: quality-tiered proximity decay + N-S/E-W directional network bonus).
    - [x] `factor_grocery.go` (`S_grocery`: Supermarket distance + pharmacy boost).
