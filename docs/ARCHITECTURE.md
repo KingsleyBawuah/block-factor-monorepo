@@ -229,6 +229,7 @@ To avoid dependencies on external host Redis instances, caching is partitioned a
    * **Google Places 400m Grid Cache:** 30-day TTL.
    * **FCC Broadband Address Cache:** Bi-annual refresh.
    * **OTP2 Commute Route Durations:** 7-day TTL. Cache key: origin/destination coordinates snapped to a 100m grid + mode + departure window.
+   * **Runtime vs. Ingestion Artifact Caching:** Runtime caches (Places, OTP2, FCC) store lightweight (< 10 KB) JSON records queried strictly by exact key. While `cache_entries` was also reused to cache large raw ingestion artifacts (e.g. the ~100MB CTA GTFS `.zip` archive, FEMA GeoJSON dumps) for fast local `make seed` runs and ephemeral container portability (DATA_SOURCES.md), storing 100MB+ binaries in `JSONB` causes base64 expansion and TOAST bloat. See §13.2 for the optimization plan.
 
 ### 5.5 Outbound API Protection & Cost Defense
 To prevent runaway third-party API costs or thundering-herd spikes during cold cache refills, the Go backend enforces four defensive layers:
@@ -489,4 +490,13 @@ Final decisions locked before Phase 1 implementation begins. These supplement th
 ### 13.2 Open Investigations (decide when the phase begins)
 * **Public-facing identity (Phase 2 launch prep):** Whether to form a dedicated business identity (Google Workspace account, possibly an LLC) before public launch, to keep the developer's name off domain WHOIS, the Privacy Policy/ToS entity name, support contact, and the public GitHub org. Separate question from GCP project ownership, which is already resolved above.
 * **Integration-test harness (Phase 2/3):** `testcontainers-go` (hermetic per-suite PostGIS, no external orchestration, CI-portable; slower cold starts) vs. a compose-managed test database (fast reuse, mirrors dev topology; shared state requires cleanup discipline). Either way, spatial tests run against golden GeoJSON fixtures in `testdata/`.
+* **Ingestion Seed Artifact Storage vs. Runtime Cache Separation (`cache_entries` / Phase 2/3):**
+  * **Context:** `cache_entries` currently doubles as an artifact cache for large raw ingestion sources (notably the ~100MB CTA GTFS `.zip` archive, FEMA NFHL multi-page GeoJSON, and Overpass line geometry dumps). This was a deliberate choice to keep `make seed` fast during development (~4s repeat runs) and portable across ephemeral container environments with zero local persistent disk requirements.
+  * **Current Inefficiencies & Tooling Friction:**
+    * Go's `json.Marshal` base64-encodes raw `[]byte` into `JSONB`, inflating a 100MB `.zip` to ~133MB of text in Postgres TOAST storage.
+    * Unmarshaling a 133MB Base64 JSON string introduces memory spikes in Go during ingestion.
+    * Database inspection tools (e.g., JetBrains DataGrip, DBeaver) encounter `OutOfMemoryError: Java heap space` when viewing `cache_entries` unless the IDE page size is explicitly reduced to 1 row or column projections are used.
+  * **Planned Resolution Options:**
+    1. **Dedicated Binary Storage (`BYTEA`):** If database-backed artifact caching is retained for ephemeral compute portability, move raw binary archives to a dedicated `BYTEA` table (`seed_artifact_cache`) to eliminate JSON parsing and 33% Base64 overhead.
+    2. **Local Volume / Disk Caching:** Store development seed artifacts on a mounted cache directory (e.g. `.cache/seed/`) and leave `cache_entries` purely for lightweight runtime API scoring lookups.
 

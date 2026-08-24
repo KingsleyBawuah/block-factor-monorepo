@@ -17,6 +17,10 @@ This is a plain-English glossary of the GIS (Geographic Information Systems) and
 
 The smallest rectangle that fully contains a shape, described by its min/max latitude and longitude edges — like the rectangular crop tool in an image editor, snapped tight around whatever you're framing. BlockFactor uses this idea for the 400m spatial grid cache: Google Places results are cached per grid cell (a small bounding box) rather than per exact address, so many nearby addresses share the same cached data instead of each triggering a fresh paid API call.
 
+## Coordinate Order (Longitude / Latitude vs. X / Y)
+
+In standard everyday speech, we say "latitude, longitude" (e.g. `41.8781, -87.6298`). In Cartesian math and GIS systems (like PostGIS `ST_MakePoint(x, y)`), coordinates are ordered by the horizontal $X$-axis and vertical $Y$-axis: $(X, Y) \to (\text{longitude}, \text{latitude})$. Accidental coordinate-order transposition (passing `lat, lon` into an `ST_MakePoint(x, y)` call) results in a point in the Antarctic Ocean instead of Chicago. BlockFactor's Go backend handles this conversion explicitly at the spatial client boundary.
+
 ## Coordinate Reference System (CRS)
 
 A CRS defines how a flat pair of numbers (like `41.8781, -87.6298`) maps onto an actual physical location on Earth. It's the difference between "3 inches from the top-left corner of this piece of paper" and "this exact spot in the real world" — the CRS is the agreed-upon rulebook that makes coordinates meaningful and comparable. BlockFactor uses one CRS throughout: WGS84 (see below), identified by its SRID `4326`.
@@ -76,6 +80,10 @@ A free, live query service for OpenStreetMap data (`overpass-api.de`) — a comp
 ## PBF (Protocolbuffer Binary Format)
 
 A compact binary encoding OpenStreetMap uses for its data extracts, as an alternative to the older plain-text `.osm` XML format — same nodes/ways/relations and tags, just packed far more densely, so a regional extract is a fraction of the size and much faster to parse. Think of it as the difference between a verbose XML export and a zipped binary log of the same records. BlockFactor initially planned to ingest a Chicago-area `.osm.pbf` extract (from a provider like Geofabrik) to pull out POIs, but ended up switching to the live Overpass API instead for that specific dataset — see "Overpass API" above and `docs/DATA_SOURCES.md` "OSM POIs" for why. PBF/`ogr2ogr` is still the right tool for genuinely shapefile-based datasets (bike routes, parks, FEMA flood zones).
+
+## Point-in-Polygon (ST_Contains / ST_Covers)
+
+A computational geometry test that determines whether a given point location falls inside, outside, or on the boundary of an arbitrary polygon shape — like dropping a pin on a paper map and checking if it falls inside city limits. `ST_Contains` tests whether a point is strictly in the interior of a polygon, while `ST_Covers` also includes points that land exactly on the boundary edge. BlockFactor uses PostGIS `ST_Covers` against the `city_boundary` table to validate service coverage and enforce the `OUT_OF_COVERAGE` (HTTP 422) hard-reject policy before any factor score calculations run.
 
 ## Polygon
 
