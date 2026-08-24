@@ -112,7 +112,7 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
    - [x] Graceful degradation: timed-out or data-less factors return `null`, are excluded from the weight sum, and remaining weights renormalize; the response marks degraded factors.
 
 4. **HTTP Handlers (`services/api/internal/api/`):**
-   - [ ] `POST /api/v1/score`
+   - [x] `POST /api/v1/score`
    - [x] `GET /api/v1/geocode` (one-shot geocode returning coordinates; typeahead autocomplete deferred until self-hosted Photon per Nominatim policy)
    - [x] `GET /api/v1/health`
 
