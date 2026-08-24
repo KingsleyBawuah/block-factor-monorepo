@@ -15,7 +15,7 @@ This is a plain-English glossary of the GIS (Geographic Information Systems) and
 
 ## Azimuth (ST_Azimuth)
 
-The horizontal angle (bearing) of a directional line segment measured clockwise in degrees from true North ($0^\circ$). In simple terms, it's a 360-degree compass needle pointing along the direction of travel: $0^\circ$/$360^\circ$ is due North, $90^\circ$ is East, $180^\circ$ is South, and $270^\circ$ is West. BlockFactor uses PostGIS's `ST_Azimuth` on bike route linestrings to bucket nearby bike infrastructure into North-South vs. East-West orientations, awarding the dual-axis network bonus for the $S_{\text{bike}}$ factor if protected corridors exist in both orthogonal directions.
+The horizontal angle (bearing) of a directional line segment measured clockwise in degrees from true North (0°). In simple terms, it's a 360-degree compass needle pointing along the direction of travel: 0°/360° is due North, 90° is East, 180° is South, and 270° is West. BlockFactor uses PostGIS's `ST_Azimuth` on bike route linestrings to bucket nearby bike infrastructure into North-South vs. East-West orientations, awarding the dual-axis network bonus for the $S_{\text{bike}}$ factor if protected corridors exist in both orthogonal directions.
 
 ## Bounding Box
 
