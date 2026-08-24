@@ -14,6 +14,12 @@ type QueryRowProvider interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
+// QueryProvider is satisfied by *pgxpool.Pool, *pgx.Conn, and pgx.Tx for multi-row queries.
+type QueryProvider interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 // BoundaryChecker checks whether coordinates fall inside the active service coverage area.
 type BoundaryChecker interface {
 	IsWithinCityBoundary(ctx context.Context, lat, lon float64) (bool, error)

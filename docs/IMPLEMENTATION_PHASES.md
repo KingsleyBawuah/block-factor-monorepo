@@ -95,10 +95,10 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
    - [ ] `factor_grocery.go` (`S_grocery`: Supermarket distance + pharmacy boost).
    - [ ] `factor_third_places.go` (`S_third_place`: Cached POI density).
    - [ ] `factor_green.go` (`S_green`: Park proximity + Lakefront/606 trail bonus).
-   - [ ] `factor_noise.go` (`S_noise`: Elevated CTA track & arterial road proximity penalties).
-   - [ ] `factor_flood.go` (`S_flood`: FEMA zones + 311 sewer backup penalty).
+   - [x] `factor_noise.go` (`S_noise`: Elevated CTA track & arterial road proximity penalties).
+   - [x] `factor_flood.go` (`S_flood`: FEMA zones + 311 sewer backup penalty).
    - [ ] `factor_safety.go` (`S_safety`: 12-month violent/property penalty normalized to city percentiles).
-   - [ ] `factor_solar.go` (`S_solar`: orientation base lookup × exposure modifier + floor bonus).
+   - [x] `factor_solar.go` (`S_solar`: orientation base lookup × exposure modifier + floor bonus).
 2. **Outbound Clients & Cost Defense (`services/api/internal/clients/`):**
    - [ ] `places.go` — Google Places (New) Nearby Search client with 400m grid-cache fill (30-day TTL in `cache_entries`), powering `S_third_place` and the Phase 4 POI map layer.
      - Protected by a 4-tier cost defense layer: token-bucket rate limiter (`golang.org/x/time/rate`), daily budget circuit breaker (degrading `S_third_place` to `null`), in-flight `singleflight` deduplication (`golang.org/x/sync/singleflight`), and Google Cloud hard billing quotas.
@@ -106,9 +106,10 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
    - [x] `nominatim.go` — one-shot geocoding client returning ranked candidates (public endpoint, ≤ 1 req/sec rate-limited, custom `User-Agent`; no typeahead in Phase 1 per Nominatim policy).
    - [ ] `otp.go` — **interface definition only**: `factor_commute.go` is built and unit-tested against fixture-based fakes shaped as **GTFS GraphQL API** responses (OTP 2.x removed the legacy REST plan API); the live client lands in Phase 6.
 3. **Concurrency Orchestrator (`engine.go`):**
-   - [ ] `errgroup` fan-out with a hard 8-second parent context deadline.
-   - [ ] Dynamic weight normalization ($\sum w_i = 100\%$).
-   - [ ] Graceful degradation: timed-out or data-less factors return `null`, are excluded from the weight sum, and remaining weights renormalize; the response marks degraded factors.
+   - [x] `errgroup` / goroutine fan-out with a hard 8-second parent context deadline.
+   - [x] Dynamic weight normalization ($\sum w_i = 100\%$).
+   - [x] Graceful degradation: timed-out or data-less factors return `null`, are excluded from the weight sum, and remaining weights renormalize; the response marks degraded factors.
+
 4. **HTTP Handlers (`services/api/internal/api/`):**
    - [ ] `POST /api/v1/score`
    - [x] `GET /api/v1/geocode` (one-shot geocode returning coordinates; typeahead autocomplete deferred until self-hosted Photon per Nominatim policy)
