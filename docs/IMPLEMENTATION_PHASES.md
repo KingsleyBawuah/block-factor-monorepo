@@ -70,10 +70,10 @@ Create database tables with spatial indexes and build the standalone CLI tool to
      - `cache_entries` (standard LOGGED Postgres cache table with indexed `expires_at`).
 2. **Data Ingestion CLI Tool (`services/api/cmd/seed/main.go`):**
    - [x] SODA API client connecting to the Chicago Data Portal (authenticated via `CHICAGO_APP_TOKEN`).
-   - [x] Automated parsers for CTA 'L' stops, bike routes, parks, crime incidents, FEMA flood zones, 311 sewer backup incidents, OSM POIs, noise geometry, and the city boundary polygon. (All 8 external dataset parsers complete; post-ingest derivations remain.)
-   - [ ] Post-ingest derivation steps: GTFS `stop_times` headway analysis → `bus_corridors`; crime-grid distribution → `safety_grid_percentiles` (staging-table + rename swap per ARCHITECTURE 11.3).
+   - [x] Automated parsers for CTA 'L' stops, bike routes, parks, crime incidents, FEMA flood zones, 311 sewer backup incidents, OSM POIs, noise geometry, and the city boundary polygon.
+   - [ ] Post-ingest derivation steps: Crime-grid distribution → `safety_grid_percentiles` (staging-table atomic swap per ARCHITECTURE 11.3, completed); GTFS `stop_times` headway analysis → `bus_corridors` (pending).
    - [x] Ingestion tooling per dataset (GDAL `ogr2ogr` vs. Go shapefile lib, PBF parsing, GTFS parsing) resolved at phase start per ARCHITECTURE 13.2.
-   - [ ] Selective CLI flags: `--dataset=cta`, `--dataset=crimes`, `--dataset=osm_pois`, `--dataset=flood_zones`, `--dataset=sewer_311`, `--dataset=noise`, `--dataset=derive`, `--limit=1000`, `--all`. (All individual dataset flags implemented; `--dataset=derive` pending derivation PR.)
+   - [ ] Selective CLI flags: `--dataset=cta`, `--dataset=crimes`, `--dataset=osm_pois`, `--dataset=flood_zones`, `--dataset=sewer_311`, `--dataset=noise`, `--dataset=safety_grid`, `--dataset=derive`, `--limit=1000`, `--all`. (All individual dataset flags & `--dataset=derive` implemented; `bus_corridors` pending.)
 
 ### Validation Criteria
 - `make migrate-up` creates all tables and spatial indexes cleanly.
