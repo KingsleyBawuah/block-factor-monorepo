@@ -21,9 +21,15 @@ func (c *SolarCalculator) Name() FactorName {
 	return FactorSolar
 }
 
-// Calculate computes the S_solar score from unit metadata.
+// Calculate computes the S_solar score from unit metadata, automatically inferring
+// the building's street-facing window direction if not explicitly supplied.
 func (c *SolarCalculator) Calculate(_ context.Context, params ScoreParams) (FactorResult, error) {
-	score := CalculateSolarScore(params.Unit)
+	inferredFacing := api.S
+	if params.Address != nil {
+		inferredFacing = InferStreetFacingOrientation(*params.Address)
+	}
+
+	score := CalculateSolarScore(params.Unit, inferredFacing)
 	return FactorResult{
 		Name:     FactorSolar,
 		Score:    &score,
@@ -40,27 +46,30 @@ func (c *SolarCalculator) Calculate(_ context.Context, params ScoreParams) (Fact
 //     +5 pts per floor above floor 2 (e.g. floor 3 = +5, floor 5 = +15).
 //   - Score formula:
 //     clamp(BaseScore × ExposureModifier + FloorBonus, 0, 100).
-func CalculateSolarScore(unit *api.UnitMetadata) float32 {
-	baseScore := 100.0 // Default when facing is unspecified
+func CalculateSolarScore(unit *api.UnitMetadata, defaultFacing api.UnitMetadataFacing) float32 {
+	facing := defaultFacing
 	if unit != nil && unit.Facing != nil {
-		switch strings.ToUpper(string(*unit.Facing)) {
-		case "S":
-			baseScore = 100.0
-		case "SE":
-			baseScore = 92.5
-		case "SW":
-			baseScore = 87.5
-		case "E":
-			baseScore = 85.0
-		case "W":
-			baseScore = 75.0
-		case "NE":
-			baseScore = 62.5
-		case "NW":
-			baseScore = 57.5
-		case "N":
-			baseScore = 40.0
-		}
+		facing = *unit.Facing
+	}
+
+	baseScore := 100.0
+	switch strings.ToUpper(string(facing)) {
+	case "S":
+		baseScore = 100.0
+	case "SE":
+		baseScore = 92.5
+	case "SW":
+		baseScore = 87.5
+	case "E":
+		baseScore = 85.0
+	case "W":
+		baseScore = 75.0
+	case "NE":
+		baseScore = 62.5
+	case "NW":
+		baseScore = 57.5
+	case "N":
+		baseScore = 40.0
 	}
 
 	exposureMod := 1.0 // Default when exposure is unspecified

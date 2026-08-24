@@ -28,8 +28,9 @@ seed:
 
 # Regenerate OpenAPI contracts and client SDKs
 generate:
-	oapi-codegen -config services/api/openapi.cfg.yaml docs/openapi.yaml
+	cd services/api && oapi-codegen -config openapi.cfg.yaml ../../docs/openapi.yaml
 	cd packages/web && bun run --bun generate-api
+
 
 # Verify generated contracts are up-to-date (CI drift gate)
 generate-check: generate

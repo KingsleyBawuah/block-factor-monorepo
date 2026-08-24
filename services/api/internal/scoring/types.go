@@ -40,6 +40,7 @@ type FactorCalculator interface {
 
 // ScoreParams represents the input parameters provided to the scoring engine.
 type ScoreParams struct {
+	Address                *string
 	Origin                 api.Coordinates
 	DestinationCoordinates *api.Coordinates
 	Unit                   *api.UnitMetadata

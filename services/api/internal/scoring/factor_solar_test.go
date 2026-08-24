@@ -9,9 +9,14 @@ import (
 )
 
 func TestCalculateSolarScore_NilUnit(t *testing.T) {
-	score := scoring.CalculateSolarScore(nil)
+	score := scoring.CalculateSolarScore(nil, api.S)
 	if score != 100.0 {
-		t.Errorf("expected default score 100.0 for nil unit metadata, got %f", score)
+		t.Errorf("expected default score 100.0 for nil unit metadata facing South, got %f", score)
+	}
+
+	scoreNorth := scoring.CalculateSolarScore(nil, api.N)
+	if scoreNorth != 40.0 {
+		t.Errorf("expected default score 40.0 for nil unit metadata facing North, got %f", scoreNorth)
 	}
 }
 
@@ -97,7 +102,7 @@ func TestCalculateSolarScore_Orientations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			score := scoring.CalculateSolarScore(tt.unit)
+			score := scoring.CalculateSolarScore(tt.unit, api.S)
 			if score != tt.expected {
 				t.Errorf("expected score %f, got %f", tt.expected, score)
 			}
@@ -165,7 +170,7 @@ func TestCalculateSolarScore_ExposureAndFloor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			score := scoring.CalculateSolarScore(tt.unit)
+			score := scoring.CalculateSolarScore(tt.unit, api.S)
 			if score != tt.expected {
 				t.Errorf("expected score %f, got %f", tt.expected, score)
 			}
@@ -173,13 +178,35 @@ func TestCalculateSolarScore_ExposureAndFloor(t *testing.T) {
 	}
 }
 
-func TestSolarCalculator_Calculate(t *testing.T) {
+func TestSolarCalculator_Calculate_AutoInferOrientation(t *testing.T) {
 	calc := scoring.NewSolarCalculator()
 	if calc.Name() != scoring.FactorSolar {
 		t.Errorf("expected name %q, got %q", scoring.FactorSolar, calc.Name())
 	}
 
+	// 1801 W 18th St (Odd on East-West -> infers North -> base score 40.0)
+	addr := "1801 W 18th St, Chicago, IL 60608"
 	res, err := calc.Calculate(context.Background(), scoring.ScoreParams{
+		Address: &addr,
+		Unit: &api.UnitMetadata{
+			Exposure: ptr(api.Street),
+			Floor:    ptr(1),
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Degraded {
+		t.Errorf("expected not degraded")
+	}
+	if res.Score == nil || *res.Score != 40.0 {
+		t.Errorf("expected inferred North score 40.0, got %v", res.Score)
+	}
+
+	// Explicit user override facing South should take precedence (score 100.0)
+	resOverride, err := calc.Calculate(context.Background(), scoring.ScoreParams{
+		Address: &addr,
 		Unit: &api.UnitMetadata{
 			Facing:   ptr(api.S),
 			Exposure: ptr(api.Street),
@@ -189,10 +216,7 @@ func TestSolarCalculator_Calculate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if res.Degraded {
-		t.Errorf("expected not degraded")
-	}
-	if res.Score == nil || *res.Score != 100.0 {
-		t.Errorf("expected score 100.0, got %v", res.Score)
+	if resOverride.Score == nil || *resOverride.Score != 100.0 {
+		t.Errorf("expected override South score 100.0, got %v", resOverride.Score)
 	}
 }

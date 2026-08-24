@@ -101,6 +101,10 @@ The technique of subdividing a geographic region into a regular tessellation of 
 
 A PostGIS spatial query function that answers "is this thing within X meters of that thing?" efficiently, using a GiST index rather than brute-force checking every record. It's the core building block behind nearly every BlockFactor scoring factor — "is there a supermarket within 0.3 miles," "is there a CTA stop within 0.25 miles" — all of it boils down to an `ST_DWithin` call under the hood.
 
+## Street-Facing Orientation (Brennan Grid System)
+
+The compass direction a building's primary entrance and front-facing windows face toward the public right-of-way. In Chicago's 1909 Brennan address system, house numbers encode exact cardinal geometry: odd numbers on East-West streets sit on the South side facing North, even numbers sit on the North side facing South; odd numbers on North-South streets sit on the East side facing West, and even numbers sit on the West side facing East. BlockFactor's scoring engine uses these rules (along with vector azimuth calculation for diagonal avenues) to automatically infer unit window orientation for the $S_{\text{solar}}$ factor when unit-level metadata is omitted.
+
 ## SRID (Spatial Reference Identifier)
 
 A numeric ID that names a specific coordinate reference system — similar to how a country code (+1, +44) identifies which phone numbering system you're using. BlockFactor uses SRID `4326`, which specifically means WGS84 (see below). Every spatial column in the database is tagged `4326` so nothing gets mixed up with a different, incompatible projection.
@@ -112,3 +116,4 @@ The specific real-world reference system that defines what "latitude 41.8781, lo
 ## WKB / WKT / GeoJSON
 
 The same coordinates, stored or shown three different ways for three different audiences. **WKB** ("Well-Known Binary") is what's actually sitting in a `geom` column — a compact binary encoding of the geometry type, SRID, and raw coordinate numbers, never converted to text just to run a spatial query. **WKT** ("Well-Known Text") is its human-readable form, e.g. `POINT(-87.672892 42.019063)` — purely a debugging convenience, never sent over a wire in production. **GeoJSON** — `{"type":"Point","coordinates":[-87.672892,42.019063]}` — is the one that actually matters outside the database: it's the near-universal web standard for spatial data, understood natively by MapLibre GL (BlockFactor's map library) and virtually every other mapping tool. BlockFactor's spatial math (PostGIS running `ST_DWithin` etc.) operates on the raw binary and never touches the other two; whenever the API needs to hand something to the frontend to actually draw on a map, it converts to GeoJSON first (`ST_AsGeoJSON()`).
+
