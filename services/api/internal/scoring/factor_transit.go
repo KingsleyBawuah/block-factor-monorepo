@@ -22,11 +22,32 @@ const (
 	// TransitBonusRadiusThresholdMeters is 0.2 miles (321.869 m) for high-frequency bus proximity.
 	TransitBonusRadiusThresholdMeters = 321.869
 
-	// TransitBonusPoints is the +10 pt boost for dual-line access or high-frequency bus service.
-	TransitBonusPoints = 10.0
+	// TransitDualLineBonusPoints is the +10 pt boost for dual-line 'L' access.
+	TransitDualLineBonusPoints = 10.0
 
 	// TransitBusHeadwayThresholdMinutes defines the <= 10 min headway benchmark for high frequency.
 	TransitBusHeadwayThresholdMinutes = 10.0
+
+	// TransitBusOneAxisBonusPoints is the +10 pt boost for a qualifying high-frequency
+	// bus corridor in only one direction (N-S or E-W).
+	TransitBusOneAxisBonusPoints = 10.0
+	// TransitBusBothAxesBonusPoints is the +15 pt boost when qualifying corridors cover
+	// both N-S and E-W.
+	TransitBusBothAxesBonusPoints = 15.0
+
+	// Rail service quality (0-20 pts total): AMPeakComponent + OvernightComponent.
+	// TransitRailAMPeakMaxPoints is awarded at <= TransitRailAMPeakCloseMinutes headway,
+	// decaying to 0 at >= TransitRailAMPeakFarMinutes.
+	TransitRailAMPeakMaxPoints    = 10.0
+	TransitRailAMPeakCloseMinutes = 6.0
+	TransitRailAMPeakFarMinutes   = 20.0
+
+	// TransitRailOvernightMaxPoints is awarded at <= TransitRailOvernightCloseMinutes
+	// headway, decaying to 0 at >= TransitRailOvernightFarMinutes (matching CTA's own
+	// 30-min service standard for non-Key routes at peak, per PRD §5.2).
+	TransitRailOvernightMaxPoints    = 10.0
+	TransitRailOvernightCloseMinutes = 15.0
+	TransitRailOvernightFarMinutes   = 30.0
 )
 
 // CtaStation represents a nearby CTA 'L' rapid-transit station.
@@ -42,15 +63,28 @@ type BusCorridor struct {
 	RouteName          string
 	MeanHeadwayMinutes float64
 	DistanceMeters     float64
+	// AzimuthDegrees is nil when the corridor's start and end points coincide
+	// (e.g. a loop), which leaves the bearing undefined.
+	AzimuthDegrees *float64
 }
 
-// TransitQuerier defines spatial database queries for CTA stops and bus corridors.
+// CtaLineService holds a CTA 'L' line's scheduled AM-peak and overnight headway,
+// powering the S_transit rail service-quality bonus (PRD §5.2).
+type CtaLineService struct {
+	LineName                string
+	AMPeakHeadwayMinutes    float64
+	OvernightHeadwayMinutes *float64
+}
+
+// TransitQuerier defines spatial database queries for CTA stops, bus corridors, and
+// per-line service quality.
 type TransitQuerier interface {
 	GetNearbyCtaStations(ctx context.Context, lat, lon float64, maxDistanceMeters float64) ([]CtaStation, error)
 	GetNearbyBusCorridors(ctx context.Context, lat, lon float64, maxDistanceMeters float64, maxHeadwayMinutes float64) ([]BusCorridor, error)
+	GetLineService(ctx context.Context) ([]CtaLineService, error)
 }
 
-// DBTransitQuerier queries cta_stops and bus_corridors in PostGIS.
+// DBTransitQuerier queries cta_stops, bus_corridors, and cta_line_service in PostGIS.
 type DBTransitQuerier struct {
 	db spatial.QueryProvider
 }
@@ -109,7 +143,11 @@ func (q *DBTransitQuerier) GetNearbyBusCorridors(ctx context.Context, lat, lon f
 			route_id,
 			route_name,
 			mean_headway_minutes,
-			ST_Distance(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_meters
+			ST_Distance(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_meters,
+			degrees(ST_Azimuth(
+				ST_StartPoint(ST_GeometryN(geom::geometry, 1)),
+				ST_EndPoint(ST_GeometryN(geom::geometry, 1))
+			)) AS azimuth_deg
 		FROM bus_corridors
 		WHERE mean_headway_minutes <= $4
 		  AND ST_DWithin(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3)
@@ -125,7 +163,7 @@ func (q *DBTransitQuerier) GetNearbyBusCorridors(ctx context.Context, lat, lon f
 	var corridors []BusCorridor
 	for rows.Next() {
 		var b BusCorridor
-		if err := rows.Scan(&b.RouteID, &b.RouteName, &b.MeanHeadwayMinutes, &b.DistanceMeters); err != nil {
+		if err := rows.Scan(&b.RouteID, &b.RouteName, &b.MeanHeadwayMinutes, &b.DistanceMeters, &b.AzimuthDegrees); err != nil {
 			return nil, fmt.Errorf("scoring: scan bus corridor row: %w", err)
 		}
 		corridors = append(corridors, b)
@@ -136,6 +174,36 @@ func (q *DBTransitQuerier) GetNearbyBusCorridors(ctx context.Context, lat, lon f
 	}
 
 	return corridors, nil
+}
+
+// GetLineService returns every CTA 'L' line's scheduled AM-peak and overnight headway.
+func (q *DBTransitQuerier) GetLineService(ctx context.Context) ([]CtaLineService, error) {
+	if q.db == nil {
+		return nil, errors.New("scoring: nil database connection")
+	}
+
+	query := `SELECT line_name, am_peak_headway_minutes, overnight_headway_minutes FROM cta_line_service;`
+
+	rows, err := q.db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("scoring: query cta line service: %w", err)
+	}
+	defer rows.Close()
+
+	var lines []CtaLineService
+	for rows.Next() {
+		var l CtaLineService
+		if err := rows.Scan(&l.LineName, &l.AMPeakHeadwayMinutes, &l.OvernightHeadwayMinutes); err != nil {
+			return nil, fmt.Errorf("scoring: scan cta line service row: %w", err)
+		}
+		lines = append(lines, l)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("scoring: iterate cta line service rows: %w", err)
+	}
+
+	return lines, nil
 }
 
 // TransitCalculator calculates the S_transit livability factor.
@@ -169,7 +237,19 @@ func (c *TransitCalculator) Calculate(ctx context.Context, params ScoreParams) (
 		return FactorResult{Name: FactorTransit, Degraded: true}, err
 	}
 
-	score, minDistance, contributing := CalculateTransitScore(stations, corridors)
+	// No stations within range means no line is reachable, so the rail quality
+	// bonus is unconditionally 0 -- skip the query rather than fetch data that
+	// can't affect the result. cta_stops.lines is always non-empty for a real
+	// station, so len(stations) > 0 is an exact proxy for "some line is reachable".
+	var lineServices []CtaLineService
+	if len(stations) > 0 {
+		lineServices, err = c.querier.GetLineService(ctx)
+		if err != nil {
+			return FactorResult{Name: FactorTransit, Degraded: true}, err
+		}
+	}
+
+	score, minDistance, contributing := CalculateTransitScore(stations, corridors, lineServices)
 	return FactorResult{
 		Name:             FactorTransit,
 		Score:            &score,
@@ -184,11 +264,17 @@ func (c *TransitCalculator) Calculate(ctx context.Context, params ScoreParams) (
 //     <= 0.25 mi (402.336 m): 100 pts
 //     0.25 – 1.0 mi (402.336 – 1609.344 m): linear decay from 100 to 0 pts
 //     > 1.0 mi: 0 pts
-//   - Bonus (+10 pts, capped at 100 total):
-//     Dual-line access (2+ distinct CTA lines across accessible stations within 1.0 mi)
-//     OR high-frequency bus corridor (mean headway <= 10 min) within <= 0.2 mi (321.869 m).
-//   - Formula: clamp(BaseScore + Bonus, 0, 100).
-func CalculateTransitScore(stations []CtaStation, corridors []BusCorridor) (score float32, minDistance *float32, contributing []api.ContributingPoi) {
+//   - Three independent, additive bonus components:
+//     1. Dual-line access: +10 pts if 2+ distinct 'L' lines are reachable across
+//     stations within 1.0 mi.
+//     2. Bus directional coverage: +10 pts for a qualifying high-frequency
+//     (<= 10 min headway) bus corridor within 0.2 mi in one direction only,
+//     +15 pts if corridors cover both N-S and E-W.
+//     3. Rail service quality (0-20 pts): AMPeakComponent + OvernightComponent for
+//     the best-scoring line among all lines reachable within 1.0 mi (not
+//     necessarily the closest station).
+//   - Formula: clamp(BaseScore + DualLineBonus + BusBonus + RailQualityBonus, 0, 100).
+func CalculateTransitScore(stations []CtaStation, corridors []BusCorridor, lineServices []CtaLineService) (score float32, minDistance *float32, contributing []api.ContributingPoi) {
 	var closestStation *CtaStation
 	uniqueLines := make(map[string]struct{})
 
@@ -219,24 +305,16 @@ func CalculateTransitScore(stations []CtaStation, corridors []BusCorridor) (scor
 		}
 	}
 
-	hasDualLineBonus := len(uniqueLines) >= 2
-	var qualifyingBusCorridor *BusCorridor
-	for i := range corridors {
-		c := &corridors[i]
-		if c.DistanceMeters <= TransitBonusRadiusThresholdMeters && c.MeanHeadwayMinutes <= TransitBusHeadwayThresholdMinutes {
-			if qualifyingBusCorridor == nil || c.DistanceMeters < qualifyingBusCorridor.DistanceMeters {
-				qualifyingBusCorridor = c
-			}
-		}
-	}
-	hasBusBonus := qualifyingBusCorridor != nil
-
-	bonus := 0.0
-	if hasDualLineBonus || hasBusBonus {
-		bonus = TransitBonusPoints
+	dualLineBonus := 0.0
+	if len(uniqueLines) >= 2 {
+		dualLineBonus = TransitDualLineBonusPoints
 	}
 
-	finalScore := math.Min(100.0, math.Max(0.0, baseScore+bonus))
+	busBonus, qualifyingBusCorridor := calculateBusDirectionalBonus(corridors)
+
+	railQualityBonus := calculateRailQualityBonus(uniqueLines, lineServices)
+
+	finalScore := math.Min(100.0, math.Max(0.0, baseScore+dualLineBonus+busBonus+railQualityBonus))
 	score = float32(math.Round(finalScore*10) / 10)
 
 	// Determine minDistance and contributing POIs
@@ -277,4 +355,99 @@ func CalculateTransitScore(stations []CtaStation, corridors []BusCorridor) (scor
 	}
 
 	return score, minDistance, contributing
+}
+
+// calculateBusDirectionalBonus returns the bus bonus points and the closest qualifying
+// corridor (for the contributing-POI display), based on how many distinct axes (N-S,
+// E-W) the qualifying high-frequency corridors cover. The caller's query already
+// filters to the bonus radius/headway threshold, but the distance/headway check is
+// re-applied here defensively so this function stays correct independent of the
+// caller, matching the original single-bonus implementation's behavior.
+func calculateBusDirectionalBonus(corridors []BusCorridor) (bonus float64, closest *BusCorridor) {
+	hasNorthSouth := false
+	hasEastWest := false
+
+	for i := range corridors {
+		c := &corridors[i]
+		if c.DistanceMeters > TransitBonusRadiusThresholdMeters || c.MeanHeadwayMinutes > TransitBusHeadwayThresholdMinutes {
+			continue
+		}
+		if closest == nil || c.DistanceMeters < closest.DistanceMeters {
+			closest = c
+		}
+		if c.AzimuthDegrees != nil {
+			if isNorthSouthAzimuth(*c.AzimuthDegrees) {
+				hasNorthSouth = true
+			} else {
+				hasEastWest = true
+			}
+		}
+	}
+
+	switch {
+	case hasNorthSouth && hasEastWest:
+		return TransitBusBothAxesBonusPoints, closest
+	case closest != nil:
+		return TransitBusOneAxisBonusPoints, closest
+	default:
+		return 0.0, nil
+	}
+}
+
+// calculateRailQualityBonus returns the best (AMPeakComponent + OvernightComponent)
+// score among lines, per the "best-scoring accessible line" rule in PRD §5.2 --
+// not an average across lines, and not tied to the physically closest station.
+func calculateRailQualityBonus(lines map[string]struct{}, lineServices []CtaLineService) float64 {
+	if len(lines) == 0 || len(lineServices) == 0 {
+		return 0.0
+	}
+
+	serviceByLine := make(map[string]CtaLineService, len(lineServices))
+	for _, ls := range lineServices {
+		serviceByLine[ls.LineName] = ls
+	}
+
+	best := 0.0
+	for line := range lines {
+		svc, ok := serviceByLine[line]
+		if !ok {
+			continue
+		}
+		quality := railAMPeakComponent(svc.AMPeakHeadwayMinutes) + railOvernightComponent(svc.OvernightHeadwayMinutes)
+		if quality > best {
+			best = quality
+		}
+	}
+	return best
+}
+
+// railAMPeakComponent computes the 0-10 pt AM-peak sub-score for a line's headway.
+func railAMPeakComponent(headwayMinutes float64) float64 {
+	switch {
+	case headwayMinutes <= TransitRailAMPeakCloseMinutes:
+		return TransitRailAMPeakMaxPoints
+	case headwayMinutes >= TransitRailAMPeakFarMinutes:
+		return 0.0
+	default:
+		ratio := (TransitRailAMPeakFarMinutes - headwayMinutes) / (TransitRailAMPeakFarMinutes - TransitRailAMPeakCloseMinutes)
+		return TransitRailAMPeakMaxPoints * ratio
+	}
+}
+
+// railOvernightComponent computes the 0-10 pt overnight sub-score for a line's
+// headway. A nil headway (no scheduled overnight service at all) scores 0.
+func railOvernightComponent(headwayMinutes *float64) float64 {
+	if headwayMinutes == nil {
+		return 0.0
+	}
+	h := *headwayMinutes
+	switch {
+	case h <= TransitRailOvernightCloseMinutes:
+		return TransitRailOvernightMaxPoints
+	case h >= TransitRailOvernightFarMinutes:
+		return 0.0
+	default:
+		ratio := (TransitRailOvernightFarMinutes - h) / (TransitRailOvernightFarMinutes - TransitRailOvernightCloseMinutes)
+		return TransitRailOvernightMaxPoints * ratio
+	}
 }
