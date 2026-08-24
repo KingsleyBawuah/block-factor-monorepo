@@ -33,9 +33,10 @@ const (
 // BikeRouteProximity represents a nearby bike route segment and its bearing.
 type BikeRouteProximity struct {
 	RouteType      string // 'Protected Bike Lane', 'Neighborhood Greenway', etc.
-	StreetName     *string
 	DistanceMeters float64
-	AzimuthDegrees float64
+	// AzimuthDegrees is nil when the segment's start and end points coincide
+	// (e.g. a loop), which leaves the bearing undefined.
+	AzimuthDegrees *float64
 }
 
 // BikeQuerier defines spatial database queries for bike infrastructure.
@@ -62,12 +63,11 @@ func (q *DBBikeQuerier) GetNearbyBikeRoutes(ctx context.Context, lat, lon float6
 	query := `
 		SELECT
 			route_type,
-			street_name,
 			ST_Distance(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_meters,
-			COALESCE(degrees(ST_Azimuth(
+			degrees(ST_Azimuth(
 				ST_StartPoint(ST_GeometryN(geom::geometry, 1)),
 				ST_EndPoint(ST_GeometryN(geom::geometry, 1))
-			)), 0.0) AS azimuth_deg
+			)) AS azimuth_deg
 		FROM bike_routes
 		WHERE ST_DWithin(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3)
 		ORDER BY distance_meters ASC;
@@ -82,7 +82,7 @@ func (q *DBBikeQuerier) GetNearbyBikeRoutes(ctx context.Context, lat, lon float6
 	var routes []BikeRouteProximity
 	for rows.Next() {
 		var r BikeRouteProximity
-		if err := rows.Scan(&r.RouteType, &r.StreetName, &r.DistanceMeters, &r.AzimuthDegrees); err != nil {
+		if err := rows.Scan(&r.RouteType, &r.DistanceMeters, &r.AzimuthDegrees); err != nil {
 			return nil, fmt.Errorf("scoring: scan bike route row: %w", err)
 		}
 		routes = append(routes, r)
@@ -147,26 +147,26 @@ func CalculateBikeScore(routes []BikeRouteProximity) (score float32, minDistance
 	}
 
 	bestBaseScore := 0.0
-	var closestDist *float64
+	var bestDist *float64
 	hasNorthSouth := false
 	hasEastWest := false
 
 	for i := range routes {
 		r := &routes[i]
-		if closestDist == nil || r.DistanceMeters < *closestDist {
-			d := r.DistanceMeters
-			closestDist = &d
-		}
 
 		tierScore := getBikeTierScore(r.RouteType)
 		segScore := computeDecayedScore(tierScore, r.DistanceMeters)
 		if segScore > bestBaseScore {
 			bestBaseScore = segScore
+			d := r.DistanceMeters
+			bestDist = &d
 		}
 
-		// Qualifying network connectivity: Buffered Bike Lane or better within 0.5 mi
-		if tierScore >= BikeTierBufferedScore && r.DistanceMeters <= BikeMaxQueryRadiusMeters {
-			if isNorthSouthAzimuth(r.AzimuthDegrees) {
+		// Qualifying network connectivity: Buffered Bike Lane or better within 0.5 mi.
+		// Segments with an undefined bearing (a degenerate loop) can't be bucketed
+		// into either direction, so they're excluded from the network bonus.
+		if tierScore >= BikeTierBufferedScore && r.DistanceMeters <= BikeMaxQueryRadiusMeters && r.AzimuthDegrees != nil {
+			if isNorthSouthAzimuth(*r.AzimuthDegrees) {
 				hasNorthSouth = true
 			} else {
 				hasEastWest = true
@@ -182,8 +182,8 @@ func CalculateBikeScore(routes []BikeRouteProximity) (score float32, minDistance
 	finalScore := math.Min(100.0, math.Max(0.0, bestBaseScore+bonus))
 	score = float32(math.Round(finalScore*10) / 10)
 
-	if closestDist != nil {
-		distVal := float32(math.Round(*closestDist*10) / 10)
+	if bestDist != nil {
+		distVal := float32(math.Round(*bestDist*10) / 10)
 		minDistance = &distVal
 	}
 

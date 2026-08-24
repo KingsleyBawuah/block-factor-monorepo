@@ -19,7 +19,7 @@ func TestCalculateGroceryScore_Scenarios(t *testing.T) {
 		{
 			name: "Supermarket within 0.3 mi (200m)",
 			pois: []scoring.OsmPoi{
-				{Name: "Trader Joe's", PoiType: "supermarket", DistanceMeters: 200.0, Lat: 41.88, Lon: -87.65},
+				{Name: "Trader Joe's", PoiType: "supermarket", DistanceMeters: 200.0},
 			},
 			expectedScore: 100.0,
 			expectedPois:  1,
@@ -27,7 +27,7 @@ func TestCalculateGroceryScore_Scenarios(t *testing.T) {
 		{
 			name: "Supermarket at 800m (0.3 - 0.75 mi) without pharmacy",
 			pois: []scoring.OsmPoi{
-				{Name: "Jewel-Osco", PoiType: "supermarket", DistanceMeters: 800.0, Lat: 41.88, Lon: -87.65},
+				{Name: "Jewel-Osco", PoiType: "supermarket", DistanceMeters: 800.0},
 			},
 			expectedScore: 75.0,
 			expectedPois:  1,
@@ -35,8 +35,8 @@ func TestCalculateGroceryScore_Scenarios(t *testing.T) {
 		{
 			name: "Supermarket at 800m with pharmacy at 250m (+10 boost)",
 			pois: []scoring.OsmPoi{
-				{Name: "Jewel-Osco", PoiType: "supermarket", DistanceMeters: 800.0, Lat: 41.88, Lon: -87.65},
-				{Name: "Walgreens", PoiType: "pharmacy", DistanceMeters: 250.0, Lat: 41.881, Lon: -87.651},
+				{Name: "Jewel-Osco", PoiType: "supermarket", DistanceMeters: 800.0},
+				{Name: "Walgreens", PoiType: "pharmacy", DistanceMeters: 250.0},
 			},
 			expectedScore: 85.0, // 75 + 10
 			expectedPois:  2,
@@ -44,8 +44,8 @@ func TestCalculateGroceryScore_Scenarios(t *testing.T) {
 		{
 			name: "Supermarket at 200m with pharmacy at 100m (clamped at 100)",
 			pois: []scoring.OsmPoi{
-				{Name: "Mariano's", PoiType: "supermarket", DistanceMeters: 200.0, Lat: 41.88, Lon: -87.65},
-				{Name: "CVS", PoiType: "pharmacy", DistanceMeters: 100.0, Lat: 41.881, Lon: -87.651},
+				{Name: "Mariano's", PoiType: "supermarket", DistanceMeters: 200.0},
+				{Name: "CVS", PoiType: "pharmacy", DistanceMeters: 100.0},
 			},
 			expectedScore: 100.0, // 100 + 10 -> 100
 			expectedPois:  2,
@@ -53,7 +53,7 @@ func TestCalculateGroceryScore_Scenarios(t *testing.T) {
 		{
 			name: "Corner store fallback within 0.3 mi",
 			pois: []scoring.OsmPoi{
-				{Name: "Local Bodega", PoiType: "convenience", DistanceMeters: 300.0, Lat: 41.88, Lon: -87.65},
+				{Name: "Local Bodega", PoiType: "convenience", DistanceMeters: 300.0},
 			},
 			expectedScore: 40.0,
 			expectedPois:  1,
@@ -61,8 +61,8 @@ func TestCalculateGroceryScore_Scenarios(t *testing.T) {
 		{
 			name: "Corner store with nearby pharmacy",
 			pois: []scoring.OsmPoi{
-				{Name: "Local Bodega", PoiType: "convenience", DistanceMeters: 300.0, Lat: 41.88, Lon: -87.65},
-				{Name: "Walgreens", PoiType: "pharmacy", DistanceMeters: 200.0, Lat: 41.881, Lon: -87.651},
+				{Name: "Local Bodega", PoiType: "convenience", DistanceMeters: 300.0},
+				{Name: "Walgreens", PoiType: "pharmacy", DistanceMeters: 200.0},
 			},
 			expectedScore: 50.0, // 40 + 10
 			expectedPois:  2,
@@ -70,6 +70,31 @@ func TestCalculateGroceryScore_Scenarios(t *testing.T) {
 		{
 			name:          "No retail food POIs within 1.0 mi",
 			pois:          nil,
+			expectedScore: 0.0,
+			expectedPois:  0,
+		},
+		{
+			name: "Close corner store outscores a heavily-decayed distant supermarket",
+			pois: []scoring.OsmPoi{
+				{Name: "Distant Mariano's", PoiType: "supermarket", DistanceMeters: 1600.0},
+				{Name: "Local Bodega", PoiType: "convenience", DistanceMeters: 50.0},
+			},
+			expectedScore: 40.0,
+			expectedPois:  1,
+		},
+		{
+			name: "Convenience store beyond its threshold contributes nothing",
+			pois: []scoring.OsmPoi{
+				{Name: "Far Bodega", PoiType: "convenience", DistanceMeters: 900.0},
+			},
+			expectedScore: 0.0,
+			expectedPois:  0,
+		},
+		{
+			name: "Pharmacy beyond its threshold contributes nothing",
+			pois: []scoring.OsmPoi{
+				{Name: "Far Walgreens", PoiType: "pharmacy", DistanceMeters: 500.0},
+			},
 			expectedScore: 0.0,
 			expectedPois:  0,
 		},
@@ -85,6 +110,25 @@ func TestCalculateGroceryScore_Scenarios(t *testing.T) {
 				t.Errorf("expected %d contributing pois, got %d", tt.expectedPois, len(contributing))
 			}
 		})
+	}
+}
+
+func TestCalculateGroceryScore_PharmacyOnlyReturnsItsDistance(t *testing.T) {
+	// A pharmacy-only result still produces a nonzero score via the boost,
+	// so minDistance must reflect the pharmacy's distance rather than nil.
+	pois := []scoring.OsmPoi{
+		{Name: "Walgreens", PoiType: "pharmacy", DistanceMeters: 100.0},
+	}
+
+	score, minDistance, contributing := scoring.CalculateGroceryScore(pois)
+	if score != 10.0 {
+		t.Errorf("expected score 10.0, got %f", score)
+	}
+	if minDistance == nil || *minDistance != 100.0 {
+		t.Errorf("expected minDistance 100.0, got %v", minDistance)
+	}
+	if len(contributing) != 1 {
+		t.Errorf("expected 1 contributing poi, got %d", len(contributing))
 	}
 }
 
@@ -106,7 +150,7 @@ func TestGroceryCalculator_Calculate_Success(t *testing.T) {
 				t.Errorf("expected max distance %f, got %f", scoring.GroceryMaxQueryRadiusMeters, maxDistance)
 			}
 			return []scoring.OsmPoi{
-				{Name: "Aldi", PoiType: "supermarket", DistanceMeters: 300.0, Lat: 41.879, Lon: -87.63},
+				{Name: "Aldi", PoiType: "supermarket", DistanceMeters: 300.0},
 			}, nil
 		},
 	}

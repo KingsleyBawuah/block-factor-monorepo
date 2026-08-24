@@ -30,7 +30,6 @@ const (
 type ParkProximity struct {
 	Name           string
 	ParkClass      string
-	Acres          *float64
 	DistanceMeters float64
 }
 
@@ -59,7 +58,6 @@ func (q *DBGreenQuerier) GetNearbyParks(ctx context.Context, lat, lon float64, m
 		SELECT
 			park_name,
 			park_class,
-			acres,
 			ST_Distance(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_meters
 		FROM parks
 		WHERE ST_DWithin(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3)
@@ -75,7 +73,7 @@ func (q *DBGreenQuerier) GetNearbyParks(ctx context.Context, lat, lon float64, m
 	var parks []ParkProximity
 	for rows.Next() {
 		var p ParkProximity
-		if err := rows.Scan(&p.Name, &p.ParkClass, &p.Acres, &p.DistanceMeters); err != nil {
+		if err := rows.Scan(&p.Name, &p.ParkClass, &p.DistanceMeters); err != nil {
 			return nil, fmt.Errorf("scoring: scan park row: %w", err)
 		}
 		parks = append(parks, p)
@@ -184,12 +182,5 @@ func CalculateGreenScore(parks []ParkProximity) (score float32, minDistance *flo
 }
 
 func isLinearTrail(p *ParkProximity) bool {
-	if strings.ToUpper(p.ParkClass) == "LINEAR PARK" {
-		return true
-	}
-
-	name := strings.ToLower(p.Name)
-	return strings.Contains(name, "lakefront") ||
-		strings.Contains(name, "606") ||
-		strings.Contains(name, "bloomingdale")
+	return strings.ToUpper(p.ParkClass) == "LINEAR PARK"
 }

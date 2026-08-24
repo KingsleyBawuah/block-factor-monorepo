@@ -18,36 +18,36 @@ func TestCalculateBikeScore_TiersAndDecay(t *testing.T) {
 		{
 			name: "Protected bike lane within 0.1 mi (100m)",
 			routes: []scoring.BikeRouteProximity{
-				{RouteType: "Protected Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: 0.0},
+				{RouteType: "Protected Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: ptr(0.0)},
 			},
 			expectedScore: 100.0,
 		},
 		{
 			name: "Buffered bike lane within 0.1 mi (100m)",
 			routes: []scoring.BikeRouteProximity{
-				{RouteType: "Buffered Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: 0.0},
+				{RouteType: "Buffered Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: ptr(0.0)},
 			},
 			expectedScore: 70.0,
 		},
 		{
 			name: "Painted bike lane within 0.1 mi (100m)",
 			routes: []scoring.BikeRouteProximity{
-				{RouteType: "Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: 0.0},
+				{RouteType: "Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: ptr(0.0)},
 			},
 			expectedScore: 40.0,
 		},
 		{
 			name: "Marked shared lane within 0.1 mi (100m)",
 			routes: []scoring.BikeRouteProximity{
-				{RouteType: "Marked Shared Lane", DistanceMeters: 100.0, AzimuthDegrees: 0.0},
+				{RouteType: "Marked Shared Lane", DistanceMeters: 100.0, AzimuthDegrees: ptr(0.0)},
 			},
 			expectedScore: 15.0,
 		},
 		{
 			name: "High quality protected lane at 400m outscores close shared lane at 50m",
 			routes: []scoring.BikeRouteProximity{
-				{RouteType: "Marked Shared Lane", DistanceMeters: 50.0, AzimuthDegrees: 90.0},
-				{RouteType: "Protected Bike Lane", DistanceMeters: 400.0, AzimuthDegrees: 90.0},
+				{RouteType: "Marked Shared Lane", DistanceMeters: 50.0, AzimuthDegrees: ptr(90.0)},
+				{RouteType: "Protected Bike Lane", DistanceMeters: 400.0, AzimuthDegrees: ptr(90.0)},
 			},
 			// Protected lane: 100 * (804.672 - 400) / (804.672 - 160.934) = 62.86 -> 62.9
 			expectedScore: 62.9,
@@ -55,16 +55,16 @@ func TestCalculateBikeScore_TiersAndDecay(t *testing.T) {
 		{
 			name: "Dual-axis network bonus (+15 pts for N-S and E-W buffered lanes)",
 			routes: []scoring.BikeRouteProximity{
-				{RouteType: "Buffered Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: 0.0},  // North-South (70 pts)
-				{RouteType: "Buffered Bike Lane", DistanceMeters: 200.0, AzimuthDegrees: 90.0}, // East-West
+				{RouteType: "Buffered Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: ptr(0.0)},  // North-South (70 pts)
+				{RouteType: "Buffered Bike Lane", DistanceMeters: 200.0, AzimuthDegrees: ptr(90.0)}, // East-West
 			},
 			expectedScore: 85.0, // 70 + 15
 		},
 		{
 			name: "Protected lane with dual axis bonus clamped at 100",
 			routes: []scoring.BikeRouteProximity{
-				{RouteType: "Protected Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: 0.0},
-				{RouteType: "Protected Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: 90.0},
+				{RouteType: "Protected Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: ptr(0.0)},
+				{RouteType: "Protected Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: ptr(90.0)},
 			},
 			expectedScore: 100.0, // 100 + 15 -> clamped to 100
 		},
@@ -82,6 +82,35 @@ func TestCalculateBikeScore_TiersAndDecay(t *testing.T) {
 				t.Errorf("expected score %f, got %f", tt.expectedScore, score)
 			}
 		})
+	}
+}
+
+func TestCalculateBikeScore_MinDistanceMatchesBestSegment(t *testing.T) {
+	// The 400m protected lane produces the winning score, so the returned
+	// distance must describe that segment, not the closer but lower-scoring
+	// shared lane at 50m.
+	routes := []scoring.BikeRouteProximity{
+		{RouteType: "Marked Shared Lane", DistanceMeters: 50.0, AzimuthDegrees: ptr(90.0)},
+		{RouteType: "Protected Bike Lane", DistanceMeters: 400.0, AzimuthDegrees: ptr(90.0)},
+	}
+
+	_, minDistance := scoring.CalculateBikeScore(routes)
+	if minDistance == nil || *minDistance != 400.0 {
+		t.Errorf("expected minDistance 400.0, got %v", minDistance)
+	}
+}
+
+func TestCalculateBikeScore_NilAzimuthExcludedFromNetworkBonus(t *testing.T) {
+	// A degenerate (loop) segment has no defined bearing and must not count
+	// toward either the North-South or East-West side of the network bonus.
+	routes := []scoring.BikeRouteProximity{
+		{RouteType: "Buffered Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: nil},
+		{RouteType: "Buffered Bike Lane", DistanceMeters: 200.0, AzimuthDegrees: ptr(90.0)},
+	}
+
+	score, _ := scoring.CalculateBikeScore(routes)
+	if score != 70.0 {
+		t.Errorf("expected score 70.0 (no network bonus), got %f", score)
 	}
 }
 
@@ -103,7 +132,7 @@ func TestBikeCalculator_Calculate_Success(t *testing.T) {
 				t.Errorf("expected max distance %f, got %f", scoring.BikeMaxQueryRadiusMeters, maxDistance)
 			}
 			return []scoring.BikeRouteProximity{
-				{RouteType: "Protected Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: 0.0},
+				{RouteType: "Protected Bike Lane", DistanceMeters: 100.0, AzimuthDegrees: ptr(0.0)},
 			}, nil
 		},
 	}

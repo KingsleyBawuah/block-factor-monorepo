@@ -36,8 +36,6 @@ type OsmPoi struct {
 	Name           string
 	PoiType        string // 'supermarket', 'convenience', 'pharmacy'
 	DistanceMeters float64
-	Lat            float64
-	Lon            float64
 }
 
 // GroceryQuerier defines spatial database queries for grocery POIs.
@@ -65,9 +63,7 @@ func (q *DBGroceryQuerier) GetNearbyGroceryPois(ctx context.Context, lat, lon fl
 		SELECT
 			COALESCE(poi_name, ''),
 			poi_type,
-			ST_Distance(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_meters,
-			ST_Y(geom::geometry) AS lat,
-			ST_X(geom::geometry) AS lon
+			ST_Distance(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_meters
 		FROM osm_pois
 		WHERE ST_DWithin(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3)
 		ORDER BY distance_meters ASC;
@@ -82,7 +78,7 @@ func (q *DBGroceryQuerier) GetNearbyGroceryPois(ctx context.Context, lat, lon fl
 	var pois []OsmPoi
 	for rows.Next() {
 		var p OsmPoi
-		if err := rows.Scan(&p.Name, &p.PoiType, &p.DistanceMeters, &p.Lat, &p.Lon); err != nil {
+		if err := rows.Scan(&p.Name, &p.PoiType, &p.DistanceMeters); err != nil {
 			return nil, fmt.Errorf("scoring: scan grocery poi row: %w", err)
 		}
 		pois = append(pois, p)
@@ -163,28 +159,37 @@ func CalculateGroceryScore(pois []OsmPoi) (score float32, minDistance *float32, 
 		}
 	}
 
-	baseScore := 0.0
-	var primaryDist *float64
-
+	supermarketScore := 0.0
 	if closestSupermarket != nil {
 		d := closestSupermarket.DistanceMeters
-		primaryDist = &d
 		switch {
 		case d <= GrocerySupermarketCloseThresholdMeters:
-			baseScore = 100.0
+			supermarketScore = 100.0
 		case d <= GrocerySupermarketMidThresholdMeters:
-			baseScore = 75.0
+			supermarketScore = 75.0
 		case d <= GroceryMaxQueryRadiusMeters:
 			// Linear decay from 75 to 0 between 0.75 mi and 1.0 mi
 			decayRatio := (GroceryMaxQueryRadiusMeters - d) / (GroceryMaxQueryRadiusMeters - GrocerySupermarketMidThresholdMeters)
-			baseScore = 75.0 * math.Max(0.0, decayRatio)
-		default:
-			baseScore = 0.0
+			supermarketScore = 75.0 * math.Max(0.0, decayRatio)
 		}
-	} else if closestConvenience != nil && closestConvenience.DistanceMeters <= GroceryConvenienceThresholdMeters {
-		d := closestConvenience.DistanceMeters
-		primaryDist = &d
-		baseScore = GroceryConvenienceMaxScore
+	}
+
+	convenienceScore := 0.0
+	if closestConvenience != nil && closestConvenience.DistanceMeters <= GroceryConvenienceThresholdMeters {
+		convenienceScore = GroceryConvenienceMaxScore
+	}
+
+	// The convenience-store cap is an independent rule (PRD §5.3), not a
+	// fallback gated on the total absence of a supermarket: a very close
+	// bodega can outscore a distant, heavily-decayed supermarket.
+	baseScore := supermarketScore
+	primaryPoi := closestSupermarket
+	if convenienceScore > baseScore {
+		baseScore = convenienceScore
+		primaryPoi = closestConvenience
+	}
+	if baseScore == 0 {
+		primaryPoi = nil
 	}
 
 	pharmacyBoost := 0.0
@@ -195,32 +200,35 @@ func CalculateGroceryScore(pois []OsmPoi) (score float32, minDistance *float32, 
 	finalScore := math.Min(100.0, math.Max(0.0, baseScore+pharmacyBoost))
 	score = float32(math.Round(finalScore*10) / 10)
 
+	var primaryDist *float64
+	if primaryPoi != nil {
+		primaryDist = &primaryPoi.DistanceMeters
+	} else if pharmacyBoost > 0 {
+		primaryDist = &closestPharmacy.DistanceMeters
+	}
 	if primaryDist != nil {
 		distVal := float32(math.Round(*primaryDist*10) / 10)
 		minDistance = &distVal
 	}
 
-	if closestSupermarket != nil {
-		name := closestSupermarket.Name
+	// Only list a POI as contributing if it actually moved the score —
+	// a convenience store or pharmacy outside its threshold contributed 0.
+	if primaryPoi != nil {
+		name := primaryPoi.Name
 		if name == "" {
-			name = "Supermarket"
+			if primaryPoi == closestSupermarket {
+				name = "Supermarket"
+			} else {
+				name = "Corner Store"
+			}
 		}
 		contributing = append(contributing, api.ContributingPoi{
 			Name:           name,
-			DistanceMeters: float32(math.Round(closestSupermarket.DistanceMeters*10) / 10),
-		})
-	} else if closestConvenience != nil {
-		name := closestConvenience.Name
-		if name == "" {
-			name = "Corner Store"
-		}
-		contributing = append(contributing, api.ContributingPoi{
-			Name:           name,
-			DistanceMeters: float32(math.Round(closestConvenience.DistanceMeters*10) / 10),
+			DistanceMeters: float32(math.Round(primaryPoi.DistanceMeters*10) / 10),
 		})
 	}
 
-	if closestPharmacy != nil {
+	if pharmacyBoost > 0 {
 		name := closestPharmacy.Name
 		if name == "" {
 			name = "Pharmacy"
