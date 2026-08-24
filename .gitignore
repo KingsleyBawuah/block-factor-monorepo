@@ -16,6 +16,10 @@ dist/
 coverage.txt
 coverage.out
 profile.out
+# `go build ./...` run from inside a cmd/<name>/ directory (instead of the
+# module root) drops an unwanted binary named after that directory in place.
+services/api/cmd/*/seed
+services/api/cmd/*/server
 
 # Node / Bun & Frontend Build Artifacts
 node_modules/
