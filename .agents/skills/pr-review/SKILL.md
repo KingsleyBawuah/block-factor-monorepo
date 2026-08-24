@@ -9,14 +9,12 @@ Perform a maximally rigorous, critical review of the given pull request before i
 
 ## Setup: isolated worktree, never the shared working directory
 
-**Never run `git checkout` or `gh pr checkout` in the project's primary working directory (`block-factor-monorepo/`) or in another agent's worktree.** Doing so silently switches that directory's branch out from under whatever is running there — this has already happened once (during review of PR #39) and disrupted an in-progress task elsewhere. Always work from your own dedicated worktree instead — see `AGENTS.md` §6 "Git Worktree Isolation" for the full convention this follows.
+**Never run `git checkout` or `gh pr checkout` in the project's primary working directory (`block-factor-monorepo/`) or in Claude's worktree.** Doing so silently switches that directory's branch out from under whatever is running there — this has already happened once (during review of PR #39) and disrupted an in-progress task elsewhere. Always work from Agy's dedicated worktree (`Developer/worktrees/block-factor-monorepo/agy/block-factor-monorepo`) — see `AGENTS.md` §6 "Git Worktree Isolation" for the full convention this follows.
 
-1. From the repository root, check whether `../block-factor-monorepo.worktrees/agy/` already exists.
-   - If it exists, `cd` into it.
-   - If not, create it once (reuse the same directory for every future review): `git worktree add ../block-factor-monorepo.worktrees/agy main`
-2. Inside your worktree: `git fetch origin && git checkout main && git pull` to sync the trunk to latest before reviewing anything against it.
-3. Check out the PR's actual branch inside your worktree only: `gh pr checkout <PR-number>`. This is safe now — it only affects your own worktree, not the primary clone or Claude's worktree.
-4. Copy `.env` into your worktree if it isn't already there, and run `bun install` under `packages/web/` if the PR touches frontend code — a fresh worktree only contains git-tracked files, so gitignored local config and installed dependencies don't carry over automatically.
+1. Ensure you are executing inside Agy's dedicated worktree (`Developer/worktrees/block-factor-monorepo/agy/block-factor-monorepo`), never the primary clone on `main`.
+2. Sync trunk and remote references: `git fetch origin`.
+3. Check out the PR's actual branch inside this worktree: `gh pr checkout <PR-number>`. This is safe — it only affects Agy's worktree, not the primary clone or Claude's worktree.
+4. Ensure `.env` is present in the worktree, and run `bun install` under `packages/web/` if the PR touches frontend code — gitignored local config and installed dependencies live per-worktree.
 
 ## Review approach
 
