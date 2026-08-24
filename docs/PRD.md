@@ -118,11 +118,29 @@ A weighted average of individual factor scores, where `wᵢ` are the user-config
 
 ### 5.2 Transit Score (`S_transit`)
 
+**Base score — distance to nearest CTA 'L' stop:**
+
 - **100 pts** at ≤ 0.25 miles from a CTA 'L' stop (~5 min walk).
 - Linear decay to **0 pts** at 1.0 mile.
-- **+10 pt bonus** for dual-line access OR a high-frequency bus stop (≤ 10 min headways) within 0.2 miles (capped at 100 total).
 
-> **High-Frequency Definition:** A bus stop qualifies as high-frequency if at least one route serving it has a mean scheduled headway of ≤ 10 minutes between 7:00–9:00 AM on weekdays, computed from GTFS `stop_times` during ingestion.
+**Bonus — three independent components, all additive, then `clamp(BaseScore + Bonuses, 0, 100)`:**
+
+1. **Dual-line access:** **+10 pts** if 2+ distinct CTA 'L' lines are reachable across stations within 1.0 mile. Encodes transfer/redundancy value, independent of physical direction — real 'L' lines curve too much (the Loop, the Brown Line's turn onto the Ravenswood branch, the Pink Line's jog south) for a geometric "reach" bonus to mean anything without dedicated per-line track geometry, which doesn't exist yet (see Future Consideration below).
+2. **Bus directional coverage:** looks at high-frequency (≤ 10 min headway) bus corridors within 0.2 miles and how many distinct axes they cover:
+   - No qualifying corridor: **+0 pts**.
+   - Qualifying corridor(s) in one direction only (e.g. only east-west): **+10 pts**.
+   - Qualifying corridors in both directions (east-west *and* north-south): **+15 pts**.
+
+   Unlike rail, most Chicago bus routes run straight enough along a single arterial street that a geometric axis classification (`ST_Azimuth` on the corridor geometry) is meaningful — this mirrors `S_bike`'s (§5.11) directional network bonus.
+3. **Rail service quality:** a continuous 0–20 pt score based on the closest accessible CTA 'L' line's actual schedule, `AMPeakComponent + OvernightComponent`:
+   - **AM peak component (0–10 pts):** 10 pts at ≤ 6 min mean headway (7:00–9:00 AM weekdays), linear decay to 0 pts at ≥ 20 min headway.
+   - **Overnight component (0–10 pts):** 10 pts at ≤ 15 min mean overnight headway (1:00–4:00 AM, any day), linear decay to 0 pts when the line has no scheduled overnight service at all.
+
+   Both components are derived from the same CTA static GTFS feed already used for the bus high-frequency derivation (`stop_times`), computed per line rather than hardcoded (CTA's 24-hour line roster changes — the Orange Line is slated for 24-hour Midway service in 2026 — so this must read from the live schedule at ingestion time, not a fixed list of line names). Continuous decay was chosen over discrete tiers to avoid misrepresenting real in-between cases like the Pink Line, which runs frequently by day (8–9 min peak headway) but sparsely overnight (~20 min) — a binary "24-hour: yes/no" flag would either overstate or understate that service level depending on which side of the cutoff it landed on.
+
+> **High-Frequency Definition (bus):** A bus stop qualifies as high-frequency if at least one route serving it has a mean scheduled headway of ≤ 10 minutes between 7:00–9:00 AM on weekdays, computed from GTFS `stop_times` during ingestion. (Unchanged from v1.)
+
+> **Future Consideration — Rail Directional Reach (Post-v1):** The bus directional-coverage bonus has no rail equivalent — see the Dual-Line Access rationale above. Adding one would require ingesting real per-line track geometry (not just the raw, line-agnostic track segments `noise_sources` already stores for `S_noise`) so a local azimuth could be computed near each specific station rather than over an entire curving line. Not started; scoped separately from the rail service-quality work above.
 
 > **Future Consideration — Metra Proximity (Post-v1):** `S_transit` currently only counts CTA 'L' stops and buses; Metra (Chicago's suburban commuter rail) isn't modeled as a standalone proximity amenity at all yet, even though a nearby Metra station is a real asset — particularly for commuting to the suburbs, which CTA doesn't reach. Unlike the §5.10 `S_commute` consideration below, this would need real new work: no Metra ingestion path exists yet (station locations, line data), and it'd mean either extending this factor's radius/bonus logic or designing a separate one. Not started.
 
