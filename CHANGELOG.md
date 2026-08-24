@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - $S_{\text{safety}}$ public safety factor (`services/api/internal/scoring/factor_safety.go`): evaluates localized point-in-polygon crime incident density against precomputed citywide ~500m grid percentiles (`safety_grid_percentiles`), mapping relative safety percentiles cleanly to intuitive 0–100 scores (100.0 - percentile).
 - $S_{\text{bike}}$ bike infrastructure factor (`services/api/internal/scoring/factor_bike.go`): calculates quality-tiered proximity decay to cycling infrastructure (100 pts for Protected Bike Lanes/Greenways, 70 pts for Buffered Lanes, 40 pts for Painted Lanes, 15 pts for Sharrows; decaying to 0 at 0.5 mi) and awards a +15 pt dual-axis network bonus for connectivity across both North-South and East-West corridors.
 - $S_{\text{transit}}$ transit accessibility factor (`services/api/internal/scoring/factor_transit.go`): calculates distance decay to CTA 'L' rapid-transit stations (100 pts at <= 0.25 mi, linear decay to 0 pts at 1.0 mi) and awards a +10 pt bonus for dual-line station access (2+ distinct lines across stations within 1.0 mi) or high-frequency bus corridors (mean headway <= 10 min) within <= 0.2 mi.
+- `cta_line_service` table (`db/migrations/00014_create_cta_line_service.sql`): one row per CTA 'L' line storing AM-peak and overnight mean headway, powering the revised $S_{\text{transit}}$ rail service-quality bonus (PRD §5.2). Schema only — GTFS-derived population via the seed CLI is a separate follow-up.
 
 
 
