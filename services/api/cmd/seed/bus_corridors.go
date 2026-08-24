@@ -61,9 +61,10 @@ type gtfsTrip struct {
 // gtfsService is a parsed calendar.txt row: day-of-week pattern plus the
 // date range it's actually valid for.
 type gtfsService struct {
-	weekday   bool
-	startDate time.Time
-	endDate   time.Time
+	weekday     bool
+	daysPerWeek int
+	startDate   time.Time
+	endDate     time.Time
 }
 
 type shapePoint struct {
@@ -366,10 +367,18 @@ func parseCalendarServices(files map[string]*zip.File) (map[string]gtfsService, 
 		if errStart != nil || errEnd != nil {
 			continue
 		}
+		dayCols := []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+		daysPerWeek := 0
+		for _, col := range dayCols {
+			if row[idx[col]] == "1" {
+				daysPerWeek++
+			}
+		}
 		services[row[idx["service_id"]]] = gtfsService{
-			weekday:   row[idx["monday"]] == "1" && row[idx["tuesday"]] == "1" && row[idx["wednesday"]] == "1" && row[idx["thursday"]] == "1" && row[idx["friday"]] == "1",
-			startDate: startDate,
-			endDate:   endDate,
+			weekday:     row[idx["monday"]] == "1" && row[idx["tuesday"]] == "1" && row[idx["wednesday"]] == "1" && row[idx["thursday"]] == "1" && row[idx["friday"]] == "1",
+			daysPerWeek: daysPerWeek,
+			startDate:   startDate,
+			endDate:     endDate,
 		}
 	}
 	return services, nil
@@ -571,6 +580,10 @@ func parseFirstDepartures(files map[string]*zip.File, trips map[string]gtfsTrip)
 		return nil, fmt.Errorf("stop_times.txt missing required columns")
 	}
 
+	// GTFS requires stop_sequence to increase monotonically along a trip but
+	// does not require it to start at 1, so track the minimum observed
+	// sequence per trip rather than assuming "1" is always the first stop.
+	tripMinSeq := make(map[string]int)
 	tripFirstDeparture := make(map[string]string)
 	for {
 		row, err := stReader.Read()
@@ -584,7 +597,12 @@ func parseFirstDepartures(files map[string]*zip.File, trips map[string]gtfsTrip)
 		if _, isRelevant := trips[tripID]; !isRelevant {
 			continue
 		}
-		if strings.TrimSpace(row[stSeqIdx]) == "1" {
+		seq, seqErr := strconv.Atoi(strings.TrimSpace(row[stSeqIdx]))
+		if seqErr != nil {
+			continue
+		}
+		if minSeq, seen := tripMinSeq[tripID]; !seen || seq < minSeq {
+			tripMinSeq[tripID] = seq
 			tripFirstDeparture[tripID] = strings.TrimSpace(row[stDepIdx])
 		}
 	}
