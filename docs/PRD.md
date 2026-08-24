@@ -202,9 +202,15 @@ Addresses the critical Chicago risk of basement and garden-unit flooding:
 | Direction | Base Score |
 |---|---|
 | South (180°) | 100 |
+| Southeast (135°) | 92.5 |
+| Southwest (225°) | 87.5 |
 | East (90°) | 85 |
 | West (270°) | 75 |
+| Northeast (45°) | 62.5 |
+| Northwest (315°) | 57.5 |
 | North (0°) | 40 |
+
+> **Intermediate Directions:** The four ordinal directions (SE, SW, NE, NW) score as the average of their two adjacent cardinal base scores (e.g. SE = avg(S, E) = 92.5). These are reachable both from explicit `unit.facing` input and from `InferStreetFacingOrientation`'s diagonal-avenue inference (addresses on Milwaukee, Archer, and similar diagonal avenues, per Chicago's 1909 Brennan numbering system — see `internal/scoring/orientation.go`).
 
 **Exposure Modifier:**
 

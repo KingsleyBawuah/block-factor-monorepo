@@ -59,6 +59,26 @@ func TestInferStreetFacingOrientation_ChicagoGrid(t *testing.T) {
 			address:  "",
 			expected: api.S,
 		},
+		{
+			name:     "5500 W Fakestreet Ave (unrecognized street name, even, W prefix -> faces South)",
+			address:  "5500 W Fakestreet Ave, Chicago, IL 60651",
+			expected: api.S,
+		},
+		{
+			name:     "5501 W Fakestreet Ave (unrecognized street name, odd, W prefix -> faces North)",
+			address:  "5501 W Fakestreet Ave, Chicago, IL 60651",
+			expected: api.N,
+		},
+		{
+			name:     "1500 N Fakestreet Ave (unrecognized street name, even, N prefix -> faces East)",
+			address:  "1500 N Fakestreet Ave, Chicago, IL 60614",
+			expected: api.E,
+		},
+		{
+			name:     "1501 N Fakestreet Ave (unrecognized street name, odd, N prefix -> faces West)",
+			address:  "1501 N Fakestreet Ave, Chicago, IL 60614",
+			expected: api.W,
+		},
 	}
 
 	for _, tt := range tests {
