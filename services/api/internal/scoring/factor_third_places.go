@@ -43,29 +43,49 @@ const (
 	// never raw address), so nearby addresses share a single cached (and
 	// paid) API fetch.
 	thirdPlaceGridCellMeters = 400.0
+
+	// thirdPlaceFillRadiusMeters is the radius a cache-fill actually
+	// searches, centered on the grid cell's center rather than the specific
+	// requesting address (see thirdPlaceGridCellCenter): large enough that
+	// any address anywhere in the 400m cell -- even at its corner -- has
+	// its full ThirdPlaceQueryRadiusMeters query window covered by this one
+	// shared fetch. That's the cell's half-diagonal (400 / sqrt(2)) plus
+	// the query radius itself. Without this, two addresses sharing a cell
+	// but sitting near opposite edges of it could see different real POIs,
+	// yet the second one silently reuses the first one's narrower fetch.
+	thirdPlaceFillRadiusMeters = thirdPlaceGridCellMeters/math.Sqrt2 + ThirdPlaceQueryRadiusMeters
 )
 
-// thirdPlaceIncludedTypes are the Places (New) type values searched for
-// S_third_place: cafes (independence-classified below) and fitness venues,
-// fetched in a single combined request to conserve the daily call budget.
-var thirdPlaceIncludedTypes = []string{"cafe", "gym", "fitness_center"}
+// thirdPlaceIncludedTypes are the Places (New) Table A type values searched
+// for S_third_place: cafes (independence-classified below) and fitness
+// venues, fetched in a single combined request to conserve the daily call
+// budget. "coffee_shop" is a distinct Table A type from "cafe" -- both are
+// searched and treated identically by isCafeType.
+var thirdPlaceIncludedTypes = []string{"cafe", "coffee_shop", "gym", "fitness_center", "yoga_studio"}
 
 // thirdPlaceChainBrands is a maintained exclusion list of chain coffee
 // brands used to approximate "independent" (PRD §5.4: Google Places data
-// carries no such flag). Matched case-insensitively as a substring against
-// the place's display name at cache-fill time, so e.g. "Starbucks Reserve"
-// and "Dunkin' - Michigan Ave" both match. Not exhaustive -- extend as new
+// carries no such flag). Matched as a substring against the place's display
+// name, normalized by isChainCafeBrand (lowercased, punctuation stripped),
+// at cache-fill time. Entries are bare brand tokens rather than full
+// storefront names, since Google Places display names vary by location
+// ("Peet's Coffee" vs. plain "Peets"). Not exhaustive -- extend as new
 // chains are observed slipping through in real Chicago data.
 var thirdPlaceChainBrands = []string{
 	"starbucks",
 	"dunkin",
-	"peet's coffee",
-	"caribou coffee",
+	"peet",
+	"caribou",
 	"tim hortons",
-	"philz coffee",
+	"philz",
 	"dutch bros",
 	"coffee bean & tea leaf",
-	"biggby coffee",
+	"biggby",
+	"pret a manger",
+	"panera",
+	"capital one cafe",
+	"einstein bros",
+	"au bon pain",
 }
 
 // ThirdPlacePoi is a classified, cacheable third-place POI. Independence is
@@ -73,7 +93,7 @@ var thirdPlaceChainBrands = []string{
 // wording of the heuristic.
 type ThirdPlacePoi struct {
 	Name              string
-	PrimaryType       string // "cafe", "gym", or "fitness_center"
+	PrimaryType       string // "cafe", "coffee_shop", "gym", "fitness_center", or "yoga_studio"
 	IsIndependentCafe bool
 	Lat               float64
 	Lon               float64
@@ -118,9 +138,12 @@ func NewDBPlacesBudget(db spatial.QueryRowProvider) *DBPlacesBudget {
 }
 
 // IncrementAndCheck atomically increments today's call_count in
-// places_api_budget (creating today's row on first use) using Postgres's
-// own CURRENT_DATE, then compares the post-increment count against
-// dailyCapCalls.
+// places_api_budget (creating today's row on first use), then compares the
+// post-increment count against dailyCapCalls. The budget day is evaluated
+// in America/Chicago (this app's only service area) rather than the
+// database server's own timezone (UTC in this project's docker-compose
+// setup), so the cap rolls over at Chicago midnight -- not, confusingly,
+// at 6-7pm local time.
 func (b *DBPlacesBudget) IncrementAndCheck(ctx context.Context, dailyCapCalls int) (bool, error) {
 	if b.db == nil {
 		return false, errors.New("scoring: nil database connection")
@@ -128,7 +151,7 @@ func (b *DBPlacesBudget) IncrementAndCheck(ctx context.Context, dailyCapCalls in
 
 	query := `
 		INSERT INTO places_api_budget (budget_date, call_count)
-		VALUES (CURRENT_DATE, 1)
+		VALUES ((now() AT TIME ZONE 'America/Chicago')::date, 1)
 		ON CONFLICT (budget_date) DO UPDATE SET call_count = places_api_budget.call_count + 1
 		RETURNING call_count;
 	`
@@ -231,7 +254,10 @@ func (c *ThirdPlaceCalculator) resolvePois(ctx context.Context, gridKey string, 
 			return thirdPlaceFillResult{degraded: true}, nil
 		}
 
-		fetched, err := c.places.SearchNearby(ctx, lat, lon, ThirdPlaceQueryRadiusMeters, thirdPlaceIncludedTypes)
+		// Search around the cell's own center, not the requesting address --
+		// see thirdPlaceFillRadiusMeters for why.
+		fillLat, fillLon := thirdPlaceGridCellCenter(lat, lon)
+		fetched, err := c.places.SearchNearby(ctx, fillLat, fillLon, thirdPlaceFillRadiusMeters, thirdPlaceIncludedTypes)
 		if err != nil {
 			return thirdPlaceFillResult{}, err
 		}
@@ -250,6 +276,20 @@ func (c *ThirdPlaceCalculator) resolvePois(ctx context.Context, gridKey string, 
 	return result.pois, result.degraded, nil
 }
 
+// isCafeType reports whether primaryType is either of the two Table A
+// types PRD §5.4's cafe benchmark covers -- Google Places (New) treats
+// "coffee_shop" as distinct from "cafe", but the PRD makes no such
+// distinction.
+func isCafeType(primaryType string) bool {
+	return primaryType == "cafe" || primaryType == "coffee_shop"
+}
+
+// isFitnessType reports whether primaryType is one of the Table A types
+// PRD §5.4's "fitness center/studio" benchmark covers.
+func isFitnessType(primaryType string) bool {
+	return primaryType == "gym" || primaryType == "fitness_center" || primaryType == "yoga_studio"
+}
+
 // classifyThirdPlacePois normalizes raw Places results and resolves cafe
 // independence once, at cache-fill time (PRD §5.4).
 func classifyThirdPlacePois(places []clients.Place) []ThirdPlacePoi {
@@ -258,7 +298,7 @@ func classifyThirdPlacePois(places []clients.Place) []ThirdPlacePoi {
 		pois = append(pois, ThirdPlacePoi{
 			Name:              p.Name,
 			PrimaryType:       p.PrimaryType,
-			IsIndependentCafe: p.PrimaryType == "cafe" && !isChainCafeBrand(p.Name),
+			IsIndependentCafe: isCafeType(p.PrimaryType) && !isChainCafeBrand(p.Name),
 			Lat:               p.Lat,
 			Lon:               p.Lon,
 		})
@@ -266,14 +306,33 @@ func classifyThirdPlacePois(places []clients.Place) []ThirdPlacePoi {
 	return pois
 }
 
+// thirdPlaceNamePunctuation is stripped from a display name before chain
+// matching, so e.g. "Peet's Coffee" and "Peets Coffee" both normalize to
+// "peets coffee" and match the same bare "peet" brand token.
+var thirdPlaceNamePunctuation = strings.NewReplacer("'", "", "’", "", ".", "", ",", "")
+
 func isChainCafeBrand(name string) bool {
-	lower := strings.ToLower(name)
+	normalized := thirdPlaceNamePunctuation.Replace(strings.ToLower(name))
 	for _, brand := range thirdPlaceChainBrands {
-		if strings.Contains(lower, brand) {
+		if strings.Contains(normalized, brand) {
 			return true
 		}
 	}
 	return false
+}
+
+// thirdPlaceGridCellIndices returns the integer 400m grid cell coordinates
+// containing (lat, lon), plus the local meters-per-degree-longitude
+// conversion at that latitude (longitude degrees shrink toward the poles),
+// shared by thirdPlaceGridKey and thirdPlaceGridCellCenter so the two never
+// drift out of sync with each other.
+func thirdPlaceGridCellIndices(lat, lon float64) (latCell, lonCell float64, metersPerDegreeLon float64) {
+	const metersPerDegreeLat = 111_320.0
+	metersPerDegreeLon = metersPerDegreeLat * math.Cos(lat*math.Pi/180)
+
+	latCell = math.Floor(lat * metersPerDegreeLat / thirdPlaceGridCellMeters)
+	lonCell = math.Floor(lon * metersPerDegreeLon / thirdPlaceGridCellMeters)
+	return latCell, lonCell, metersPerDegreeLon
 }
 
 // thirdPlaceGridKey buckets a coordinate into the 400m grid cell used to key
@@ -282,13 +341,23 @@ func isChainCafeBrand(name string) bool {
 // approximation rather than PostGIS -- accurate enough for city-scale cache
 // bucketing, and keeps this pure Go with no DB round trip.
 func thirdPlaceGridKey(lat, lon float64) string {
+	latCell, lonCell, _ := thirdPlaceGridCellIndices(lat, lon)
+	return fmt.Sprintf("places:third_place:%d_%d", int64(latCell), int64(lonCell))
+}
+
+// thirdPlaceGridCellCenter returns the coordinate at the exact center of
+// the 400m grid cell containing (lat, lon). A cache-fill searches around
+// this center point -- combined with thirdPlaceFillRadiusMeters -- rather
+// than the specific requesting address, so every address sharing a cell
+// sees the same, fully-covering cached result regardless of where in the
+// cell it happens to fall.
+func thirdPlaceGridCellCenter(lat, lon float64) (centerLat, centerLon float64) {
 	const metersPerDegreeLat = 111_320.0
-	metersPerDegreeLon := metersPerDegreeLat * math.Cos(lat*math.Pi/180)
+	latCell, lonCell, metersPerDegreeLon := thirdPlaceGridCellIndices(lat, lon)
 
-	latCell := int64(math.Floor(lat * metersPerDegreeLat / thirdPlaceGridCellMeters))
-	lonCell := int64(math.Floor(lon * metersPerDegreeLon / thirdPlaceGridCellMeters))
-
-	return fmt.Sprintf("places:third_place:%d_%d", latCell, lonCell)
+	centerLat = (latCell + 0.5) * thirdPlaceGridCellMeters / metersPerDegreeLat
+	centerLon = (lonCell + 0.5) * thirdPlaceGridCellMeters / metersPerDegreeLon
+	return centerLat, centerLon
 }
 
 // haversineDistanceMeters computes the great-circle distance between two
@@ -343,12 +412,12 @@ func CalculateThirdPlaceScore(pois []ThirdPlacePoi, originLat, originLon float64
 		candidate := thirdPlaceCandidate{poi: p, distanceMeters: d}
 
 		switch {
-		case p.PrimaryType == "cafe" && p.IsIndependentCafe:
+		case isCafeType(p.PrimaryType) && p.IsIndependentCafe:
 			independentCafesWide = append(independentCafesWide, candidate)
 			if d <= ThirdPlaceCloseThresholdMeters {
 				independentCafesClose = append(independentCafesClose, candidate)
 			}
-		case p.PrimaryType == "gym" || p.PrimaryType == "fitness_center":
+		case isFitnessType(p.PrimaryType):
 			fitnessWide = append(fitnessWide, candidate)
 			if d <= ThirdPlaceCloseThresholdMeters {
 				fitnessClose = append(fitnessClose, candidate)

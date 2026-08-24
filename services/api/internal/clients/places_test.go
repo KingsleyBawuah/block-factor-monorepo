@@ -3,6 +3,7 @@ package clients
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -184,5 +185,31 @@ func TestPlacesClient_SearchNearby_NonRetryableClientError(t *testing.T) {
 	}
 	if attempts != 1 {
 		t.Errorf("expected non-retryable 400 to execute exactly 1 attempt, got %d", attempts)
+	}
+}
+
+func TestPlacesClient_SearchNearby_ContextCancelledDuringBackoffWait(t *testing.T) {
+	// Deliberately does NOT call withNoPlacesBackoff -- this exercises the
+	// real placesBackoffWait's ctx.Done() branch, which every other retry
+	// test bypasses.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"error":"temporarily unavailable"}`))
+	}))
+	defer server.Close()
+
+	client := NewPlacesClient("test-api-key", slog.New(slog.DiscardHandler))
+	client.baseURL = server.URL
+	client.limiter = rate.NewLimiter(rate.Inf, 1)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err := client.SearchNearby(ctx, 41.8998, -87.6505, 804.672, []string{"cafe"})
+	if err == nil {
+		t.Fatal("expected error once the context is cancelled mid-backoff, got nil")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded, got: %v", err)
 	}
 }

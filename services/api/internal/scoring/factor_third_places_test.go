@@ -32,6 +32,49 @@ func TestThirdPlaceGridKey_DifferentCellForDistantCoordinates(t *testing.T) {
 	}
 }
 
+func TestThirdPlaceGridCellCenter_FallsInSameCellAsOrigin(t *testing.T) {
+	// Points scattered across a cell must all resolve to a center that maps
+	// back to that exact same cell -- otherwise the fill radius calculation
+	// (built around "the center is representative of the whole cell") would
+	// be centered somewhere outside it.
+	points := [][2]float64{
+		{41.8998, -87.6505},
+		{41.90005, -87.6503},
+		{41.8995, -87.6508},
+	}
+
+	for _, p := range points {
+		wantKey := thirdPlaceGridKey(p[0], p[1])
+		centerLat, centerLon := thirdPlaceGridCellCenter(p[0], p[1])
+		if gotKey := thirdPlaceGridKey(centerLat, centerLon); gotKey != wantKey {
+			t.Errorf("cell center of (%v, %v) maps to a different cell: origin key %q, center key %q", p[0], p[1], wantKey, gotKey)
+		}
+	}
+}
+
+func TestThirdPlaceFillRadiusMeters_CoversQueryRadiusFromAnyPointInCell(t *testing.T) {
+	// The whole point of thirdPlaceFillRadiusMeters is that a fetch
+	// centered on the cell's center, at that radius, must fully contain
+	// every point within ThirdPlaceQueryRadiusMeters of *any* address
+	// inside the cell -- including one sitting right at the cell's corner.
+	centerLat, centerLon := thirdPlaceGridCellCenter(41.8998, -87.6505)
+
+	// Approximate a worst-case corner address ~283m from the center
+	// (roughly a 400m cell's half-diagonal) by walking due north.
+	const metersPerDegreeLat = 111_320.0
+	cornerLat := centerLat + 283.0/metersPerDegreeLat
+	cornerLon := centerLon
+
+	// A POI right at that corner address's own query radius boundary.
+	poiLat := cornerLat + ThirdPlaceQueryRadiusMeters/metersPerDegreeLat
+	poiLon := cornerLon
+
+	distFromFillCenter := haversineDistanceMeters(centerLat, centerLon, poiLat, poiLon)
+	if distFromFillCenter > thirdPlaceFillRadiusMeters {
+		t.Errorf("a POI at a corner address's query boundary (%.1fm from cell center) falls outside thirdPlaceFillRadiusMeters (%.1fm)", distFromFillCenter, thirdPlaceFillRadiusMeters)
+	}
+}
+
 func TestIsChainCafeBrand(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -43,6 +86,21 @@ func TestIsChainCafeBrand(t *testing.T) {
 		{"case-insensitive match", "STARBUCKS RESERVE", true},
 		{"independent cafe", "Sip Coffee House", false},
 		{"independent cafe with chain-adjacent name", "Metropolis Coffee Company", false},
+		// A storefront's Google Places display name doesn't always carry
+		// the full brand name or its apostrophe -- these must still match.
+		{"chain brand without apostrophe", "Peets Coffee", true},
+		{"chain brand as bare storefront name, no suffix", "Philz", true},
+		{"chain brand with possessive apostrophe intact", "Peet's Coffee & Tea", true},
+		// Chains flagged as gaps in code review.
+		{"Panera Bread", "Panera Bread", true},
+		{"Pret A Manger full name", "Pret A Manger", true},
+		{"Einstein Bros Bagels", "Einstein Bros. Bagels", true},
+		{"Au Bon Pain", "Au Bon Pain - Union Station", true},
+		{"Capital One Cafe", "Capital One Cafe", true},
+		// "pret" alone is a substring of ordinary English words -- matching
+		// only the full "pret a manger" brand avoids flagging real
+		// independent cafes that happen to contain it.
+		{"independent cafe containing 'pret' as a substring", "Pretty Petals Cafe", false},
 	}
 
 	for _, tt := range tests {
@@ -58,12 +116,14 @@ func TestClassifyThirdPlacePois(t *testing.T) {
 	places := []clients.Place{
 		{Name: "Starbucks", PrimaryType: "cafe", Lat: 41.9, Lon: -87.65},
 		{Name: "Sip Coffee House", PrimaryType: "cafe", Lat: 41.901, Lon: -87.651},
+		{Name: "Metropolis Coffee", PrimaryType: "coffee_shop", Lat: 41.9015, Lon: -87.6515},
 		{Name: "Lincoln Park Fitness", PrimaryType: "gym", Lat: 41.902, Lon: -87.652},
+		{Name: "Yoga Six", PrimaryType: "yoga_studio", Lat: 41.903, Lon: -87.653},
 	}
 
 	pois := classifyThirdPlacePois(places)
-	if len(pois) != 3 {
-		t.Fatalf("expected 3 pois, got %d", len(pois))
+	if len(pois) != 5 {
+		t.Fatalf("expected 5 pois, got %d", len(pois))
 	}
 	if pois[0].IsIndependentCafe {
 		t.Errorf("expected Starbucks to be classified as a chain")
@@ -71,8 +131,34 @@ func TestClassifyThirdPlacePois(t *testing.T) {
 	if !pois[1].IsIndependentCafe {
 		t.Errorf("expected Sip Coffee House to be classified as independent")
 	}
-	if pois[2].IsIndependentCafe {
+	if !pois[2].IsIndependentCafe {
+		t.Errorf("expected an independent coffee_shop to be classified as independent -- coffee_shop is a distinct Places type from cafe, not a gap")
+	}
+	if pois[3].IsIndependentCafe {
 		t.Errorf("expected a gym to never be flagged as an independent cafe")
+	}
+	if pois[4].IsIndependentCafe {
+		t.Errorf("expected a yoga studio to never be flagged as an independent cafe")
+	}
+}
+
+func TestIsCafeType(t *testing.T) {
+	if !isCafeType("cafe") || !isCafeType("coffee_shop") {
+		t.Errorf("expected both cafe and coffee_shop to be recognized as cafe types")
+	}
+	if isCafeType("gym") {
+		t.Errorf("expected gym to not be recognized as a cafe type")
+	}
+}
+
+func TestIsFitnessType(t *testing.T) {
+	for _, tp := range []string{"gym", "fitness_center", "yoga_studio"} {
+		if !isFitnessType(tp) {
+			t.Errorf("expected %q to be recognized as a fitness type", tp)
+		}
+	}
+	if isFitnessType("cafe") {
+		t.Errorf("expected cafe to not be recognized as a fitness type")
 	}
 }
 
@@ -183,6 +269,44 @@ func TestCalculateThirdPlaceScore_Scenarios(t *testing.T) {
 			expectedScore: 0.0,
 			expectedPois:  0,
 		},
+		{
+			name: "3 independent cafes and 1 gym exactly at the 0.4 mi boundary (inclusive) -> 100",
+			pois: []ThirdPlacePoi{
+				poi("Sip Coffee", "cafe", true, ThirdPlaceCloseThresholdMeters),
+				poi("Metropolis Coffee", "cafe", true, ThirdPlaceCloseThresholdMeters),
+				poi("Dark Matter Coffee", "cafe", true, ThirdPlaceCloseThresholdMeters),
+				poi("Lincoln Park Fitness", "gym", false, ThirdPlaceCloseThresholdMeters),
+			},
+			expectedScore: 100.0,
+			expectedPois:  2,
+		},
+		{
+			name: "3rd independent cafe just past the 0.4 mi boundary misses the 100 pt tier -> 75",
+			pois: []ThirdPlacePoi{
+				poi("Sip Coffee", "cafe", true, ThirdPlaceCloseThresholdMeters),
+				poi("Metropolis Coffee", "cafe", true, ThirdPlaceCloseThresholdMeters),
+				poi("Dark Matter Coffee", "cafe", true, ThirdPlaceCloseThresholdMeters+1),
+				poi("Lincoln Park Fitness", "gym", false, ThirdPlaceCloseThresholdMeters),
+			},
+			expectedScore: 75.0,
+			expectedPois:  2,
+		},
+		{
+			name: "1 independent cafe exactly at the 0.5 mi boundary (inclusive) -> 40",
+			pois: []ThirdPlacePoi{
+				poi("Sip Coffee", "cafe", true, ThirdPlaceQueryRadiusMeters),
+			},
+			expectedScore: 40.0,
+			expectedPois:  1,
+		},
+		{
+			name: "1 independent cafe just past the 0.5 mi boundary -> 0",
+			pois: []ThirdPlacePoi{
+				poi("Sip Coffee", "cafe", true, ThirdPlaceQueryRadiusMeters+1),
+			},
+			expectedScore: 0.0,
+			expectedPois:  0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -281,14 +405,21 @@ func TestDBPlacesBudget_IncrementAndCheck_QueryError(t *testing.T) {
 }
 
 type mockPlacesQuerier struct {
-	callCount int32
-	places    []clients.Place
-	err       error
-	delay     time.Duration
+	mu             sync.Mutex
+	callCount      int32
+	places         []clients.Place
+	err            error
+	delay          time.Duration
+	capturedLat    float64
+	capturedLon    float64
+	capturedRadius float64
 }
 
-func (m *mockPlacesQuerier) SearchNearby(ctx context.Context, _, _, _ float64, _ []string) ([]clients.Place, error) {
+func (m *mockPlacesQuerier) SearchNearby(ctx context.Context, lat, lon, radiusMeters float64, _ []string) ([]clients.Place, error) {
 	atomic.AddInt32(&m.callCount, 1)
+	m.mu.Lock()
+	m.capturedLat, m.capturedLon, m.capturedRadius = lat, lon, radiusMeters
+	m.mu.Unlock()
 	if m.delay > 0 {
 		select {
 		case <-time.After(m.delay):
@@ -393,6 +524,34 @@ func TestThirdPlaceCalculator_Calculate_CacheMissFetchesAndCaches(t *testing.T) 
 	}
 	if len(cache.data) != 1 {
 		t.Errorf("expected the fetch result to be cached, got %d entries", len(cache.data))
+	}
+}
+
+func TestThirdPlaceCalculator_Calculate_FillsFromGridCellCenterNotRequestOrigin(t *testing.T) {
+	// Two different addresses sharing a grid cell must produce the exact
+	// same cache-fill request -- otherwise a later address near the edge
+	// of the cell would silently reuse a fetch that never covered its own
+	// query radius (the bug flagged in code review).
+	origin := api.Coordinates{Lat: 41.8998, Lon: -87.6505}
+	wantCenterLat, wantCenterLon := thirdPlaceGridCellCenter(origin.Lat, origin.Lon)
+
+	cache := &mockThirdPlaceCache{}
+	places := &mockPlacesQuerier{places: []clients.Place{{Name: "Sip Coffee", PrimaryType: "cafe"}}}
+	budget := &mockPlacesBudget{withinBudget: true}
+
+	calc := NewThirdPlaceCalculator(places, cache, budget, 100)
+	if _, err := calc.Calculate(context.Background(), ScoreParams{Origin: origin}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	places.mu.Lock()
+	defer places.mu.Unlock()
+	if places.capturedLat != wantCenterLat || places.capturedLon != wantCenterLon {
+		t.Errorf("expected fetch centered on grid cell center (%v, %v), got (%v, %v) -- request origin was (%v, %v)",
+			wantCenterLat, wantCenterLon, places.capturedLat, places.capturedLon, origin.Lat, origin.Lon)
+	}
+	if places.capturedRadius != thirdPlaceFillRadiusMeters {
+		t.Errorf("expected fetch radius %v, got %v", thirdPlaceFillRadiusMeters, places.capturedRadius)
 	}
 }
 
