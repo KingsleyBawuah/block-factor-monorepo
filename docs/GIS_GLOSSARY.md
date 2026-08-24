@@ -73,6 +73,14 @@ A compact binary encoding OpenStreetMap uses for its data extracts, as an altern
 
 A shape made from a closed loop of straight lines: connect a series of coordinate points one after another, then draw one final line back to where you started, and whatever's enclosed is the polygon. It's how GIS represents anything with an *area* — a park, a lake, a city boundary — as opposed to a single location (a Point) or a path (a LineString). A MultiPolygon is just a polygon record allowed to be more than one separate piece at once: BlockFactor's own `city_boundary` is technically a MultiPolygon because O'Hare Airport sits detached from the rest of Chicago, making "the city" two disconnected pieces stored as one record. BlockFactor stores parks, flood zones, and the city boundary as (Multi)Polygons — distinct from points like CTA stations or lines like bike routes.
 
+## Projected Coordinate System (UTM Zone 16N / EPSG:32616)
+
+A map projection that translates locations from the curved 3D globe onto a flat, 2D planar surface with consistent linear distance units (like meters). Think of the difference between giving directions in angles/degrees on a globe vs. measuring distances with a meter stick on a flat desk blueprint. WGS84 (SRID `4326`) stores coordinates in angular degrees (latitude/longitude), where the physical length of 1 degree of longitude shrinks as you move away from the equator. When generating geometric shapes with metric sizes (such as exact 500m $\times$ 500m grid squares), PostGIS needs metric units: BlockFactor temporarily projects Chicago's boundary into UTM Zone 16N (SRID `32616` — the standard metric conformal projection centered over Illinois) to generate the grid with `ST_SquareGrid(500, ...)`, and then transforms the generated polygon cells back to WGS84 `geography` for storage.
+
+## Spatial Grid / Binning (ST_SquareGrid)
+
+The technique of subdividing a geographic region into a regular tessellation of uniform tiles (squares or hexagons) to aggregate scattered point data into spatial bins. It is the geographic equivalent of a 2D histogram or laying graph paper over a map and counting how many pins land in each square. BlockFactor uses PostGIS's `ST_SquareGrid` to partition the entire City of Chicago into ~2,650 uniform 500m $\times$ 500m blocks, spatial-joining ~225K crime points to compute localized penalty scores and citywide percentiles for the $S_{\text{safety}}$ factor.
+
 ## ST_DWithin
 
 A PostGIS spatial query function that answers "is this thing within X meters of that thing?" efficiently, using a GiST index rather than brute-force checking every record. It's the core building block behind nearly every BlockFactor scoring factor — "is there a supermarket within 0.3 miles," "is there a CTA stop within 0.25 miles" — all of it boils down to an `ST_DWithin` call under the hood.
