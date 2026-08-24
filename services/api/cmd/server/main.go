@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/api"
+	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/clients"
+	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/spatial"
 )
 
 func main() {
@@ -26,7 +28,30 @@ func main() {
 		logger.Info("PORT environment variable not set, defaulting to port", slog.String("port", port))
 	}
 
-	serverImpl := api.NewServer(logger)
+	userAgent := os.Getenv("NOMINATIM_USER_AGENT")
+	geocoder := clients.NewNominatimClient(userAgent, logger)
+
+	var serverOpts []api.ServerOption
+	serverOpts = append(serverOpts, api.WithGeocoder(geocoder))
+
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL != "" {
+		initCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		pool, err := spatial.NewPool(initCtx, databaseURL)
+		if err != nil {
+			logger.Warn("failed to connect to database pool at startup", slog.String("error", err.Error()))
+		} else {
+			defer pool.Close()
+			serverOpts = append(serverOpts, api.WithBoundaryChecker(spatial.NewDBBoundaryChecker(pool)))
+			logger.Info("connected to PostGIS database pool")
+		}
+	} else {
+		logger.Warn("DATABASE_URL not set; spatial database checks will be unconfigured")
+	}
+
+	serverImpl := api.NewServer(logger, serverOpts...)
 	router := api.NewRouter(serverImpl)
 
 	httpServer := &http.Server{
