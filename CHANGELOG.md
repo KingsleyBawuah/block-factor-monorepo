@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `S_third_place` scoring factor (PRD §5.4): cafes and fitness venues within a 0.5 mile radius, scored 100/75/40/0 by count and proximity, with independent cafes (vs. chain brands like Starbucks/Dunkin', via a maintained exclusion list) weighted separately from fitness venues per the PRD's benchmark tiers. Adds `internal/clients/places.go` (Google Places API (New) `searchNearby` client) and `internal/scoring/factor_third_places.go`, which fills the existing `cache_entries` grid cache (400m cells, 30-day TTL, keyed by coordinate per `PRIVACY_AND_DATA_HANDLING.md` — never the raw address) with `golang.org/x/sync/singleflight` deduplicating concurrent cache-fills for the same cell. A new `places_api_budget` table (migration `00015`) enforces a daily cap on Places API calls, atomically incremented in Postgres rather than in-process memory so the cap survives restarts/redeploys and holds correctly across multiple server instances; exceeding it degrades `S_third_place` to `null` for the rest of the day rather than erroring the score request. Adds `GOOGLE_PLACES_DAILY_BUDGET_CALLS` to `.env.example`.
+
 ### Fixed
 
 - `.env.example`'s `DATABASE_URL` had the database name and password swapped relative to `docker-compose.yml`'s actual `POSTGRES_DB`/`POSTGRES_PASSWORD` values, which would have caused `make migrate-up` and the API's own DB connection to fail with an auth error.

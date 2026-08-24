@@ -58,6 +58,10 @@ The standard file format transit agencies (like the CTA) publish schedules in �
 
 The exact geographic path a transit vehicle follows on the physical street grid, stored in GTFS as a sequence of ordered coordinate points (`shapes.txt`). Rather than drawing a straight line from stop A to stop B, shapes trace the actual turns and curves along city streets. BlockFactor parses these ordered points into linestrings to construct the geometric paths of high-frequency transit corridors.
 
+## Haversine Formula
+
+A way to compute the straight-line ("great-circle") distance between two lat/lon coordinates using pure trigonometry — no database, no PostGIS, just math you can run on two numbers in any programming language. It accounts for the fact that the Earth is a sphere, not a flat grid, the same way `ST_Distance` does for two points stored in a PostGIS `geography` column — the difference is where the calculation happens. BlockFactor's DB-backed factors (grocery, transit, safety) get distance for free from PostGIS since the POIs already live in the database; `S_third_place`'s POIs come from a live Google Places API call and get cached in a plain key-value cache instead, so there's no PostGIS geography column to ask — the Go backend computes the haversine distance itself, at read time, from the request's origin coordinate to each cached POI's stored lat/lon.
+
 ## Headway
 
 Transit jargon for "how long you wait between vehicles" — a bus with a 10-minute headway shows up roughly every 10 minutes. It's the transit-scheduling equivalent of a traffic light's cycle time. BlockFactor computes headway from GTFS data to decide whether a bus stop is frequent enough to boost a property's transit score.
