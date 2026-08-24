@@ -71,9 +71,9 @@ Create database tables with spatial indexes and build the standalone CLI tool to
 2. **Data Ingestion CLI Tool (`services/api/cmd/seed/main.go`):**
    - [x] SODA API client connecting to the Chicago Data Portal (authenticated via `CHICAGO_APP_TOKEN`).
    - [x] Automated parsers for CTA 'L' stops, bike routes, parks, crime incidents, FEMA flood zones, 311 sewer backup incidents, OSM POIs, noise geometry, and the city boundary polygon.
-   - [ ] Post-ingest derivation steps: Crime-grid distribution → `safety_grid_percentiles` (staging-table atomic swap per ARCHITECTURE 11.3, completed); GTFS `stop_times` headway analysis → `bus_corridors` (pending).
+   - [x] Post-ingest derivation steps: Crime-grid distribution → `safety_grid_percentiles` (staging-table atomic swap per ARCHITECTURE 11.3, completed); GTFS `stop_times` headway analysis → `bus_corridors` (completed).
    - [x] Ingestion tooling per dataset (GDAL `ogr2ogr` vs. Go shapefile lib, PBF parsing, GTFS parsing) resolved at phase start per ARCHITECTURE 13.2.
-   - [ ] Selective CLI flags: `--dataset=cta`, `--dataset=crimes`, `--dataset=osm_pois`, `--dataset=flood_zones`, `--dataset=sewer_311`, `--dataset=noise`, `--dataset=safety_grid`, `--dataset=derive`, `--limit=1000`, `--all`. (All individual dataset flags & `--dataset=derive` implemented; `bus_corridors` pending.)
+   - [x] Selective CLI flags: `--dataset=boundary`, `--dataset=cta`, `--dataset=bike_routes`, `--dataset=parks`, `--dataset=crimes`, `--dataset=osm_pois`, `--dataset=noise`, `--dataset=flood_zones`, `--dataset=sewer_311`, `--dataset=safety_grid`, `--dataset=bus_corridors`, `--dataset=derive`, `--limit=1000`, `--all`.
 
 ### Validation Criteria
 - `make migrate-up` creates all tables and spatial indexes cleanly.

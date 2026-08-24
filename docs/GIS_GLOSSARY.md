@@ -45,9 +45,17 @@ GiST (Generalized Search Tree) is a database index built for spatial (and other 
 
 The standard file format transit agencies (like the CTA) publish schedules in — stops, routes, trip times, service frequency. It's the de facto universal format every trip-planning tool (Google Maps, OpenTripPlanner, etc.) knows how to read. BlockFactor ingests CTA's GTFS feed both to build the OpenTripPlanner routing graph and to derive which bus stops qualify as "high-frequency" (see Headway).
 
+## GTFS Shape (Route Alignment)
+
+The exact geographic path a transit vehicle follows on the physical street grid, stored in GTFS as a sequence of ordered coordinate points (`shapes.txt`). Rather than drawing a straight line from stop A to stop B, shapes trace the actual turns and curves along city streets. BlockFactor parses these ordered points into linestrings to construct the geometric paths of high-frequency transit corridors.
+
 ## Headway
 
 Transit jargon for "how long you wait between vehicles" — a bus with a 10-minute headway shows up roughly every 10 minutes. It's the transit-scheduling equivalent of a traffic light's cycle time. BlockFactor computes headway from GTFS data to decide whether a bus stop is frequent enough to boost a property's transit score.
+
+## LineString / MultiLineString
+
+A **LineString** is a geometry representing a continuous path connected by straight line segments between two or more coordinates — like drawing a road or trail with a pencil without lifting it from the paper. A **MultiLineString** is a collection of separate LineStrings grouped into a single database record — like a transit route that has distinct paths for northbound vs. southbound directions, route variations, or express turnarounds. BlockFactor stores bus corridors, bike routes, and elevated CTA tracks as MultiLineStrings in PostGIS.
 
 ## Invalid Geometry (Self-Intersection)
 

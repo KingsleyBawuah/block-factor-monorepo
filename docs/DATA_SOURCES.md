@@ -134,6 +134,15 @@ Powers $S_{\text{safety}}$ percentile normalization (PRD §5.9). Fully derived f
 - **Percentile Ranking:** Evaluated across all 2,650 cells using PostgreSQL's `PERCENT_RANK() OVER (ORDER BY penalty_score ASC) * 100`. The safest cells (penalty = 0, ~13.4% of city cells representing parks/forest preserves/lakefront margins) evaluate to 0.00 percentile. The highest-crime downtown commercial blocks evaluate to 100.00 percentile.
 - **Zero-Downtime Recompute:** To prevent long exclusive locks on live scoring queries during re-derivation, the spatial join across ~225K crimes and percentile calculations are written into an `UNLOGGED` staging table (`safety_grid_percentiles_staging`, ~2.4s compute time). An atomic transaction then executes `TRUNCATE safety_grid_percentiles; INSERT INTO safety_grid_percentiles ...; DROP TABLE safety_grid_percentiles_staging;` committing in ~20ms.
 
+### Bus Corridors (`bus_corridors`)
+
+Powers the $+10\text{ pt}$ high-frequency bus proximity bonus in $S_{\text{transit}}$ (PRD §5.2) and powers full transit route rendering for Phase 4 map layers. Fully derived from the official CTA Static GTFS Schedule archive (`google_transit.zip`) during seed/derivation (`--dataset=bus_corridors` or `--dataset=derive`).
+
+- **Headway Derivation:** Parses `calendar.txt` to isolate regular weekday service (`monday=1 ... friday=1`), filters `routes.txt` for bus routes (`route_type = 3`), and computes the mean scheduled headway per route across active directions during the weekday AM rush hour window (07:00:00 to 09:00:00, 120 minutes) from `trips.txt` and `stop_times.txt`. Routes with a mean scheduled headway $\le 10.0\text{ minutes}$ qualify as high-frequency corridors (112 of 125 routes in live CTA data). Routes with zero AM rush trips (e.g. Night Owl routes or midday tourist shuttles) receive a `999.00` sentinel headway.
+- **Corridor Geometry:** Assembles the physical street alignments from `shapes.txt` for all route shape variations into composite `MULTILINESTRING` geometries stored as WGS84 (`EPSG:4326`) `geography`. All 125 Chicago bus routes are stored with their respective headways and complete street network geometries.
+- **In-Memory Streaming & Caching:** The seed CLI streams the zipped CSVs in-process with Go's standard library (`archive/zip` + `encoding/csv`), requiring zero temporary disk files and keeping memory usage under ~150MB. The raw ~100MB `.zip` is cached in `cache_entries` (PostgreSQL) with a 90-day TTL matching CTA's quarterly seasonal schedule refresh cycle, speeding up subsequent development seed runs to ~4 seconds while maintaining zero external state in ephemeral containers.
+- **Zero-Downtime Recompute:** Built into an `UNLOGGED` staging table (`bus_corridors_staging`) before performing an atomic transactional swap into `bus_corridors` (~170ms lock duration).
+
 ---
 
 ## Not Yet Live-Verified (lower risk — fixed external standards, not Chicago-specific quirks)
