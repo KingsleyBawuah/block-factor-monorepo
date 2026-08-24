@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseTimeSeconds(t *testing.T) {
@@ -153,8 +154,9 @@ SHAPE_TRAIN,41.8800,-87.6200,2
 
 func TestDeriveBusCorridorsFromZip(t *testing.T) {
 	zipBytes := buildSyntheticGTFSZip(t)
+	referenceDate := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 
-	corridors, err := deriveBusCorridorsFromZip(zipBytes)
+	corridors, err := deriveBusCorridorsFromZip(zipBytes, referenceDate)
 	if err != nil {
 		t.Fatalf("deriveBusCorridorsFromZip failed: %v", err)
 	}
@@ -209,8 +211,103 @@ func TestDeriveBusCorridorsMissingFiles(t *testing.T) {
 	zw := zip.NewWriter(buf)
 	_ = zw.Close()
 
-	_, err := deriveBusCorridorsFromZip(buf.Bytes())
+	_, err := deriveBusCorridorsFromZip(buf.Bytes(), time.Now())
 	if err == nil {
 		t.Errorf("expected error on empty zip, got nil")
+	}
+}
+
+// TestDeriveBusCorridorsSeasonalServiceValidityWindow is a regression test for
+// ARCHITECTURE.md Decision Log row 28: CTA's real GTFS feed republishes a
+// near-identical weekday schedule under a new back-to-back service_id every
+// few weeks (132 of 133 live routes reference 2+ such blocks). Pooling trips
+// from an expired season alongside the current one -- which the original
+// implementation did, since it never checked start_date/end_date -- silently
+// inflates the trip count and deflates the computed headway. This fixture
+// models exactly that: an expired high-frequency-looking season and a
+// currently-valid low-frequency one for the same route, and asserts only the
+// currently-valid season's trips are counted.
+func TestDeriveBusCorridorsSeasonalServiceValidityWindow(t *testing.T) {
+	buf := new(bytes.Buffer)
+	zw := zip.NewWriter(buf)
+
+	calendarCSV := `service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+SER_OLD,1,1,1,1,1,0,0,20250101,20250630
+SER_NEW,1,1,1,1,1,0,0,20250701,20261231
+`
+	routesCSV := `route_id,route_short_name,route_long_name,route_type
+R_SEASONAL,77,Seasonal Test Route,3
+`
+
+	var tripsBuilder strings.Builder
+	tripsBuilder.WriteString("trip_id,route_id,service_id,direction_id,shape_id\n")
+	var stopTimesBuilder strings.Builder
+	stopTimesBuilder.WriteString("trip_id,arrival_time,departure_time,stop_id,stop_sequence\n")
+
+	// Expired season (SER_OLD): 10 trips/direction -> would compute an
+	// artificially frequent 12.0 min headway if wrongly included.
+	for dir := 0; dir < 2; dir++ {
+		for i := 0; i < 10; i++ {
+			tID := fmt.Sprintf("TRIP_OLD_D%d_%d", dir, i)
+			mins := i * 12
+			h := 7 + mins/60
+			m := mins % 60
+			fmt.Fprintf(&tripsBuilder, "%s,R_SEASONAL,SER_OLD,%d,SHAPE_S\n", tID, dir)
+			fmt.Fprintf(&stopTimesBuilder, "%s,%02d:%02d:00,%02d:%02d:00,STOP_%d,1\n", tID, h, m, h, m, dir)
+		}
+	}
+
+	// Currently-valid season (SER_NEW): 2 trips/direction -> correct headway
+	// is 120/2 = 60.0 min.
+	for dir := 0; dir < 2; dir++ {
+		for i := 0; i < 2; i++ {
+			tID := fmt.Sprintf("TRIP_NEW_D%d_%d", dir, i)
+			mins := i * 60
+			h := 7 + mins/60
+			m := mins % 60
+			fmt.Fprintf(&tripsBuilder, "%s,R_SEASONAL,SER_NEW,%d,SHAPE_S\n", tID, dir)
+			fmt.Fprintf(&stopTimesBuilder, "%s,%02d:%02d:00,%02d:%02d:00,STOP_%d,1\n", tID, h, m, h, m, dir)
+		}
+	}
+
+	shapesCSV := `shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence
+SHAPE_S,41.8800,-87.6300,1
+SHAPE_S,41.8900,-87.6300,2
+`
+
+	files := map[string]string{
+		"calendar.txt":   calendarCSV,
+		"routes.txt":     routesCSV,
+		"trips.txt":      tripsBuilder.String(),
+		"stop_times.txt": stopTimesBuilder.String(),
+		"shapes.txt":     shapesCSV,
+	}
+	for name, content := range files {
+		fw, err := zw.Create(name)
+		if err != nil {
+			t.Fatalf("failed to create zip entry %q: %v", name, err)
+		}
+		if _, err := fw.Write([]byte(content)); err != nil {
+			t.Fatalf("failed to write content for %q: %v", name, err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("failed to close zip writer: %v", err)
+	}
+
+	// referenceDate falls inside SER_NEW's window only.
+	referenceDate := time.Date(2025, 8, 15, 0, 0, 0, 0, time.UTC)
+	corridors, err := deriveBusCorridorsFromZip(buf.Bytes(), referenceDate)
+	if err != nil {
+		t.Fatalf("deriveBusCorridorsFromZip failed: %v", err)
+	}
+	if len(corridors) != 1 {
+		t.Fatalf("expected 1 corridor, got %d", len(corridors))
+	}
+
+	got := corridors[0].meanHeadway
+	const wantHeadway = 60.0
+	if got != wantHeadway {
+		t.Errorf("meanHeadway = %.1f, want %.1f (expired SER_OLD trips must not be pooled with current SER_NEW trips)", got, wantHeadway)
 	}
 }

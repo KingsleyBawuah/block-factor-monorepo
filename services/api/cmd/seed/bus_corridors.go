@@ -58,6 +58,15 @@ type gtfsTrip struct {
 	shapeID     string
 }
 
+// gtfsService is a parsed calendar.txt row: day-of-week pattern plus the
+// date range it's actually valid for.
+type gtfsService struct {
+	weekday     bool
+	daysPerWeek int
+	startDate   time.Time
+	endDate     time.Time
+}
+
 type shapePoint struct {
 	lat float64
 	lon float64
@@ -92,7 +101,7 @@ func parseTimeSeconds(t string) (int, bool) {
 func fetchOrLoadGTFS(ctx context.Context, c *cache.Cache) ([]byte, error) {
 	// 1. Check local file override (CTA_GTFS_PATH)
 	if localPath := os.Getenv("CTA_GTFS_PATH"); localPath != "" {
-		slog.Info("bus_corridors: loading GTFS from local file override", slog.String("path", localPath))
+		slog.Info("gtfs: loading from local file override", slog.String("path", localPath))
 		data, err := os.ReadFile(localPath)
 		if err != nil {
 			return nil, fmt.Errorf("read local GTFS file %q: %w", localPath, err)
@@ -105,9 +114,9 @@ func fetchOrLoadGTFS(ctx context.Context, c *cache.Cache) ([]byte, error) {
 		var cachedBytes []byte
 		cached, err := c.Get(ctx, ctaGTFSCacheKey, &cachedBytes)
 		if err != nil {
-			slog.Warn("bus_corridors: cache check failed; will fetch live", slog.String("error", err.Error()))
+			slog.Warn("gtfs: cache check failed; will fetch live", slog.String("error", err.Error()))
 		} else if cached && len(cachedBytes) > 0 {
-			slog.Info("bus_corridors: using cached GTFS archive", slog.Int("bytes", len(cachedBytes)))
+			slog.Info("gtfs: using cached archive", slog.Int("bytes", len(cachedBytes)))
 			return cachedBytes, nil
 		}
 	}
@@ -118,7 +127,7 @@ func fetchOrLoadGTFS(ctx context.Context, c *cache.Cache) ([]byte, error) {
 		feedURL = defaultCTAGTFSURL
 	}
 
-	slog.Info("bus_corridors: downloading CTA GTFS archive", slog.String("url", feedURL))
+	slog.Info("gtfs: downloading CTA archive", slog.String("url", feedURL))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create GTFS download request: %w", err)
@@ -140,12 +149,12 @@ func fetchOrLoadGTFS(ctx context.Context, c *cache.Cache) ([]byte, error) {
 		return nil, fmt.Errorf("read GTFS response body: %w", err)
 	}
 
-	slog.Info("bus_corridors: downloaded GTFS archive", slog.Int("bytes", len(data)))
+	slog.Info("gtfs: downloaded archive", slog.Int("bytes", len(data)))
 
 	// Save to Postgres cache for future runs
 	if c != nil {
 		if err := c.Set(ctx, ctaGTFSCacheKey, data, ctaGTFSCacheTTL); err != nil {
-			slog.Warn("bus_corridors: failed to cache GTFS archive", slog.String("error", err.Error()))
+			slog.Warn("gtfs: failed to cache archive", slog.String("error", err.Error()))
 		}
 	}
 
@@ -153,8 +162,9 @@ func fetchOrLoadGTFS(ctx context.Context, c *cache.Cache) ([]byte, error) {
 }
 
 // deriveBusCorridorsFromZip parses a GTFS zip archive, computes weekday AM-peak
-// headways for all bus routes, and constructs MULTILINESTRING WKT geometries from shapes.txt.
-func deriveBusCorridorsFromZip(zipBytes []byte) ([]derivedCorridor, error) {
+// headways for all bus routes as of referenceDate, and constructs MULTILINESTRING
+// WKT geometries from shapes.txt.
+func deriveBusCorridorsFromZip(zipBytes []byte, referenceDate time.Time) ([]derivedCorridor, error) {
 	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
 	if err != nil {
 		return nil, fmt.Errorf("open zip reader: %w", err)
@@ -165,11 +175,12 @@ func deriveBusCorridorsFromZip(zipBytes []byte) ([]derivedCorridor, error) {
 		files[f.Name] = f
 	}
 
-	// 1. Parse calendar.txt to identify active weekday service IDs
-	weekdayServices, err := parseWeekdayServices(files)
+	// 1. Parse calendar.txt and identify weekday service IDs currently valid as of referenceDate
+	calendarServices, err := parseCalendarServices(files)
 	if err != nil {
 		return nil, err
 	}
+	weekdayServices := weekdayServiceIDs(calendarServices, referenceDate)
 
 	// 2. Parse routes.txt for bus routes (route_type = 3)
 	busRoutes, err := parseBusRoutes(files)
@@ -302,7 +313,19 @@ func deriveBusCorridorsFromZip(zipBytes []byte) ([]derivedCorridor, error) {
 	return corridors, nil
 }
 
-func parseWeekdayServices(files map[string]*zip.File) (map[string]bool, error) {
+// gtfsDateLayout is GTFS's calendar.txt date format (YYYYMMDD), used for
+// start_date/end_date validity-window comparisons.
+const gtfsDateLayout = "20060102"
+
+// parseCalendarServices parses calendar.txt into per-service_id day-of-week
+// flags and validity windows. CTA's feed republishes near-identical
+// schedules under a new back-to-back service_id roughly every 2-4 weeks
+// (confirmed live: 132 of 133 routes reference 2+ weekday service_id blocks
+// covering different, non-overlapping date ranges) -- start_date/end_date
+// MUST be checked against a reference date by every caller, or trip counts
+// silently pool multiple schedule "seasons" together as if they all ran on
+// the same calendar day. See ARCHITECTURE.md Decision Log row 28.
+func parseCalendarServices(files map[string]*zip.File) (map[string]gtfsService, error) {
 	calFile, ok := files["calendar.txt"]
 	if !ok {
 		return nil, fmt.Errorf("calendar.txt not found in GTFS archive")
@@ -319,28 +342,18 @@ func parseWeekdayServices(files map[string]*zip.File) (map[string]bool, error) {
 		return nil, fmt.Errorf("read calendar.txt header: %w", err)
 	}
 
-	serviceIdx, monIdx, tueIdx, wedIdx, thuIdx, friIdx := -1, -1, -1, -1, -1, -1
+	idx := make(map[string]int, len(calHeader))
 	for i, h := range calHeader {
-		switch strings.TrimSpace(h) {
-		case "service_id":
-			serviceIdx = i
-		case "monday":
-			monIdx = i
-		case "tuesday":
-			tueIdx = i
-		case "wednesday":
-			wedIdx = i
-		case "thursday":
-			thuIdx = i
-		case "friday":
-			friIdx = i
+		idx[strings.TrimSpace(h)] = i
+	}
+	required := []string{"service_id", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "start_date", "end_date"}
+	for _, col := range required {
+		if _, ok := idx[col]; !ok {
+			return nil, fmt.Errorf("calendar.txt missing required column %q", col)
 		}
 	}
-	if serviceIdx < 0 || monIdx < 0 || tueIdx < 0 || wedIdx < 0 || thuIdx < 0 || friIdx < 0 {
-		return nil, fmt.Errorf("calendar.txt missing required columns")
-	}
 
-	weekdayServices := make(map[string]bool)
+	services := make(map[string]gtfsService)
 	for {
 		row, err := calReader.Read()
 		if err == io.EOF {
@@ -349,11 +362,44 @@ func parseWeekdayServices(files map[string]*zip.File) (map[string]bool, error) {
 		if err != nil {
 			continue
 		}
-		if row[monIdx] == "1" && row[tueIdx] == "1" && row[wedIdx] == "1" && row[thuIdx] == "1" && row[friIdx] == "1" {
-			weekdayServices[row[serviceIdx]] = true
+		startDate, errStart := time.Parse(gtfsDateLayout, strings.TrimSpace(row[idx["start_date"]]))
+		endDate, errEnd := time.Parse(gtfsDateLayout, strings.TrimSpace(row[idx["end_date"]]))
+		if errStart != nil || errEnd != nil {
+			continue
+		}
+		dayCols := []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+		daysPerWeek := 0
+		for _, col := range dayCols {
+			if row[idx[col]] == "1" {
+				daysPerWeek++
+			}
+		}
+		services[row[idx["service_id"]]] = gtfsService{
+			weekday:     row[idx["monday"]] == "1" && row[idx["tuesday"]] == "1" && row[idx["wednesday"]] == "1" && row[idx["thursday"]] == "1" && row[idx["friday"]] == "1",
+			daysPerWeek: daysPerWeek,
+			startDate:   startDate,
+			endDate:     endDate,
 		}
 	}
-	return weekdayServices, nil
+	return services, nil
+}
+
+// isActiveOn reports whether referenceDate falls within [startDate, endDate], inclusive.
+func (s gtfsService) isActiveOn(referenceDate time.Time) bool {
+	ref := referenceDate.Truncate(24 * time.Hour)
+	return !ref.Before(s.startDate) && !ref.After(s.endDate)
+}
+
+// weekdayServiceIDs returns service_ids that run Monday-Friday and are
+// currently within their validity window as of referenceDate.
+func weekdayServiceIDs(services map[string]gtfsService, referenceDate time.Time) map[string]bool {
+	out := make(map[string]bool)
+	for id, svc := range services {
+		if svc.weekday && svc.isActiveOn(referenceDate) {
+			out[id] = true
+		}
+	}
+	return out
 }
 
 func parseBusRoutes(files map[string]*zip.File) (map[string]gtfsRoute, error) {
@@ -419,7 +465,10 @@ func parseBusRoutes(files map[string]*zip.File) (map[string]gtfsRoute, error) {
 	return busRoutes, nil
 }
 
-func parseTrips(files map[string]*zip.File, weekdayServices map[string]bool, busRoutes map[string]gtfsRoute) (map[string]gtfsTrip, map[string]map[string]bool, error) {
+// parseTrips maps trip_id -> gtfsTrip and collects per-route shape IDs, restricted to
+// trips on one of routes and one of activeServices (the caller decides which routes/service
+// filter apply -- e.g. bus routes + weekday services, or rail routes + any-day services).
+func parseTrips(files map[string]*zip.File, activeServices map[string]bool, routes map[string]gtfsRoute) (map[string]gtfsTrip, map[string]map[string]bool, error) {
 	tripsFile, ok := files["trips.txt"]
 	if !ok {
 		return nil, nil, fmt.Errorf("trips.txt not found in GTFS archive")
@@ -466,7 +515,7 @@ func parseTrips(files map[string]*zip.File, weekdayServices map[string]bool, bus
 			continue
 		}
 		routeID := strings.TrimSpace(row[tripRouteIdx])
-		if _, isBus := busRoutes[routeID]; !isBus {
+		if _, inRouteSet := routes[routeID]; !inRouteSet {
 			continue
 		}
 		dirID := "0"
@@ -485,7 +534,7 @@ func parseTrips(files map[string]*zip.File, weekdayServices map[string]bool, bus
 		}
 
 		serviceID := strings.TrimSpace(row[tripServiceIdx])
-		if !weekdayServices[serviceID] {
+		if !activeServices[serviceID] {
 			continue
 		}
 
@@ -531,6 +580,10 @@ func parseFirstDepartures(files map[string]*zip.File, trips map[string]gtfsTrip)
 		return nil, fmt.Errorf("stop_times.txt missing required columns")
 	}
 
+	// GTFS requires stop_sequence to increase monotonically along a trip but
+	// does not require it to start at 1, so track the minimum observed
+	// sequence per trip rather than assuming "1" is always the first stop.
+	tripMinSeq := make(map[string]int)
 	tripFirstDeparture := make(map[string]string)
 	for {
 		row, err := stReader.Read()
@@ -544,7 +597,12 @@ func parseFirstDepartures(files map[string]*zip.File, trips map[string]gtfsTrip)
 		if _, isRelevant := trips[tripID]; !isRelevant {
 			continue
 		}
-		if strings.TrimSpace(row[stSeqIdx]) == "1" {
+		seq, seqErr := strconv.Atoi(strings.TrimSpace(row[stSeqIdx]))
+		if seqErr != nil {
+			continue
+		}
+		if minSeq, seen := tripMinSeq[tripID]; !seen || seq < minSeq {
+			tripMinSeq[tripID] = seq
 			tripFirstDeparture[tripID] = strings.TrimSpace(row[stDepIdx])
 		}
 	}
@@ -639,8 +697,8 @@ func ingestBusCorridors(ctx context.Context, c *cache.Cache, pool *pgxpool.Pool)
 		return fmt.Errorf("fetch GTFS archive: %w", err)
 	}
 
-	// 2. Parse and derive all bus corridors
-	corridors, err := deriveBusCorridorsFromZip(zipBytes)
+	// 2. Parse and derive all bus corridors, using today as the GTFS service validity reference
+	corridors, err := deriveBusCorridorsFromZip(zipBytes, time.Now())
 	if err != nil {
 		return fmt.Errorf("derive bus corridors: %w", err)
 	}
