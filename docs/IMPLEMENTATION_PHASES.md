@@ -93,7 +93,7 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
    - [ ] `factor_commute.go` (`S_commute`: Rush-hour OTP2 point-to-point transit duration + transfer friction).
    - [x] `factor_bike.go` (`S_bike`: quality-tiered proximity decay + N-S/E-W directional network bonus).
    - [x] `factor_grocery.go` (`S_grocery`: Supermarket distance + pharmacy boost).
-   - [ ] `factor_third_places.go` (`S_third_place`: Cached POI density).
+   - [x] `factor_third_places.go` (`S_third_place`: Cached POI density).
    - [x] `factor_green.go` (`S_green`: Park proximity + Lakefront/606 trail bonus).
    - [x] `factor_noise.go` (`S_noise`: Elevated CTA track & arterial road proximity penalties).
    - [x] `factor_flood.go` (`S_flood`: FEMA zones + 311 sewer backup penalty).
@@ -101,7 +101,7 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
    - [x] `factor_solar.go` (`S_solar`: orientation base lookup × exposure modifier + floor bonus).
 
 2. **Outbound Clients & Cost Defense (`services/api/internal/clients/`):**
-   - [ ] `places.go` — Google Places (New) Nearby Search client with 400m grid-cache fill (30-day TTL in `cache_entries`), powering `S_third_place` and the Phase 4 POI map layer.
+   - [x] `places.go` — Google Places (New) Nearby Search client with 400m grid-cache fill (30-day TTL in `cache_entries`), powering `S_third_place` and the Phase 4 POI map layer.
      - Protected by a 4-tier cost defense layer: token-bucket rate limiter (`golang.org/x/time/rate`), daily budget circuit breaker (degrading `S_third_place` to `null`), in-flight `singleflight` deduplication (`golang.org/x/sync/singleflight`), and Google Cloud hard billing quotas.
      - ~~**TODO (prerequisite):** provision the Google Cloud project + Places API (New) key — restricted, hard daily quota cap, billing alert — before this client lands.~~ Done (key provisioned; IP restriction pending — see `docs/PROVISIONING.md`).
    - [x] `nominatim.go` — one-shot geocoding client returning ranked candidates (public endpoint, ≤ 1 req/sec rate-limited, custom `User-Agent`; no typeahead in Phase 1 per Nominatim policy).
