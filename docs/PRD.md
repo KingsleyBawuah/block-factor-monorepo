@@ -320,6 +320,8 @@ Evaluates proximity to genuinely useful cycling infrastructure, weighted by real
 
 > **Why the network bonus, not just a density count:** A single isolated protected-lane segment is less useful than a connected network — but more specifically, *direction* matters more than raw count. Two parallel lanes running the same axis don't help if your actual trips need to go the other way; genuinely useful access means being able to travel in more than one direction from home. Chicago's strict cardinal street grid makes a simple two-bucket (north-south / east-west) orientation check a reasonably accurate, low-complexity proxy for "can I actually get anywhere from here," without needing full compass-rose granularity.
 
+> **Future Consideration — Divvy Dock Proximity Bonus:** Divvy is currently display-only (§4: station markers + live capacity badges on the Phase 4 map layer, not a scored factor). A small proximity bonus here is plausible — using only the GBFS feed's static `station_information` (dock location), never the live 5-minute-TTL `station_status` capacity data, since a scored factor needs to describe the location, not the moment. Deferred for now because Divvy stations are heavily sited near existing transit hubs and bike infrastructure, so a bonus here risks being highly correlated with what `S_transit`'s dual-line bonus and this factor's own network bonus already capture, rather than adding much genuinely new signal — worth a real look once real station density data is in hand from the Phase 4 work, not speculated about in advance.
+
 ---
 
 ## 6. Monetization & Native Affiliate Catalog
