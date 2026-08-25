@@ -8,13 +8,21 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/api"
+	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/cache"
 	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/clients"
+	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/scoring"
 	"github.com/KingsleyBawuah/block-factor-monorepo/services/api/internal/spatial"
 )
+
+// defaultGooglePlacesDailyBudgetCalls is used when GOOGLE_PLACES_DAILY_BUDGET_CALLS
+// is unset or invalid -- a conservative self-imposed cost guard, not a
+// Google-mandated quota (see internal/scoring/factor_third_places.go).
+const defaultGooglePlacesDailyBudgetCalls = 500
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -46,9 +54,40 @@ func main() {
 			defer pool.Close()
 			serverOpts = append(serverOpts, api.WithBoundaryChecker(spatial.NewDBBoundaryChecker(pool)))
 			logger.Info("connected to PostGIS database pool")
+
+			placesClient := clients.NewPlacesClient(os.Getenv("GOOGLE_PLACES_API_KEY"), logger)
+			dailyBudgetCalls := defaultGooglePlacesDailyBudgetCalls
+			if v := os.Getenv("GOOGLE_PLACES_DAILY_BUDGET_CALLS"); v != "" {
+				if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+					dailyBudgetCalls = parsed
+				} else {
+					logger.Warn("invalid GOOGLE_PLACES_DAILY_BUDGET_CALLS, using default",
+						slog.String("value", v), slog.Int("default", defaultGooglePlacesDailyBudgetCalls))
+				}
+			}
+
+			calculators := []scoring.FactorCalculator{
+				scoring.NewTransitCalculator(scoring.NewDBTransitQuerier(pool)),
+				scoring.NewBikeCalculator(scoring.NewDBBikeQuerier(pool)),
+				scoring.NewGroceryCalculator(scoring.NewDBGroceryQuerier(pool)),
+				scoring.NewGreenCalculator(scoring.NewDBGreenQuerier(pool)),
+				scoring.NewNoiseCalculator(scoring.NewDBNoiseQuerier(pool)),
+				scoring.NewFloodCalculator(scoring.NewDBFloodQuerier(pool)),
+				scoring.NewSafetyCalculator(scoring.NewDBSafetyQuerier(pool)),
+				scoring.NewSolarCalculator(),
+				scoring.NewThirdPlaceCalculator(placesClient, cache.New(pool), scoring.NewDBPlacesBudget(pool), dailyBudgetCalls),
+				// No live OTP2 client exists yet (Phase 6) -- registered
+				// with a nil querier so S_commute still appears in the
+				// response, correctly degraded, whenever a destination is
+				// supplied, rather than silently vanishing. See
+				// ARCHITECTURE.md §6 for why OTP2 is its own phase.
+				scoring.NewCommuteCalculator(nil),
+			}
+			engine := scoring.NewEngine(calculators, logger)
+			serverOpts = append(serverOpts, api.WithScoreEngine(&scoreEngineAdapter{engine: engine}))
 		}
 	} else {
-		logger.Warn("DATABASE_URL not set; spatial database checks will be unconfigured")
+		logger.Warn("DATABASE_URL not set; spatial database checks and scoring will be unconfigured")
 	}
 
 	serverImpl := api.NewServer(logger, serverOpts...)
