@@ -33,10 +33,24 @@ func TestParseRailLines(t *testing.T) {
 		{"Red Line", []string{"Red"}, false},
 		{"Red, Purple Line", []string{"Red", "Purple"}, false},
 		{"Yellow Line", []string{"Yellow"}, false},
+
+		// Edge cases not observed in the live 16 values, but defended
+		// against: empty/whitespace input, trailing/double commas, and a
+		// hypothetical "modifier before Line" ordering the source hasn't
+		// shown but the parser should still handle correctly.
+		{"", nil, false},
+		{"   ", nil, false},
+		{"Red, ", []string{"Red"}, false},
+		{"Red, , Blue", []string{"Red", "Blue"}, false},
+		{"Purple (Express) Line", []string{"Purple"}, true},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.raw, func(t *testing.T) {
+		name := tt.raw
+		if name == "" {
+			name = "(empty string)"
+		}
+		t.Run(name, func(t *testing.T) {
 			gotLines, gotExpress := parseRailLines(tt.raw)
 			if !reflect.DeepEqual(gotLines, tt.wantLines) {
 				t.Errorf("parseRailLines(%q) lines = %v, want %v", tt.raw, gotLines, tt.wantLines)
@@ -50,18 +64,20 @@ func TestParseRailLines(t *testing.T) {
 
 func TestRailGrade(t *testing.T) {
 	tests := []struct {
+		name       string
 		sourceType string
 		want       string
 		wantErr    bool
 	}{
-		{"Subway", "subway", false},
-		{"Elevated or At Grade", "elevated_or_at_grade", false},
-		{"Unknown", "", true},
-		{"", "", true},
+		{"subway", "Subway", "subway", false},
+		{"elevated or at grade", "Elevated or At Grade", "elevated_or_at_grade", false},
+		{"unrecognized value", "Unknown", "", true},
+		{"empty string", "", "", true},
+		{"whitespace padded subway", " Subway ", "subway", false},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.sourceType, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			got, err := railGrade(tt.sourceType)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("railGrade(%q) error = %v, wantErr %v", tt.sourceType, err, tt.wantErr)

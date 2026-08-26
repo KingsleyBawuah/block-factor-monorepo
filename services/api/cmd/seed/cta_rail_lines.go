@@ -39,6 +39,16 @@ type ctaRailLineRow struct {
 func parseRailLines(raw string) (lines []string, express bool) {
 	for _, token := range strings.Split(raw, ",") {
 		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+
+		// Strip a trailing " Line" both before and after checking for a
+		// modifier suffix: every real value observed has modifiers and
+		// " Line" in a fixed order ("Purple (Express)", never "Purple
+		// (Express) Line"), but stripping on both sides keeps the parser
+		// correct if the source ever reverses that order.
+		token = strings.TrimSpace(strings.TrimSuffix(token, " Line"))
 
 		if s, ok := strings.CutSuffix(token, "(Express)"); ok {
 			token, express = strings.TrimSpace(s), true
@@ -51,6 +61,9 @@ func parseRailLines(raw string) (lines []string, express bool) {
 		}
 
 		token = strings.TrimSpace(strings.TrimSuffix(token, " Line"))
+		if token == "" {
+			continue
+		}
 		lines = append(lines, token)
 	}
 	return lines, express
@@ -58,7 +71,7 @@ func parseRailLines(raw string) (lines []string, express bool) {
 
 // railGrade maps the source's `type` field to cta_rail_lines.grade.
 func railGrade(sourceType string) (string, error) {
-	switch sourceType {
+	switch strings.TrimSpace(sourceType) {
 	case "Subway":
 		return "subway", nil
 	case "Elevated or At Grade":
@@ -78,6 +91,9 @@ func ingestCTARailLines(ctx context.Context, soda *clients.SODAClient, pool *pgx
 	}
 	if err := soda.GetJSON(ctx, ctaRailLinesResourceID, params, &rows); err != nil {
 		return fmt.Errorf("fetch CTA rail lines: %w", err)
+	}
+	if len(rows) == 0 {
+		return fmt.Errorf("fetch CTA rail lines: received 0 rows from the source -- refusing to clear the table")
 	}
 
 	tx, err := pool.Begin(ctx)
