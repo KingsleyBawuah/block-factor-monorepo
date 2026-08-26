@@ -9,6 +9,10 @@ import {
 } from "@tanstack/react-router";
 import App from "./App";
 
+// maplibre-gl is mocked globally in src/test/setup.ts (the bun:test
+// preload) — happy-dom has no WebGL context, so the real Map constructor
+// (invoked by MapCanvas, rendered inside App) would throw.
+
 function createTestRouter() {
   const rootRoute = createRootRoute({ component: App });
   const indexRoute = createRoute({
