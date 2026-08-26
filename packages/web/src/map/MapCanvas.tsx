@@ -5,11 +5,15 @@ import { BASEMAP_STYLE_URL, CHICAGO_CENTER, CHICAGO_DEFAULT_ZOOM } from "./const
 
 export type MapCanvasProps = {
   /**
-   * Called once the MapLibre instance is constructed, handing back the live
-   * map so later Phase 4 layer components (CTA rail, bike routes, POIs,
-   * Divvy docks, solar ray) can call addSource/addLayer/flyTo on it rather
-   * than each reimplementing map setup — see docs/IMPLEMENTATION_PHASES.md
-   * Phase 4.
+   * Called once the MapLibre instance's `load` event fires (all initial
+   * resources, including the basemap style, have downloaded), handing back
+   * the live map so later Phase 4 layer components (CTA rail, bike routes,
+   * POIs, Divvy docks, solar ray) can call addSource/addLayer/flyTo on it
+   * rather than each reimplementing map setup — see
+   * docs/IMPLEMENTATION_PHASES.md Phase 4. Deliberately not fired right
+   * after construction: addSource/addLayer throw ("Style is not done
+   * loading") if called before the style has finished loading, and the
+   * remote CARTO style JSON fetch is real, unavoidable async latency.
    */
   onMapReady?: (map: MapLibreMap) => void;
 };
@@ -38,7 +42,7 @@ export function MapCanvas({ onMapReady }: MapCanvasProps) {
     });
     map.addControl(new NavigationControl({ showCompass: true }), "top-right");
     mapRef.current = map;
-    onMapReadyRef.current?.(map);
+    map.on("load", () => onMapReadyRef.current?.(map));
 
     return () => {
       map.remove();

@@ -5,10 +5,10 @@ import { Popup } from "maplibre-gl";
 import "lineicons/dist/lineicons.css";
 import { apiClient } from "../../lib/api/client";
 import { expandRailSegments } from "./expandRailSegments";
-import { ctaLineColor } from "./cta-colors";
+import { ctaLineColor, ctaLineTextColor } from "./cta-colors";
+import { normalizeStationProperties, type CtaStationProperties } from "./normalizeStationProperties";
+import { escapeHtml } from "./escapeHtml";
 import type { FeatureCollection, PointGeometry } from "../geojson";
-
-type CtaStationProperties = { name: string; lines: string[]; ada: boolean };
 
 const RAIL_SOURCE_ID = "cta-rail-lines";
 const RAIL_LAYER_ID = "cta-rail-lines-layer";
@@ -61,8 +61,14 @@ export function CtaRailLayer({ map }: CtaRailLayerProps) {
         // Subway (underground) segments render dashed; elevated/at-grade
         // segments render solid -- a common transit-map convention for
         // "this track isn't actually visible at street level," distinct
-        // from the per-line color encoding.
-        "line-dasharray": ["case", ["==", ["get", "grade"], "subway"], ["literal", [2, 1.5]], ["literal", [1]]],
+        // from the per-line color encoding. line-dasharray requires an
+        // array in every branch (confirmed against the installed style
+        // spec's reference/v8.json: cross-faded-data-driven properties can
+        // only take literal array values, selected per-feature via case/
+        // match -- there's no "omit for solid" option), so the solid
+        // branch uses a zero-length gap ([1, 0]) rather than a bare [1],
+        // which is actually a fine 1-unit dash / 1-unit gap dotted pattern.
+        "line-dasharray": ["case", ["==", ["get", "grade"], "subway"], ["literal", [2, 1.5]], ["literal", [1, 0]]],
       },
     });
 
@@ -102,12 +108,14 @@ export function CtaRailLayer({ map }: CtaRailLayerProps) {
       if (feature?.geometry.type !== "Point") return;
 
       const coords = feature.geometry.coordinates.slice(0, 2) as [number, number];
-      const props = feature.properties as CtaStationProperties;
+      const props = normalizeStationProperties(feature.properties as Record<string, unknown>);
 
       const badges = props.lines
         .map(
           (line) =>
-            `<span class="bf-line-badge" style="background-color:${ctaLineColor(line)}">${line}</span>`
+            `<span class="bf-line-badge" style="background-color:${ctaLineColor(line)};color:${ctaLineTextColor(
+              line
+            )}">${escapeHtml(line)}</span>`
         )
         .join("");
 
@@ -115,7 +123,7 @@ export function CtaRailLayer({ map }: CtaRailLayerProps) {
         .setLngLat(coords)
         .setHTML(
           `<div class="bf-station-card">` +
-            `<div class="bf-station-name">${props.name}</div>` +
+            `<div class="bf-station-name">${escapeHtml(props.name)}</div>` +
             `<div class="bf-station-lines">${badges}</div>` +
             `<div class="bf-station-ada">${
               props.ada

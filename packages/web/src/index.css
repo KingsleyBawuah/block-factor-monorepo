@@ -84,12 +84,15 @@
   gap: 0.25rem;
 }
 .bf-line-badge {
+  /* color is set inline per-badge (CtaRailLayer.tsx, ctaLineTextColor) --
+     white text fails WCAG AA 4.5:1 contrast against 5 of the 8 official
+     CTA line colors (Blue, Green, Orange, Pink, Yellow), so it can't be a
+     single fixed value here. */
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   font-weight: 500;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #fff;
   border-radius: var(--radius-sm);
   padding: 0.0625rem 0.375rem;
 }

@@ -22,3 +22,20 @@ const FALLBACK_LINE_COLOR = "#71717a";
 export function ctaLineColor(line: string): string {
   return CTA_LINE_COLORS[line] ?? FALLBACK_LINE_COLOR;
 }
+
+/**
+ * Lines whose official color is too light for white badge text to clear
+ * WCAG AA's 4.5:1 text contrast ratio -- computed via the actual WCAG
+ * relative-luminance formula against every CTA_LINE_COLORS value (not
+ * eyeballed): Blue 3.05:1, Green 3.79:1, Orange 3.54:1, Pink 2.70:1,
+ * Yellow 1.31:1 all fail with white text (only Red 6.21:1, Brown 10.25:1,
+ * and Purple 10.68:1 clear it). Dark text (zinc-950, DESIGN.md's
+ * bg-canvas) clears 4.5:1 against all eight colors, so it's the correct
+ * choice for every line in this set, not just the most visibly-illegible
+ * ones.
+ */
+const DARK_TEXT_LINES = new Set(["Blue", "Green", "Orange", "Pink", "Yellow"]);
+
+export function ctaLineTextColor(line: string): string {
+  return DARK_TEXT_LINES.has(line) ? "#09090b" : "#ffffff";
+}

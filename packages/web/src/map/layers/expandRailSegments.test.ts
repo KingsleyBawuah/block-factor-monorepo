@@ -55,12 +55,17 @@ describe("expandRailSegments", () => {
     expect(b.color).toBe(ctaLineColor("Purple"));
     expect(a.offset).toBeCloseTo(-b.offset);
     expect(a.offset).not.toBe(0);
+    // Exact values, not just symmetry -- a symmetry-only assertion would
+    // pass even if RAIL_LINE_OFFSET_SPACING_PX (or the offset formula
+    // entirely) were mutated to something else symmetric-but-wrong.
+    expect(a.offset).toBeCloseTo(-1.5);
+    expect(b.offset).toBeCloseTo(1.5);
     // express/grade are per-segment, not per-line -- both expanded features carry them.
     expect(a.express).toBe(true);
     expect(b.express).toBe(true);
   });
 
-  it("splits a real 5-line segment into 5 distinct offsets symmetric around zero", () => {
+  it("splits a real 5-line segment into 5 exact offsets symmetric around zero", () => {
     const result = expandRailSegments(
       railResponse([
         { lines: ["Brown", "Green", "Orange", "Pink", "Purple"], express: true, grade: "elevated_or_at_grade" },
@@ -69,8 +74,14 @@ describe("expandRailSegments", () => {
 
     expect(result.features).toHaveLength(5);
     const offsets = result.features.map((f) => f.properties.offset);
-    expect(offsets.reduce((sum, o) => sum + o, 0)).toBeCloseTo(0);
-    expect(new Set(offsets).size).toBe(5);
+    expect(offsets).toEqual([-6, -3, 0, 3, 6]);
+  });
+
+  it("splits a 3-line segment into exact evenly-spaced offsets", () => {
+    const result = expandRailSegments(
+      railResponse([{ lines: ["Red", "Blue", "Pink"], express: false, grade: "elevated_or_at_grade" }])
+    );
+    expect(result.features.map((f) => f.properties.offset)).toEqual([-3, 0, 3]);
   });
 
   it("preserves geometry coordinates unchanged", () => {
