@@ -9,11 +9,20 @@ import { StrictMode } from "react";
 // doesn't crash.
 const removeMock = mock(() => {});
 const addControlMock = mock((_control: unknown, _position?: string) => {});
+const onMock = mock((_event: string, _handler: () => void) => {});
 const MapConstructorMock = mock((options: unknown) => ({
   options,
   addControl: addControlMock,
+  on: onMock,
   remove: removeMock,
 }));
+
+/** Finds and invokes the handler MapCanvas registered for `event` via `map.on(...)`. */
+function fireMapEvent(event: string) {
+  const call = onMock.mock.calls.find((c) => c[0] === event);
+  if (!call) throw new Error(`expected map.on("${event}", ...) to have been called`);
+  (call[1] as () => void)();
+}
 
 mock.module("maplibre-gl", () => ({
   Map: MapConstructorMock,
@@ -27,6 +36,7 @@ describe("MapCanvas", () => {
   beforeEach(() => {
     MapConstructorMock.mockClear();
     addControlMock.mockClear();
+    onMock.mockClear();
     removeMock.mockClear();
   });
 
@@ -63,9 +73,21 @@ describe("MapCanvas", () => {
     expect(removeMock).toHaveBeenCalledTimes(1);
   });
 
-  it("hands the live map instance to onMapReady", () => {
+  it("does not call onMapReady until the map's 'load' event fires", () => {
+    // Regression guard: addSource/addLayer throw ("Style is not done
+    // loading") if called before the style has finished loading, so
+    // onMapReady must never fire based on construction alone.
     const onMapReady = mock((_map: unknown) => {});
     render(<MapCanvas onMapReady={onMapReady} />);
+    expect(onMapReady).not.toHaveBeenCalled();
+  });
+
+  it("hands the live map instance to onMapReady once 'load' fires", () => {
+    const onMapReady = mock((_map: unknown) => {});
+    render(<MapCanvas onMapReady={onMapReady} />);
+
+    fireMapEvent("load");
+
     expect(onMapReady).toHaveBeenCalledTimes(1);
     expect(onMapReady.mock.calls[0][0]).toBe(MapConstructorMock.mock.results[0].value);
   });

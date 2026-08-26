@@ -30,3 +30,77 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
+
+/*
+ * Station hover card (map/layers/CtaRailLayer.tsx). Overrides MapLibre's
+ * default white popup chrome to match DESIGN.md's flat zinc surfaces --
+ * scoped to the "blockfactor-popup" className passed to `new Popup(...)`,
+ * which MapLibre adds alongside its own classes on the popup's root
+ * container. The anchor-direction selectors mirror maplibre-gl.css's own
+ * (each sets only the border side its arrow actually renders); matching
+ * them one-for-one, rather than one blanket rule, is what lets a 3-class
+ * selector reliably out-specificity MapLibre's 2-class one regardless of
+ * CSS source order.
+ */
+.blockfactor-popup .maplibregl-popup-content {
+  background-color: var(--color-zinc-900);
+  border: 1px solid var(--color-zinc-800);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  box-shadow: none;
+}
+.blockfactor-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.blockfactor-popup.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.blockfactor-popup.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--color-zinc-800);
+}
+.blockfactor-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.blockfactor-popup.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.blockfactor-popup.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--color-zinc-800);
+}
+.blockfactor-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--color-zinc-800);
+}
+.blockfactor-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--color-zinc-800);
+}
+
+.bf-station-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 9rem;
+}
+.bf-station-name {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-zinc-100);
+}
+.bf-station-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.bf-line-badge {
+  /* color is set inline per-badge (CtaRailLayer.tsx, ctaLineTextColor) --
+     white text fails WCAG AA 4.5:1 contrast against 5 of the 8 official
+     CTA line colors (Blue, Green, Orange, Pink, Yellow), so it can't be a
+     single fixed value here. */
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: var(--radius-sm);
+  padding: 0.0625rem 0.375rem;
+}
+.bf-station-ada {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--color-zinc-400);
+}

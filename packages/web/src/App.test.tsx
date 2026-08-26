@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
   createRootRoute,
@@ -27,10 +28,26 @@ function createTestRouter() {
   return createRouter({ routeTree, history });
 }
 
+// App renders map layer components (e.g. CtaRailLayer) that call useQuery,
+// which throws without a QueryClientProvider ancestor -- unlike production
+// (main.tsx), retry is disabled here: happy-dom's fetch has nothing real to
+// reach, and TanStack Query's default 3-attempt exponential backoff would
+// otherwise add real delay to every test that renders App.
+function renderApp() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const testRouter = createTestRouter();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={testRouter} />
+    </QueryClientProvider>
+  );
+}
+
 describe("App component", () => {
   it("renders header and livability score card", async () => {
-    const testRouter = createTestRouter();
-    render(<RouterProvider router={testRouter} />);
+    renderApp();
 
     expect(await screen.findByText("BlockFactor")).toBeTruthy();
     expect(await screen.findByText("Livability Score")).toBeTruthy();
@@ -38,8 +55,7 @@ describe("App component", () => {
   });
 
   it("renders authentic CTA rail badges", async () => {
-    const testRouter = createTestRouter();
-    render(<RouterProvider router={testRouter} />);
+    renderApp();
 
     expect(await screen.findByText("Blue Line")).toBeTruthy();
     expect(await screen.findByText("Red Line")).toBeTruthy();
@@ -48,8 +64,7 @@ describe("App component", () => {
   });
 
   it("renders outlet child route content", async () => {
-    const testRouter = createTestRouter();
-    render(<RouterProvider router={testRouter} />);
+    renderApp();
 
     expect(
       await screen.findByText("Workspace / Split-Screen Location Intelligence")
