@@ -1,6 +1,7 @@
 import { Outlet } from "@tanstack/react-router";
 import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
+import { MapCanvas } from "./map";
 
 export default function App() {
   return (
@@ -43,15 +44,8 @@ export default function App() {
           </div>
 
           <div className="lg:col-span-8">
-            <Card className="h-full flex items-center justify-center border-dashed border-zinc-800 bg-zinc-900/20">
-              <div className="text-center">
-                <span className="text-xs font-mono tracking-widest text-zinc-500 uppercase">
-                  MapLibre WebGL Canvas Container
-                </span>
-                <p className="mt-1 text-xs text-zinc-600">
-                  Vector tiles & isochrone layers mount here in Phase 4.
-                </p>
-              </div>
+            <Card className="h-[70vh] overflow-hidden p-0 lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
+              <MapCanvas />
             </Card>
           </div>
         </div>
