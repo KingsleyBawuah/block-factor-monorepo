@@ -417,7 +417,8 @@ go run ./services/api/cmd/seed/main.go --dataset=parks,bike_routes
 
 | Dataset | Provider / Source | Ingestion Mechanism | Production Sync Cadence |
 |---|---|---|---|
-| **CTA 'L' Stops & Lines** | Chicago Data Portal (SODA API) | GeoJSON stream → `cta_stops` table | Monthly |
+| **CTA 'L' Stations** | Chicago Data Portal (SODA API) | GeoJSON stream → `cta_stops` table | Monthly |
+| **CTA 'L' Rail Lines (Geometry)** | Chicago Data Portal (SODA API) | Per-line MultiLineString GeoJSON → `cta_rail_lines` table | Quarterly |
 | **CTA GTFS Schedules** | Chicago Transit Authority | Archive download → OTP2 graph compile | Quarterly |
 | **Protected Bike Routes** | Chicago Data Portal (SODA API) | Linestring GeoJSON → `bike_routes` table | Quarterly |
 | **Public Parks & Facilities** | Chicago Data Portal + OSM | Polygon GeoJSON → `parks` table | Quarterly |
