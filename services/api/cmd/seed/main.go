@@ -18,7 +18,7 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	dataset := flag.String("dataset", "", "Specific dataset to ingest (boundary, cta, crimes, parks, bike_routes, flood_zones, sewer_311, noise, osm_pois, safety_grid, bus_corridors, cta_line_service, derive)")
+	dataset := flag.String("dataset", "", "Specific dataset to ingest (boundary, cta, crimes, parks, bike_routes, cta_rail_lines, flood_zones, sewer_311, noise, osm_pois, safety_grid, bus_corridors, cta_line_service, derive)")
 	limit := flag.Int("limit", 0, "Limit number of records to ingest (0 = all)")
 	all := flag.Bool("all", false, "Ingest all datasets")
 	flag.Parse()
@@ -65,6 +65,7 @@ func main() {
 		{"boundary", false, func(ctx context.Context) error { return ingestBoundary(ctx, soda, pool) }},
 		{"cta", false, func(ctx context.Context) error { return ingestCTAStops(ctx, soda, pool) }},
 		{"bike_routes", false, func(ctx context.Context) error { return ingestBikeRoutes(ctx, soda, pool) }},
+		{"cta_rail_lines", false, func(ctx context.Context) error { return ingestCTARailLines(ctx, soda, pool) }},
 		{"parks", false, func(ctx context.Context) error { return ingestParks(ctx, soda, pool) }},
 		{"crimes", false, func(ctx context.Context) error { return ingestCrimes(ctx, soda, pool) }},
 		{"osm_pois", false, func(ctx context.Context) error { return ingestOSMPOIs(ctx, overpass, c, pool) }},
