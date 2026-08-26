@@ -43,6 +43,11 @@ func (s *Server) writeLayerGeoJSON(w http.ResponseWriter, layerName string, get 
 		return
 	}
 
+	// These layers are static, bulk-ingested municipal data that only
+	// changes on a seed run (quarterly/monthly per docs/DATA_SOURCES.md) --
+	// safe to cache aggressively client-side. Set only on the success path;
+	// error responses above are never cached.
+	w.Header().Set("Cache-Control", "public, max-age=86400, stale-while-revalidate=3600")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(raw); err != nil {
 		s.logger.Error("failed to write layer response", slog.String("layer", layerName), slog.String("error", err.Error()))

@@ -59,6 +59,9 @@ func TestGetCtaRailLinesLayer_Success(t *testing.T) {
 	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
 		t.Errorf("expected Content-Type application/json, got %q", ct)
 	}
+	if cc := w.Header().Get("Cache-Control"); cc != "public, max-age=86400, stale-while-revalidate=3600" {
+		t.Errorf("expected a public Cache-Control header, got %q", cc)
+	}
 	if w.Body.String() != string(want) {
 		t.Errorf("expected body to pass through unchanged, got %q", w.Body.String())
 	}
@@ -82,6 +85,9 @@ func TestGetCtaRailLinesLayer_ReaderUnavailable(t *testing.T) {
 	}
 	if res.Code != "SERVICE_UNAVAILABLE" {
 		t.Errorf("expected code SERVICE_UNAVAILABLE, got %q", res.Code)
+	}
+	if cc := w.Header().Get("Cache-Control"); cc != "" {
+		t.Errorf("expected no Cache-Control header on an error response, got %q", cc)
 	}
 }
 
@@ -109,6 +115,9 @@ func TestGetCtaRailLinesLayer_QueryError(t *testing.T) {
 	}
 	if res.Code != "LAYER_QUERY_ERROR" {
 		t.Errorf("expected code LAYER_QUERY_ERROR, got %q", res.Code)
+	}
+	if cc := w.Header().Get("Cache-Control"); cc != "" {
+		t.Errorf("expected no Cache-Control header on an error response, got %q", cc)
 	}
 }
 
@@ -150,6 +159,9 @@ func TestLayerRoutes_AllWired(t *testing.T) {
 			}
 			if !called {
 				t.Errorf("expected the LayerReader method wired to %s to be called", tt.path)
+			}
+			if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+				t.Errorf("expected Content-Type application/json, got %q", ct)
 			}
 			if w.Body.String() != string(want) {
 				t.Errorf("expected body to pass through unchanged, got %q", w.Body.String())

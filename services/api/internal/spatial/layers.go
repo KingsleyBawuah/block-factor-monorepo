@@ -2,6 +2,7 @@ package spatial
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -38,6 +39,10 @@ func NewDBLayerReader(pool *pgxpool.Pool) *DBLayerReader {
 // table/filter matches zero rows, matching docs/openapi.yaml's non-nullable
 // array schema.
 func (r *DBLayerReader) featureCollectionQuery(ctx context.Context, query string) ([]byte, error) {
+	if r.pool == nil {
+		return nil, errors.New("spatial: database pool is nil")
+	}
+
 	var raw []byte
 	if err := r.pool.QueryRow(ctx, query).Scan(&raw); err != nil {
 		return nil, fmt.Errorf("spatial: query layer: %w", err)
@@ -53,7 +58,7 @@ const ctaRailLinesGeoJSONQuery = `
 				'type', 'Feature',
 				'properties', jsonb_build_object('lines', lines, 'express', express, 'grade', grade),
 				'geometry', ST_AsGeoJSON(geom)::jsonb
-			)
+			) ORDER BY id
 		), '[]'::jsonb)
 	)
 	FROM cta_rail_lines
@@ -73,7 +78,7 @@ const ctaStationsGeoJSONQuery = `
 				'type', 'Feature',
 				'properties', jsonb_build_object('name', stop_name, 'lines', lines, 'ada', ada),
 				'geometry', ST_AsGeoJSON(geom)::jsonb
-			)
+			) ORDER BY id
 		), '[]'::jsonb)
 	)
 	FROM cta_stops
@@ -93,7 +98,7 @@ const bikeRoutesGeoJSONQuery = `
 				'type', 'Feature',
 				'properties', jsonb_build_object('routeType', route_type, 'streetName', street_name),
 				'geometry', ST_AsGeoJSON(geom)::jsonb
-			)
+			) ORDER BY id
 		), '[]'::jsonb)
 	)
 	FROM bike_routes
@@ -117,7 +122,7 @@ const trailAccessGeoJSONQuery = `
 				'type', 'Feature',
 				'properties', jsonb_build_object('name', park_name),
 				'geometry', ST_AsGeoJSON(geom)::jsonb
-			)
+			) ORDER BY id
 		), '[]'::jsonb)
 	)
 	FROM parks
@@ -138,7 +143,7 @@ const supermarketsGeoJSONQuery = `
 				'type', 'Feature',
 				'properties', jsonb_build_object('name', poi_name),
 				'geometry', ST_AsGeoJSON(geom)::jsonb
-			)
+			) ORDER BY id
 		), '[]'::jsonb)
 	)
 	FROM osm_pois
