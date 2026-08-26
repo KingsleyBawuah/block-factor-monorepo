@@ -34,7 +34,28 @@ afterEach(cleanup);
 mock.module("maplibre-gl", () => ({
   Map: mock(() => ({
     addControl: mock(() => {}),
+    addSource: mock(() => {}),
+    addLayer: mock(() => {}),
+    removeLayer: mock(() => {}),
+    removeSource: mock(() => {}),
+    getLayer: mock(() => undefined),
+    getSource: mock(() => undefined),
+    on: mock(() => {}),
+    off: mock(() => {}),
+    getCanvas: mock(() => ({ style: {} })),
     remove: mock(() => {}),
   })),
   NavigationControl: mock(() => ({})),
+  Popup: mock(() => ({
+    setLngLat: mock(function (this: unknown) {
+      return this;
+    }),
+    setHTML: mock(function (this: unknown) {
+      return this;
+    }),
+    addTo: mock(function (this: unknown) {
+      return this;
+    }),
+    remove: mock(() => {}),
+  })),
 }));

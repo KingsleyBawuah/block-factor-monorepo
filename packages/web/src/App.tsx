@@ -1,9 +1,13 @@
+import { useState } from "react";
+import type { Map as MapLibreMap } from "maplibre-gl";
 import { Outlet } from "@tanstack/react-router";
 import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
-import { MapCanvas } from "./map";
+import { MapCanvas, CtaRailLayer } from "./map";
 
 export default function App() {
+  const [map, setMap] = useState<MapLibreMap | null>(null);
+
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950 font-sans text-zinc-100">
       <header className="border-b border-zinc-800 bg-zinc-900/60 px-6 py-3">
@@ -45,7 +49,8 @@ export default function App() {
 
           <div className="lg:col-span-8">
             <Card className="h-[70vh] overflow-hidden p-0 lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
-              <MapCanvas />
+              <MapCanvas onMapReady={setMap} />
+              {map && <CtaRailLayer map={map} />}
             </Card>
           </div>
         </div>
