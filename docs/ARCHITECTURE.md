@@ -39,6 +39,8 @@ BlockFactor is initially self-hosted on a personal home server for active develo
 
 ### Phase 2 — Cloud Deployment (Post-Polish / Monetization)
 
+> This is a *deployment* phase, numbered independently from `IMPLEMENTATION_PHASES.md`'s numbered build phases — this deployment target is implemented by that document's **Phase 8: Production Release**, not its own "Phase 2."
+
 Once the application reaches a quality threshold validated through personal use, BlockFactor migrates to cloud infrastructure with monetization activated.
 
 **Target Stack:** Hetzner (compute) + Cloudflare (CDN / DNS / Tunnels)
@@ -308,7 +310,7 @@ The primary interface is a **Split-Screen Location Intelligence Workspace**:
 
 ### 7.5 Link Sharing & Social Previews (Phasing)
 * **Phase 1 (Home Server / Personal Use):** Client-side URL state via TanStack Router allows immediate link sharing with identical visual configuration.
-* **Phase 2 (Public Launch):** A lightweight Go route handler (`GET /share/:report_id`) injects dynamic OpenGraph meta cards (title, summary score, static preview map snapshot) for iMessage/Slack/Twitter previews.
+* **Phase 2 (Public Launch):** A lightweight Go route handler (`GET /share/:report_id`) injects dynamic OpenGraph meta cards (title, summary score, static preview map snapshot) for iMessage/Slack/Twitter previews. Delivered in `IMPLEMENTATION_PHASES.md`'s **Phase 8: Production Release**, alongside the cloud migration this deployment phase describes.
 
 ---
 
