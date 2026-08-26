@@ -10,7 +10,7 @@
 
 ## Overview
 
-This document outlines the phased engineering roadmap for BlockFactor, spanning local development on the home server through Phase 2 public cloud deployment. Each phase is scoped with clear deliverables, architecture alignment, and acceptance criteria.
+This document outlines the phased engineering roadmap for BlockFactor, spanning local development on the home server (Phases 1–7) through the public cloud launch (Phase 8) — see ARCHITECTURE.md §1 for the underlying home-server-vs-cloud deployment target each end of that range implements. Each phase is scoped with clear deliverables, architecture alignment, and acceptance criteria.
 
 ---
 
@@ -157,26 +157,21 @@ Originally scoped as 5 items (map component + 4 interactive layers + solar widge
 
 ---
 
-## Phase 5: Scored Report UI, Sliders & Affiliate Integration
+## Phase 5: Scored Report UI & Weight Sliders
 
 ### Objectives
-Assemble the high-density Split-Screen Analytics Workspace, reactive weight customization drawer, and contextual monetization cards.
+Assemble the high-density Split-Screen Analytics Workspace and reactive weight customization drawer.
+
+Affiliate integration (contextual cards + click instrumentation) originally scoped here has moved to Phase 8, bundled with the cloud hosting migration it's meant to help fund — see Phase 8 below. Shipping both together means affiliate links go live at the same time as the public cloud deployment they help pay for, rather than sitting live earlier on the free home-server deployment.
 
 ### Deliverables
 1. **Left Scored Analytics Panel:**
    - [ ] Hero Composite Score Ring (0–100). (Neighborhood archetype badge deferred to v2.)
    - [ ] Collapsible Weight Customization Slider Drawer with instant reactive recalculation and URL search param sync.
    - [ ] 9–10 Dense Factor Breakdown Cards (the commute card renders only when a destination is set) with distance badges ("straight-line" qualifier) and sub-score progress bars.
-2. **Contextual Affiliate Cards (Intent-Gated):**
-   - [ ] Broadband / Fiber card with available ISP speed badges (AT&T Fiber, Astound) — always-on utility feature. Delivers `internal/clients/fcc.go` + per-address cache; hides gracefully on API failure.
-   - [ ] Lemonade instant renters quote modal trigger (intent-gated: unit metadata or 2+ pinned comparisons).
-   - [ ] Dolly / Unpakt moving quote comparison card (intent-gated: destination address or unit metadata).
-   - [ ] ClassPass fitness studio trial card (displayed alongside `S_third_place` gym counts).
-3. **Affiliate Click Instrumentation:**
-   - [ ] Prometheus counter metric `blockfactor_affiliate_clicks_total{partner, placement, intent_level}` + subid/UTM passthrough to affiliate links for conversion & EPC tracking.
-4. **Bottom Multi-Address Comparison Tray:**
+2. **Bottom Multi-Address Comparison Tray:**
    - [ ] Sticky dock to pin and compare up to 3 addresses side-by-side.
-5. **Error & Empty States:**
+3. **Error & Empty States:**
    - [ ] Address-not-found, ambiguous-address candidate picker, out-of-coverage (422 `OUT_OF_COVERAGE`), geocoding failure, OTP2-unavailable, and degraded-factor (`null`) states — styled per AGENTS.md (high-density copy, no emojis).
 
 ### Validation Criteria
@@ -225,3 +220,30 @@ Deploy BlockFactor to the Beelink home server behind Caddy with automated monito
    - [ ] Migrates the Phase 1 GitHub-hosted workflows (`make lint` / `make test` / `make generate-check`) to the local home-server runner.
 4. **Data Durability:**
    - [ ] Seeded datasets and caches are reproducible via `make seed` — no backup required in Phase 1. A nightly `pg_dump` is introduced only once user-generated state (saved reports / share links) exists in Phase 2.
+
+---
+
+## Phase 8: Production Release — Cloud Deployment & Affiliate Monetization
+
+### Objectives
+Migrate BlockFactor off the home server to public cloud hosting and activate affiliate monetization at the same time, so affiliate revenue can begin offsetting the new hosting cost from day one rather than affiliate links going live earlier on a free home-server deployment. This is the last phase deliberately — everything through Phase 7 targets the home server (personal use, dev/testing), and this is the actual "go public" milestone. Corresponds to ARCHITECTURE.md §1's already-defined "Phase 2 — Cloud Deployment (Post-Polish / Monetization)" deployment target, which this phase implements rather than re-designs.
+
+### Deliverables
+1. **Cloud Infrastructure Migration** (ARCHITECTURE.md §1 "Phase 2 — Cloud Deployment"):
+   - [ ] Provision Hetzner CX/CAX compute + Cloudflare (CDN / DNS / Tunnels) per the already-defined target stack.
+   - [ ] Public-launch hardening: rate limiting / abuse protection on `POST /api/v1/score` (protects both the Google Places daily budget and affiliate CPA integrity), CORS lockdown to the public origin, and basic bot filtering at the Cloudflare edge.
+   - [ ] Retarget CI/CD: the same GitHub Actions pipelines, deployed to Hetzner via SSH or container registry push.
+2. **Link Sharing & Social Previews** (ARCHITECTURE.md §7.5 "Phase 2 (Public Launch)"):
+   - [ ] `GET /share/:report_id` Go route handler injecting dynamic OpenGraph meta cards (title, summary score, static preview map snapshot) for iMessage/Slack/Twitter link previews.
+3. **Contextual Affiliate Cards (Intent-Gated)** (moved from Phase 5; PRD §6):
+   - [ ] Broadband / Fiber card with available ISP speed badges (AT&T Fiber, Astound) — always-on utility feature. Delivers `internal/clients/fcc.go` + per-address cache; hides gracefully on API failure.
+   - [ ] Lemonade instant renters quote modal trigger (intent-gated: unit metadata or 2+ pinned comparisons).
+   - [ ] Dolly / Unpakt moving quote comparison card (intent-gated: destination address or unit metadata).
+   - [ ] ClassPass fitness studio trial card (displayed alongside `S_third_place` gym counts).
+4. **Affiliate Click Instrumentation** (moved from Phase 5):
+   - [ ] Prometheus counter metric `blockfactor_affiliate_clicks_total{partner, placement, intent_level}` + subid/UTM passthrough to affiliate links for conversion & EPC tracking.
+
+### Validation Criteria
+- BlockFactor is reachable at its public domain over HTTPS, served entirely from Hetzner/Cloudflare — no remaining dependency on the home server for production traffic.
+- Rate limiting and CORS lockdown verified against real abuse-pattern requests before affiliate links go live.
+- Affiliate click-through correctly attributes conversions via subid/UTM passthrough for at least one live partner integration.

@@ -338,7 +338,7 @@ Native affiliate cards fire based on **intent signals** detected from the user's
 | 2+ addresses pinned in comparison dock | All affiliate cards | Active decision-making stage — highest conversion intent. |
 | Address only (no commute/metadata) | Broadband only (utility feature) | Casual research phase — avoid ad fatigue. |
 
-**Click Instrumentation (Phase 5 Deliverable):** All affiliate card clicks carry a `click_event` metric (logged for funnel analysis) + UTM/subid passthrough to affiliate partners. This enables EPC (earnings per click) measurement and partner pruning in Phase 2.
+**Click Instrumentation (Phase 8 Deliverable):** All affiliate card clicks carry a `click_event` metric (logged for funnel analysis) + UTM/subid passthrough to affiliate partners. This enables EPC (earnings per click) measurement and partner pruning in Phase 2.
 
 ### 6.2 Active v1 Affiliate Partners
 
