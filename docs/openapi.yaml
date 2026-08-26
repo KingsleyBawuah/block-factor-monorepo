@@ -26,6 +26,8 @@ tags:
     description: Address-to-coordinate resolution.
   - name: Isochrones
     description: Walk/transit reach polygons.
+  - name: Layers
+    description: Static, city-wide spatial map layers (CTA rail, stations, bike routes, trail access, supermarkets).
   - name: Health
     description: Service liveness.
 
@@ -126,6 +128,85 @@ paths:
                 $ref: "#/components/schemas/IsochroneResponse"
         "422":
           $ref: "#/components/responses/OutOfCoverage"
+
+  /api/v1/layers/cta-rail:
+    get:
+      tags: [Layers]
+      operationId: getCtaRailLinesLayer
+      summary: Get CTA 'L' rail track geometry as GeoJSON.
+      description: >
+        Bulk, city-wide layer — no request parameters. Backed by
+        `cta_rail_lines` (docs/DATA_SOURCES.md "CTA 'L' Lines"), the only
+        real per-line rail track geometry available; `cta_stops` has only
+        station points, and `noise_sources`' CTA track geometry is
+        line-agnostic.
+      responses:
+        "200":
+          description: CTA rail line segments as a GeoJSON FeatureCollection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CtaRailLinesResponse"
+
+  /api/v1/layers/cta-stations:
+    get:
+      tags: [Layers]
+      operationId: getCtaStationsLayer
+      summary: Get CTA 'L' station locations as GeoJSON.
+      description: Bulk, city-wide layer — no request parameters.
+      responses:
+        "200":
+          description: CTA stations as a GeoJSON FeatureCollection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CtaStationsResponse"
+
+  /api/v1/layers/bike-routes:
+    get:
+      tags: [Layers]
+      operationId: getBikeRoutesLayer
+      summary: Get protected/buffered/painted bike infrastructure as GeoJSON.
+      description: Bulk, city-wide layer — no request parameters.
+      responses:
+        "200":
+          description: Bike route segments as a GeoJSON FeatureCollection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BikeRoutesResponse"
+
+  /api/v1/layers/trail-access:
+    get:
+      tags: [Layers]
+      operationId: getTrailAccessLayer
+      summary: Get off-street trail (linear park) boundaries as GeoJSON.
+      description: >
+        Bulk, city-wide layer — no request parameters. Backed by
+        `parks WHERE park_class = 'LINEAR PARK'` (e.g. the Lakefront Trail,
+        The 606/Bloomingdale Trail) per the existing PRD §5.5 schema
+        decision — not `bike_routes`, which has no trail category at all.
+      responses:
+        "200":
+          description: Trail-access park boundaries as a GeoJSON FeatureCollection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrailAccessResponse"
+
+  /api/v1/layers/supermarkets:
+    get:
+      tags: [Layers]
+      operationId: getSupermarketsLayer
+      summary: Get supermarket locations as GeoJSON.
+      description: Bulk, city-wide layer — no request parameters.
+      responses:
+        "200":
+          description: Supermarkets as a GeoJSON FeatureCollection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupermarketsResponse"
 
   /api/v1/health:
     get:
@@ -375,6 +456,214 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/IsochroneFeature"
+
+    CtaRailLineFeature:
+      type: object
+      required: [type, properties, geometry]
+      properties:
+        type:
+          type: string
+          const: Feature
+        properties:
+          type: object
+          required: [lines, express, grade]
+          properties:
+            lines:
+              type: array
+              items:
+                type: string
+              description: CTA line names sharing this track segment, e.g. ["Brown", "Purple"].
+            express:
+              type: boolean
+              description: True if any line on this segment runs express service here.
+            grade:
+              type: string
+              enum: [subway, elevated_or_at_grade]
+        geometry:
+          type: object
+          description: GeoJSON MultiLineString geometry.
+          required: [type, coordinates]
+          properties:
+            type:
+              type: string
+              const: MultiLineString
+            coordinates:
+              type: array
+              items: {}
+
+    CtaRailLinesResponse:
+      type: object
+      required: [type, features]
+      properties:
+        type:
+          type: string
+          const: FeatureCollection
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/CtaRailLineFeature"
+
+    CtaStationFeature:
+      type: object
+      required: [type, properties, geometry]
+      properties:
+        type:
+          type: string
+          const: Feature
+        properties:
+          type: object
+          required: [name, lines, ada]
+          properties:
+            name:
+              type: string
+            lines:
+              type: array
+              items:
+                type: string
+            ada:
+              type: boolean
+        geometry:
+          type: object
+          description: GeoJSON Point geometry.
+          required: [type, coordinates]
+          properties:
+            type:
+              type: string
+              const: Point
+            coordinates:
+              type: array
+              items: {}
+
+    CtaStationsResponse:
+      type: object
+      required: [type, features]
+      properties:
+        type:
+          type: string
+          const: FeatureCollection
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/CtaStationFeature"
+
+    BikeRouteFeature:
+      type: object
+      required: [type, properties, geometry]
+      properties:
+        type:
+          type: string
+          const: Feature
+        properties:
+          type: object
+          required: [routeType]
+          properties:
+            routeType:
+              type: string
+              enum:
+                - "Protected Bike Lane"
+                - "Neighborhood Greenway"
+                - "Buffered Bike Lane"
+                - "Bike Lane"
+                - "Marked Shared Lane"
+            streetName:
+              type: ["string", "null"]
+        geometry:
+          type: object
+          description: GeoJSON MultiLineString geometry.
+          required: [type, coordinates]
+          properties:
+            type:
+              type: string
+              const: MultiLineString
+            coordinates:
+              type: array
+              items: {}
+
+    BikeRoutesResponse:
+      type: object
+      required: [type, features]
+      properties:
+        type:
+          type: string
+          const: FeatureCollection
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/BikeRouteFeature"
+
+    TrailAccessFeature:
+      type: object
+      required: [type, properties, geometry]
+      properties:
+        type:
+          type: string
+          const: Feature
+        properties:
+          type: object
+          required: [name]
+          properties:
+            name:
+              type: string
+        geometry:
+          type: object
+          description: GeoJSON MultiPolygon geometry.
+          required: [type, coordinates]
+          properties:
+            type:
+              type: string
+              const: MultiPolygon
+            coordinates:
+              type: array
+              items: {}
+
+    TrailAccessResponse:
+      type: object
+      required: [type, features]
+      properties:
+        type:
+          type: string
+          const: FeatureCollection
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrailAccessFeature"
+
+    SupermarketFeature:
+      type: object
+      required: [type, properties, geometry]
+      properties:
+        type:
+          type: string
+          const: Feature
+        properties:
+          type: object
+          properties:
+            name:
+              type: ["string", "null"]
+              description: Null when OSM has no name tag for this store.
+        geometry:
+          type: object
+          description: GeoJSON Point geometry.
+          required: [type, coordinates]
+          properties:
+            type:
+              type: string
+              const: Point
+            coordinates:
+              type: array
+              items: {}
+
+    SupermarketsResponse:
+      type: object
+      required: [type, features]
+      properties:
+        type:
+          type: string
+          const: FeatureCollection
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupermarketFeature"
 
     HealthResponse:
       type: object

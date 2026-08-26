@@ -13,6 +13,78 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for BikeRouteFeatureGeometryType.
+const (
+	BikeRouteFeatureGeometryTypeMultiLineString BikeRouteFeatureGeometryType = "MultiLineString"
+)
+
+// Valid indicates whether the value is a known member of the BikeRouteFeatureGeometryType enum.
+func (e BikeRouteFeatureGeometryType) Valid() bool {
+	switch e {
+	case BikeRouteFeatureGeometryTypeMultiLineString:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BikeRouteFeaturePropertiesRouteType.
+const (
+	BikeLane             BikeRouteFeaturePropertiesRouteType = "Bike Lane"
+	BufferedBikeLane     BikeRouteFeaturePropertiesRouteType = "Buffered Bike Lane"
+	MarkedSharedLane     BikeRouteFeaturePropertiesRouteType = "Marked Shared Lane"
+	NeighborhoodGreenway BikeRouteFeaturePropertiesRouteType = "Neighborhood Greenway"
+	ProtectedBikeLane    BikeRouteFeaturePropertiesRouteType = "Protected Bike Lane"
+)
+
+// Valid indicates whether the value is a known member of the BikeRouteFeaturePropertiesRouteType enum.
+func (e BikeRouteFeaturePropertiesRouteType) Valid() bool {
+	switch e {
+	case BikeLane:
+		return true
+	case BufferedBikeLane:
+		return true
+	case MarkedSharedLane:
+		return true
+	case NeighborhoodGreenway:
+		return true
+	case ProtectedBikeLane:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BikeRouteFeatureType.
+const (
+	BikeRouteFeatureTypeFeature BikeRouteFeatureType = "Feature"
+)
+
+// Valid indicates whether the value is a known member of the BikeRouteFeatureType enum.
+func (e BikeRouteFeatureType) Valid() bool {
+	switch e {
+	case BikeRouteFeatureTypeFeature:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BikeRoutesResponseType.
+const (
+	BikeRoutesResponseTypeFeatureCollection BikeRoutesResponseType = "FeatureCollection"
+)
+
+// Valid indicates whether the value is a known member of the BikeRoutesResponseType enum.
+func (e BikeRoutesResponseType) Valid() bool {
+	switch e {
+	case BikeRoutesResponseTypeFeatureCollection:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CommutePillDestination.
 const (
 	FultonMarket CommutePillDestination = "fulton_market"
@@ -37,6 +109,114 @@ func (e CommutePillDestination) Valid() bool {
 	}
 }
 
+// Defines values for CtaRailLineFeatureGeometryType.
+const (
+	CtaRailLineFeatureGeometryTypeMultiLineString CtaRailLineFeatureGeometryType = "MultiLineString"
+)
+
+// Valid indicates whether the value is a known member of the CtaRailLineFeatureGeometryType enum.
+func (e CtaRailLineFeatureGeometryType) Valid() bool {
+	switch e {
+	case CtaRailLineFeatureGeometryTypeMultiLineString:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CtaRailLineFeaturePropertiesGrade.
+const (
+	ElevatedOrAtGrade CtaRailLineFeaturePropertiesGrade = "elevated_or_at_grade"
+	Subway            CtaRailLineFeaturePropertiesGrade = "subway"
+)
+
+// Valid indicates whether the value is a known member of the CtaRailLineFeaturePropertiesGrade enum.
+func (e CtaRailLineFeaturePropertiesGrade) Valid() bool {
+	switch e {
+	case ElevatedOrAtGrade:
+		return true
+	case Subway:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CtaRailLineFeatureType.
+const (
+	CtaRailLineFeatureTypeFeature CtaRailLineFeatureType = "Feature"
+)
+
+// Valid indicates whether the value is a known member of the CtaRailLineFeatureType enum.
+func (e CtaRailLineFeatureType) Valid() bool {
+	switch e {
+	case CtaRailLineFeatureTypeFeature:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CtaRailLinesResponseType.
+const (
+	CtaRailLinesResponseTypeFeatureCollection CtaRailLinesResponseType = "FeatureCollection"
+)
+
+// Valid indicates whether the value is a known member of the CtaRailLinesResponseType enum.
+func (e CtaRailLinesResponseType) Valid() bool {
+	switch e {
+	case CtaRailLinesResponseTypeFeatureCollection:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CtaStationFeatureGeometryType.
+const (
+	CtaStationFeatureGeometryTypePoint CtaStationFeatureGeometryType = "Point"
+)
+
+// Valid indicates whether the value is a known member of the CtaStationFeatureGeometryType enum.
+func (e CtaStationFeatureGeometryType) Valid() bool {
+	switch e {
+	case CtaStationFeatureGeometryTypePoint:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CtaStationFeatureType.
+const (
+	CtaStationFeatureTypeFeature CtaStationFeatureType = "Feature"
+)
+
+// Valid indicates whether the value is a known member of the CtaStationFeatureType enum.
+func (e CtaStationFeatureType) Valid() bool {
+	switch e {
+	case CtaStationFeatureTypeFeature:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CtaStationsResponseType.
+const (
+	CtaStationsResponseTypeFeatureCollection CtaStationsResponseType = "FeatureCollection"
+)
+
+// Valid indicates whether the value is a known member of the CtaStationsResponseType enum.
+func (e CtaStationsResponseType) Valid() bool {
+	switch e {
+	case CtaStationsResponseTypeFeatureCollection:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthResponseStatus.
 const (
 	Ok HealthResponseStatus = "ok"
@@ -54,16 +234,16 @@ func (e HealthResponseStatus) Valid() bool {
 
 // Defines values for IsochroneFeatureGeometryType.
 const (
-	MultiPolygon IsochroneFeatureGeometryType = "MultiPolygon"
-	Polygon      IsochroneFeatureGeometryType = "Polygon"
+	IsochroneFeatureGeometryTypeMultiPolygon IsochroneFeatureGeometryType = "MultiPolygon"
+	IsochroneFeatureGeometryTypePolygon      IsochroneFeatureGeometryType = "Polygon"
 )
 
 // Valid indicates whether the value is a known member of the IsochroneFeatureGeometryType enum.
 func (e IsochroneFeatureGeometryType) Valid() bool {
 	switch e {
-	case MultiPolygon:
+	case IsochroneFeatureGeometryTypeMultiPolygon:
 		return true
-	case Polygon:
+	case IsochroneFeatureGeometryTypePolygon:
 		return true
 	default:
 		return false
@@ -108,13 +288,13 @@ func (e IsochroneFeaturePropertiesMode) Valid() bool {
 
 // Defines values for IsochroneFeatureType.
 const (
-	Feature IsochroneFeatureType = "Feature"
+	IsochroneFeatureTypeFeature IsochroneFeatureType = "Feature"
 )
 
 // Valid indicates whether the value is a known member of the IsochroneFeatureType enum.
 func (e IsochroneFeatureType) Valid() bool {
 	switch e {
-	case Feature:
+	case IsochroneFeatureTypeFeature:
 		return true
 	default:
 		return false
@@ -123,13 +303,103 @@ func (e IsochroneFeatureType) Valid() bool {
 
 // Defines values for IsochroneResponseType.
 const (
-	FeatureCollection IsochroneResponseType = "FeatureCollection"
+	IsochroneResponseTypeFeatureCollection IsochroneResponseType = "FeatureCollection"
 )
 
 // Valid indicates whether the value is a known member of the IsochroneResponseType enum.
 func (e IsochroneResponseType) Valid() bool {
 	switch e {
-	case FeatureCollection:
+	case IsochroneResponseTypeFeatureCollection:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SupermarketFeatureGeometryType.
+const (
+	SupermarketFeatureGeometryTypePoint SupermarketFeatureGeometryType = "Point"
+)
+
+// Valid indicates whether the value is a known member of the SupermarketFeatureGeometryType enum.
+func (e SupermarketFeatureGeometryType) Valid() bool {
+	switch e {
+	case SupermarketFeatureGeometryTypePoint:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SupermarketFeatureType.
+const (
+	SupermarketFeatureTypeFeature SupermarketFeatureType = "Feature"
+)
+
+// Valid indicates whether the value is a known member of the SupermarketFeatureType enum.
+func (e SupermarketFeatureType) Valid() bool {
+	switch e {
+	case SupermarketFeatureTypeFeature:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SupermarketsResponseType.
+const (
+	SupermarketsResponseTypeFeatureCollection SupermarketsResponseType = "FeatureCollection"
+)
+
+// Valid indicates whether the value is a known member of the SupermarketsResponseType enum.
+func (e SupermarketsResponseType) Valid() bool {
+	switch e {
+	case SupermarketsResponseTypeFeatureCollection:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TrailAccessFeatureGeometryType.
+const (
+	TrailAccessFeatureGeometryTypeMultiPolygon TrailAccessFeatureGeometryType = "MultiPolygon"
+)
+
+// Valid indicates whether the value is a known member of the TrailAccessFeatureGeometryType enum.
+func (e TrailAccessFeatureGeometryType) Valid() bool {
+	switch e {
+	case TrailAccessFeatureGeometryTypeMultiPolygon:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TrailAccessFeatureType.
+const (
+	TrailAccessFeatureTypeFeature TrailAccessFeatureType = "Feature"
+)
+
+// Valid indicates whether the value is a known member of the TrailAccessFeatureType enum.
+func (e TrailAccessFeatureType) Valid() bool {
+	switch e {
+	case TrailAccessFeatureTypeFeature:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TrailAccessResponseType.
+const (
+	TrailAccessResponseTypeFeatureCollection TrailAccessResponseType = "FeatureCollection"
+)
+
+// Valid indicates whether the value is a known member of the TrailAccessResponseType enum.
+func (e TrailAccessResponseType) Valid() bool {
+	switch e {
+	case TrailAccessResponseTypeFeatureCollection:
 		return true
 	default:
 		return false
@@ -193,6 +463,38 @@ func (e UnitMetadataFacing) Valid() bool {
 	}
 }
 
+// BikeRouteFeature defines model for BikeRouteFeature.
+type BikeRouteFeature struct {
+	// Geometry GeoJSON MultiLineString geometry.
+	Geometry struct {
+		Coordinates []interface{}                `json:"coordinates"`
+		Type        BikeRouteFeatureGeometryType `json:"type"`
+	} `json:"geometry"`
+	Properties struct {
+		RouteType  BikeRouteFeaturePropertiesRouteType `json:"routeType"`
+		StreetName *string                             `json:"streetName,omitempty"`
+	} `json:"properties"`
+	Type BikeRouteFeatureType `json:"type"`
+}
+
+// BikeRouteFeatureGeometryType defines model for BikeRouteFeature.Geometry.Type.
+type BikeRouteFeatureGeometryType string
+
+// BikeRouteFeaturePropertiesRouteType defines model for BikeRouteFeature.Properties.RouteType.
+type BikeRouteFeaturePropertiesRouteType string
+
+// BikeRouteFeatureType defines model for BikeRouteFeature.Type.
+type BikeRouteFeatureType string
+
+// BikeRoutesResponse defines model for BikeRoutesResponse.
+type BikeRoutesResponse struct {
+	Features []BikeRouteFeature     `json:"features"`
+	Type     BikeRoutesResponseType `json:"type"`
+}
+
+// BikeRoutesResponseType defines model for BikeRoutesResponse.Type.
+type BikeRoutesResponseType string
+
 // CommutePill Benchmark commute duration to one of Chicago's major economic hubs, always computed live.
 type CommutePill struct {
 	Destination     CommutePillDestination `json:"destination"`
@@ -217,6 +519,72 @@ type Coordinates struct {
 	Lat float64 `json:"lat"`
 	Lon float64 `json:"lon"`
 }
+
+// CtaRailLineFeature defines model for CtaRailLineFeature.
+type CtaRailLineFeature struct {
+	// Geometry GeoJSON MultiLineString geometry.
+	Geometry struct {
+		Coordinates []interface{}                  `json:"coordinates"`
+		Type        CtaRailLineFeatureGeometryType `json:"type"`
+	} `json:"geometry"`
+	Properties struct {
+		// Express True if any line on this segment runs express service here.
+		Express bool                              `json:"express"`
+		Grade   CtaRailLineFeaturePropertiesGrade `json:"grade"`
+
+		// Lines CTA line names sharing this track segment, e.g. ["Brown", "Purple"].
+		Lines []string `json:"lines"`
+	} `json:"properties"`
+	Type CtaRailLineFeatureType `json:"type"`
+}
+
+// CtaRailLineFeatureGeometryType defines model for CtaRailLineFeature.Geometry.Type.
+type CtaRailLineFeatureGeometryType string
+
+// CtaRailLineFeaturePropertiesGrade defines model for CtaRailLineFeature.Properties.Grade.
+type CtaRailLineFeaturePropertiesGrade string
+
+// CtaRailLineFeatureType defines model for CtaRailLineFeature.Type.
+type CtaRailLineFeatureType string
+
+// CtaRailLinesResponse defines model for CtaRailLinesResponse.
+type CtaRailLinesResponse struct {
+	Features []CtaRailLineFeature     `json:"features"`
+	Type     CtaRailLinesResponseType `json:"type"`
+}
+
+// CtaRailLinesResponseType defines model for CtaRailLinesResponse.Type.
+type CtaRailLinesResponseType string
+
+// CtaStationFeature defines model for CtaStationFeature.
+type CtaStationFeature struct {
+	// Geometry GeoJSON Point geometry.
+	Geometry struct {
+		Coordinates []interface{}                 `json:"coordinates"`
+		Type        CtaStationFeatureGeometryType `json:"type"`
+	} `json:"geometry"`
+	Properties struct {
+		Ada   bool     `json:"ada"`
+		Lines []string `json:"lines"`
+		Name  string   `json:"name"`
+	} `json:"properties"`
+	Type CtaStationFeatureType `json:"type"`
+}
+
+// CtaStationFeatureGeometryType defines model for CtaStationFeature.Geometry.Type.
+type CtaStationFeatureGeometryType string
+
+// CtaStationFeatureType defines model for CtaStationFeature.Type.
+type CtaStationFeatureType string
+
+// CtaStationsResponse defines model for CtaStationsResponse.
+type CtaStationsResponse struct {
+	Features []CtaStationFeature     `json:"features"`
+	Type     CtaStationsResponseType `json:"type"`
+}
+
+// CtaStationsResponseType defines model for CtaStationsResponse.Type.
+type CtaStationsResponseType string
 
 // Error defines model for Error.
 type Error struct {
@@ -338,6 +706,63 @@ type ScoreResponse struct {
 	} `json:"factors"`
 }
 
+// SupermarketFeature defines model for SupermarketFeature.
+type SupermarketFeature struct {
+	// Geometry GeoJSON Point geometry.
+	Geometry struct {
+		Coordinates []interface{}                  `json:"coordinates"`
+		Type        SupermarketFeatureGeometryType `json:"type"`
+	} `json:"geometry"`
+	Properties struct {
+		// Name Null when OSM has no name tag for this store.
+		Name *string `json:"name,omitempty"`
+	} `json:"properties"`
+	Type SupermarketFeatureType `json:"type"`
+}
+
+// SupermarketFeatureGeometryType defines model for SupermarketFeature.Geometry.Type.
+type SupermarketFeatureGeometryType string
+
+// SupermarketFeatureType defines model for SupermarketFeature.Type.
+type SupermarketFeatureType string
+
+// SupermarketsResponse defines model for SupermarketsResponse.
+type SupermarketsResponse struct {
+	Features []SupermarketFeature     `json:"features"`
+	Type     SupermarketsResponseType `json:"type"`
+}
+
+// SupermarketsResponseType defines model for SupermarketsResponse.Type.
+type SupermarketsResponseType string
+
+// TrailAccessFeature defines model for TrailAccessFeature.
+type TrailAccessFeature struct {
+	// Geometry GeoJSON MultiPolygon geometry.
+	Geometry struct {
+		Coordinates []interface{}                  `json:"coordinates"`
+		Type        TrailAccessFeatureGeometryType `json:"type"`
+	} `json:"geometry"`
+	Properties struct {
+		Name string `json:"name"`
+	} `json:"properties"`
+	Type TrailAccessFeatureType `json:"type"`
+}
+
+// TrailAccessFeatureGeometryType defines model for TrailAccessFeature.Geometry.Type.
+type TrailAccessFeatureGeometryType string
+
+// TrailAccessFeatureType defines model for TrailAccessFeature.Type.
+type TrailAccessFeatureType string
+
+// TrailAccessResponse defines model for TrailAccessResponse.
+type TrailAccessResponse struct {
+	Features []TrailAccessFeature    `json:"features"`
+	Type     TrailAccessResponseType `json:"type"`
+}
+
+// TrailAccessResponseType defines model for TrailAccessResponse.Type.
+type TrailAccessResponseType string
+
 // UnitMetadata Optional unit-level metadata powering the solar exposure factor.
 type UnitMetadata struct {
 	Exposure *UnitMetadataExposure `json:"exposure,omitempty"`
@@ -397,6 +822,21 @@ type ServerInterface interface {
 	// GetIsochrones Get 15-minute walk and 30-minute transit reach polygons for a coordinate.
 	// (GET /api/v1/isochrones)
 	GetIsochrones(w http.ResponseWriter, r *http.Request, params GetIsochronesParams)
+	// GetBikeRoutesLayer Get protected/buffered/painted bike infrastructure as GeoJSON.
+	// (GET /api/v1/layers/bike-routes)
+	GetBikeRoutesLayer(w http.ResponseWriter, r *http.Request)
+	// GetCtaRailLinesLayer Get CTA 'L' rail track geometry as GeoJSON.
+	// (GET /api/v1/layers/cta-rail)
+	GetCtaRailLinesLayer(w http.ResponseWriter, r *http.Request)
+	// GetCtaStationsLayer Get CTA 'L' station locations as GeoJSON.
+	// (GET /api/v1/layers/cta-stations)
+	GetCtaStationsLayer(w http.ResponseWriter, r *http.Request)
+	// GetSupermarketsLayer Get supermarket locations as GeoJSON.
+	// (GET /api/v1/layers/supermarkets)
+	GetSupermarketsLayer(w http.ResponseWriter, r *http.Request)
+	// GetTrailAccessLayer Get off-street trail (linear park) boundaries as GeoJSON.
+	// (GET /api/v1/layers/trail-access)
+	GetTrailAccessLayer(w http.ResponseWriter, r *http.Request)
 	// ScoreAddress Compute a composite livability score for an address.
 	// (POST /api/v1/score)
 	ScoreAddress(w http.ResponseWriter, r *http.Request)
@@ -495,6 +935,76 @@ func (siw *ServerInterfaceWrapper) GetIsochrones(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetIsochrones(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBikeRoutesLayer operation middleware
+func (siw *ServerInterfaceWrapper) GetBikeRoutesLayer(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBikeRoutesLayer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCtaRailLinesLayer operation middleware
+func (siw *ServerInterfaceWrapper) GetCtaRailLinesLayer(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCtaRailLinesLayer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCtaStationsLayer operation middleware
+func (siw *ServerInterfaceWrapper) GetCtaStationsLayer(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCtaStationsLayer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSupermarketsLayer operation middleware
+func (siw *ServerInterfaceWrapper) GetSupermarketsLayer(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSupermarketsLayer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTrailAccessLayer operation middleware
+func (siw *ServerInterfaceWrapper) GetTrailAccessLayer(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTrailAccessLayer(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -641,6 +1151,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/score", wrapper.ScoreAddress)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/geocode", wrapper.GeocodeAddress)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/isochrones", wrapper.GetIsochrones)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/layers/cta-rail", wrapper.GetCtaRailLinesLayer)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/layers/cta-stations", wrapper.GetCtaStationsLayer)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/layers/bike-routes", wrapper.GetBikeRoutesLayer)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/layers/trail-access", wrapper.GetTrailAccessLayer)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/layers/supermarkets", wrapper.GetSupermarketsLayer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/health", wrapper.GetHealth)
 
 	return m
