@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-25T20:16:55Z",
+  "title": "Design System: BlockFactor",
+  "extensions": {
+    "colorMeta": {
+      "bg-canvas": { "role": "neutral", "displayName": "Canvas Deep Zinc", "canonical": "#09090b", "tonalRamp": ["#09090b", "#18181b", "#27272a", "#3f3f46", "#71717a", "#a1a1aa", "#d4d4d8", "#f4f4f5"] },
+      "surface-card": { "role": "neutral", "displayName": "Surface Card Zinc", "canonical": "#18181b", "tonalRamp": ["#09090b", "#18181b", "#27272a", "#3f3f46", "#71717a", "#a1a1aa", "#d4d4d8", "#f4f4f5"] },
+      "cta-red": { "role": "primary", "displayName": "CTA Red Line", "canonical": "#c60c30", "tonalRamp": ["#450a0a", "#7f1d1d", "#991b1b", "#b91c1c", "#c60c30", "#dc2626", "#ef4444", "#f87171"] },
+      "cta-blue": { "role": "primary", "displayName": "CTA Blue Line", "canonical": "#00a1de", "tonalRamp": ["#082f49", "#075985", "#0369a1", "#0284c7", "#00a1de", "#38bdf8", "#7dd3fc", "#bae6fd"] },
+      "score-emerald": { "role": "tertiary", "displayName": "Score High (Emerald)", "canonical": "#10b981", "tonalRamp": ["#022c22", "#064e3b", "#065f46", "#047857", "#10b981", "#34d399", "#6ee7b7", "#a7f3d0"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Score Display", "purpose": "Composite livability score readouts" },
+      "label": { "displayName": "Telemetry Mono Label", "purpose": "Coordinates, distances, durations, and status badges" }
+    },
+    "shadows": [
+      { "name": "flat", "value": "none", "purpose": "Flat tonal surfaces rely on 1px borders instead of drop shadows." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Default easing for badge transitions and state toggles." }
+    ],
+    "breakpoints": [
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Score Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "High-density dark analytical container with 1px border definition.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">LIVABILITY SCORE</div><div class=\"ds-score\"><span class=\"ds-score-val\">88</span><span class=\"ds-score-max\">/ 100</span></div></div>",
+      "css": ".ds-card { background: #18181b; border: 1px solid #27272a; border-radius: 2px; padding: 16px; color: #f4f4f5; font-family: Inter, sans-serif; } .ds-card-title { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; color: #a1a1aa; text-transform: uppercase; margin-bottom: 8px; } .ds-score { display: flex; align-items: baseline; gap: 6px; font-family: 'Geist Mono', monospace; } .ds-score-val { font-size: 36px; font-weight: 700; color: #f4f4f5; } .ds-score-max { font-size: 12px; color: #71717a; }"
+    },
+    {
+      "name": "CTA Transit Badge",
+      "kind": "chip",
+      "refersTo": "badge-cta-blue",
+      "description": "Official municipal transit line badge chip with uppercase tabular label.",
+      "html": "<span class=\"ds-badge ds-badge-cta-blue\">Blue Line</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; border-radius: 2px; padding: 2px 8px; font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; } .ds-badge-cta-blue { background: #00a1de; color: #ffffff; }"
+    },
+    {
+      "name": "Score Tier Badge",
+      "kind": "chip",
+      "refersTo": "badge-score-emerald",
+      "description": "Severity status indicator badge with subtle tint background and matching stroke.",
+      "html": "<span class=\"ds-badge ds-badge-score-emerald\">Optimal</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; border-radius: 2px; padding: 2px 8px; font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; } .ds-badge-score-emerald { background: rgba(2, 44, 34, 0.6); border: 1px solid rgba(6, 78, 59, 0.6); color: #10b981; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Urban Control Room",
+    "overview": "BlockFactor is an analytical, high-density location intelligence system engineered to deliver objective residential livability assessments for Chicago. The interface models a tactical urban control room: crisp dark zinc surfaces, strict 1px border delineation, authentic municipal CTA line badges, and monospace tabular telemetry. It rejects generic marketing froth in favor of raw informational density and mathematical clarity.",
+    "keyCharacteristics": [
+      "Tactical high-density information architecture prioritizing metrics, entity names, and exact distances",
+      "Flat tonal layering (deep zinc-950 canvas, zinc-900 surfaces, zinc-800 borders, zero drop shadows)",
+      "Strict data typography: Geist Mono for all numeric scores, coordinates, distances, and transit durations",
+      "Authentic municipal color palette anchored in official CTA transit line hues",
+      "Zero AI novelty clichés (no purple neon gradients, no sparkle icons, no emoji slop)"
+    ],
+    "rules": [
+      {
+        "name": "The Tabular Monospace Rule",
+        "body": "Every coordinate, distance, travel duration, and calculated score must render in Geist Mono with tabular lining figures to ensure zero visual jitter during live updates.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Surface Rule",
+        "body": "Surfaces are strictly flat with no drop shadows; visual hierarchy and elevation are conveyed exclusively through tonal stepping (zinc-950 → zinc-900 → zinc-800) and 1px border strokes.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Authentic Transit Palette Rule",
+        "body": "Transit badges and line indicators must use exact Chicago CTA hex codes (Red, Blue, Brown, Green, Pink, Orange, Purple, Yellow); never approximate or theme-shift official municipal lines.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Voice Rule",
+        "body": "Accent colors appear strictly on badges, score tiers, and map overlays. Surfaces and containers remain strictly neutral zinc to preserve high contrast and scanability.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do use Geist Mono for all numeric scores, distances, coordinates, and travel durations",
+      "Do use exact CTA transit line colors for route badges, transit chips, and map layers",
+      "Do maintain tight border radii (rounded-sm 2px for cards and badges)",
+      "Do lead component copy with metrics, entity names, and straight-line distances",
+      "Do maintain 1px zinc-800 borders between tonal surfaces for crisp visual delineation"
+    ],
+    "donts": [
+      "Don't use drop shadows, glow filters, or floating elevated surfaces",
+      "Don't use emojis in metric cards, table headers, scorecards, or empty states",
+      "Don't use purple or violet radial background glows or AI novelty tropes",
+      "Don't write redundant explanatory fluff subtitles under score headers",
+      "Don't approximate CTA transit line colors with generic Tailwind accents"
+    ]
+  }
+}
