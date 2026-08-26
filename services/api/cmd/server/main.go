@@ -53,6 +53,7 @@ func main() {
 		} else {
 			defer pool.Close()
 			serverOpts = append(serverOpts, api.WithBoundaryChecker(spatial.NewDBBoundaryChecker(pool)))
+			serverOpts = append(serverOpts, api.WithLayerReader(spatial.NewDBLayerReader(pool)))
 			logger.Info("connected to PostGIS database pool")
 
 			placesClient := clients.NewPlacesClient(os.Getenv("GOOGLE_PLACES_API_KEY"), logger)

@@ -136,7 +136,7 @@ Originally scoped as 5 items (map component + 4 interactive layers + solar widge
 
 1. [x] **Map foundation** (frontend only, no dependency) — MapLibre GL JS map component (`packages/web/src/map/`), high-contrast Chicago basemap (CartoCDN / OpenFreeMap), responsive split-screen desktop & mobile viewport handling.
 2. [x] **CTA rail line ingestion** (backend/DB only) — New migration + `cmd/seed` ingestion of the verified Chicago Data Portal dataset `xbyr-jnvx` ("CTA - 'L' (Rail) Lines") into a new `cta_rail_lines` table. This is the only real per-line rail track geometry available — `noise_sources`'s existing CTA track geometry is line-agnostic. See DATA_SOURCES.md "CTA 'L' Lines" for the verified schema, real `lines`/`type` field values, and parsing quirks (inconsistent `Express`/`Exp` abbreviation).
-3. [ ] **Map layer read endpoints** (backend only) — New `openapi.yaml` paths + Go handlers, all read-only GeoJSON `FeatureCollection`s over existing/new bulk-ingested tables (no per-request cost or budget concerns):
+3. [x] **Map layer read endpoints** (backend only) — New `openapi.yaml` paths + Go handlers, all read-only GeoJSON `FeatureCollection`s over existing/new bulk-ingested tables (no per-request cost or budget concerns):
    - `GET /api/v1/layers/cta-rail` (from deliverable 2's new `cta_rail_lines` table)
    - `GET /api/v1/layers/cta-stations` (from existing `cta_stops`)
    - `GET /api/v1/layers/bike-routes` (from existing `bike_routes`)

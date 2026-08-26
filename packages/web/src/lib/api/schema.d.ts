@@ -64,6 +64,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/layers/cta-rail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get CTA 'L' rail track geometry as GeoJSON.
+         * @description Bulk, city-wide layer — no request parameters. Backed by `cta_rail_lines` (docs/DATA_SOURCES.md "CTA 'L' Lines"), the only real per-line rail track geometry available; `cta_stops` has only station points, and `noise_sources`' CTA track geometry is line-agnostic.
+         */
+        get: operations["getCtaRailLinesLayer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/layers/cta-stations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get CTA 'L' station locations as GeoJSON.
+         * @description Bulk, city-wide layer — no request parameters.
+         */
+        get: operations["getCtaStationsLayer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/layers/bike-routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get protected/buffered/painted bike infrastructure as GeoJSON.
+         * @description Bulk, city-wide layer — no request parameters.
+         */
+        get: operations["getBikeRoutesLayer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/layers/trail-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get off-street trail (linear park) boundaries as GeoJSON.
+         * @description Bulk, city-wide layer — no request parameters. Backed by `parks WHERE park_class = 'LINEAR PARK'` (e.g. the Lakefront Trail, The 606/Bloomingdale Trail) per the existing PRD §5.5 schema decision — not `bike_routes`, which has no trail category at all.
+         */
+        get: operations["getTrailAccessLayer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/layers/supermarkets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get supermarket locations as GeoJSON.
+         * @description Bulk, city-wide layer — no request parameters.
+         */
+        get: operations["getSupermarketsLayer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -196,6 +296,106 @@ export interface components {
             type: "FeatureCollection";
             features: components["schemas"]["IsochroneFeature"][];
         };
+        CtaRailLineFeature: {
+            /** @constant */
+            type: "Feature";
+            properties: {
+                /** @description CTA line names sharing this track segment, e.g. ["Brown", "Purple"]. */
+                lines: string[];
+                /** @description True if any line on this segment runs express service here. */
+                express: boolean;
+                /** @enum {string} */
+                grade: "subway" | "elevated_or_at_grade";
+            };
+            /** @description GeoJSON MultiLineString geometry. */
+            geometry: {
+                /** @constant */
+                type: "MultiLineString";
+                coordinates: unknown[];
+            };
+        };
+        CtaRailLinesResponse: {
+            /** @constant */
+            type: "FeatureCollection";
+            features: components["schemas"]["CtaRailLineFeature"][];
+        };
+        CtaStationFeature: {
+            /** @constant */
+            type: "Feature";
+            properties: {
+                name: string;
+                lines: string[];
+                ada: boolean;
+            };
+            /** @description GeoJSON Point geometry. */
+            geometry: {
+                /** @constant */
+                type: "Point";
+                coordinates: unknown[];
+            };
+        };
+        CtaStationsResponse: {
+            /** @constant */
+            type: "FeatureCollection";
+            features: components["schemas"]["CtaStationFeature"][];
+        };
+        BikeRouteFeature: {
+            /** @constant */
+            type: "Feature";
+            properties: {
+                /** @enum {string} */
+                routeType: "Protected Bike Lane" | "Neighborhood Greenway" | "Buffered Bike Lane" | "Bike Lane" | "Marked Shared Lane";
+                streetName?: string | null;
+            };
+            /** @description GeoJSON MultiLineString geometry. */
+            geometry: {
+                /** @constant */
+                type: "MultiLineString";
+                coordinates: unknown[];
+            };
+        };
+        BikeRoutesResponse: {
+            /** @constant */
+            type: "FeatureCollection";
+            features: components["schemas"]["BikeRouteFeature"][];
+        };
+        TrailAccessFeature: {
+            /** @constant */
+            type: "Feature";
+            properties: {
+                name: string;
+            };
+            /** @description GeoJSON MultiPolygon geometry. */
+            geometry: {
+                /** @constant */
+                type: "MultiPolygon";
+                coordinates: unknown[];
+            };
+        };
+        TrailAccessResponse: {
+            /** @constant */
+            type: "FeatureCollection";
+            features: components["schemas"]["TrailAccessFeature"][];
+        };
+        SupermarketFeature: {
+            /** @constant */
+            type: "Feature";
+            properties: {
+                /** @description Null when OSM has no name tag for this store. */
+                name?: string | null;
+            };
+            /** @description GeoJSON Point geometry. */
+            geometry: {
+                /** @constant */
+                type: "Point";
+                coordinates: unknown[];
+            };
+        };
+        SupermarketsResponse: {
+            /** @constant */
+            type: "FeatureCollection";
+            features: components["schemas"]["SupermarketFeature"][];
+        };
         HealthResponse: {
             /** @enum {string} */
             status: "ok";
@@ -305,6 +505,106 @@ export interface operations {
                 };
             };
             422: components["responses"]["OutOfCoverage"];
+        };
+    };
+    getCtaRailLinesLayer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CTA rail line segments as a GeoJSON FeatureCollection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CtaRailLinesResponse"];
+                };
+            };
+        };
+    };
+    getCtaStationsLayer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CTA stations as a GeoJSON FeatureCollection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CtaStationsResponse"];
+                };
+            };
+        };
+    };
+    getBikeRoutesLayer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bike route segments as a GeoJSON FeatureCollection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BikeRoutesResponse"];
+                };
+            };
+        };
+    };
+    getTrailAccessLayer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trail-access park boundaries as a GeoJSON FeatureCollection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrailAccessResponse"];
+                };
+            };
+        };
+    };
+    getSupermarketsLayer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Supermarkets as a GeoJSON FeatureCollection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupermarketsResponse"];
+                };
+            };
         };
     };
     getHealth: {

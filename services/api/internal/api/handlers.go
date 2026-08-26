@@ -27,6 +27,7 @@ type Server struct {
 	geocoder        Geocoder
 	boundaryChecker spatial.BoundaryChecker
 	scoreEngine     ScoreEngine
+	layerReader     spatial.LayerReader
 }
 
 // ServerOption configures a Server instance.
