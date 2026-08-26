@@ -3,14 +3,28 @@ import { Map as MapLibreMap, NavigationControl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { BASEMAP_STYLE_URL, CHICAGO_CENTER, CHICAGO_DEFAULT_ZOOM } from "./constants";
 
-/**
- * GPU-accelerated MapLibre GL JS canvas. Spatial layers (CTA rail, bike
- * routes, POIs, Divvy docks, solar ray) mount on top of this in later
- * Phase 4 PRs — see docs/IMPLEMENTATION_PHASES.md Phase 4.
- */
-export function MapCanvas() {
+export type MapCanvasProps = {
+  /**
+   * Called once the MapLibre instance is constructed, handing back the live
+   * map so later Phase 4 layer components (CTA rail, bike routes, POIs,
+   * Divvy docks, solar ray) can call addSource/addLayer/flyTo on it rather
+   * than each reimplementing map setup — see docs/IMPLEMENTATION_PHASES.md
+   * Phase 4.
+   */
+  onMapReady?: (map: MapLibreMap) => void;
+};
+
+/** GPU-accelerated MapLibre GL JS canvas rendering the Chicago basemap. */
+export function MapCanvas({ onMapReady }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  // Read via a ref inside the effect (below) rather than depending on
+  // `onMapReady` directly: it's only needed at construction time, and
+  // callers typically pass an inline function, which would otherwise
+  // re-trigger the effect (tearing down and rebuilding the map) on every
+  // render.
+  const onMapReadyRef = useRef(onMapReady);
+  onMapReadyRef.current = onMapReady;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -24,6 +38,7 @@ export function MapCanvas() {
     });
     map.addControl(new NavigationControl({ showCompass: true }), "top-right");
     mapRef.current = map;
+    onMapReadyRef.current?.(map);
 
     return () => {
       map.remove();

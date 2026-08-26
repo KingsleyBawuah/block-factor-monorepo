@@ -1,4 +1,4 @@
-import { describe, it, expect, mock } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import { render, screen } from "@testing-library/react";
 import {
   createMemoryHistory,
@@ -7,18 +7,11 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
+import App from "./App";
 
-// happy-dom has no WebGL context, so the real maplibre-gl Map constructor
+// maplibre-gl is mocked globally in src/test/setup.ts (the bun:test
+// preload) — happy-dom has no WebGL context, so the real Map constructor
 // (invoked by MapCanvas, rendered inside App) would throw.
-mock.module("maplibre-gl", () => ({
-  Map: mock(() => ({
-    addControl: mock(() => {}),
-    remove: mock(() => {}),
-  })),
-  NavigationControl: mock(() => ({})),
-}));
-
-const { default: App } = await import("./App");
 
 function createTestRouter() {
   const rootRoute = createRootRoute({ component: App });
