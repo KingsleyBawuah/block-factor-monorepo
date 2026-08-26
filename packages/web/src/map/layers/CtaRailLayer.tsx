@@ -88,9 +88,9 @@ export function CtaRailLayer({ map }: CtaRailLayerProps) {
       type: "circle",
       source: STATIONS_SOURCE_ID,
       paint: {
-        "circle-radius": 4,
+        "circle-radius": 2.5,
         "circle-color": "#18181b", // zinc-900, matches DESIGN.md surface-card
-        "circle-stroke-width": 1.5,
+        "circle-stroke-width": 1,
         "circle-stroke-color": "#f4f4f5", // zinc-100, matches DESIGN.md text-primary
       },
     });
