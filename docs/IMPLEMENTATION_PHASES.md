@@ -131,19 +131,29 @@ Implement the deterministic and spatial scoring algorithms with full unit test c
 Build the GPU-accelerated interactive map workspace with custom Chicago vector styles and spatial layer overlays.
 
 ### Deliverables
-1. **MapLibre GL JS Map Component (`packages/web/src/map/`):**
-   - [ ] High-contrast, clean Chicago basemap style (CartoCDN / OpenFreeMap).
-   - [ ] Responsive split-screen desktop & mobile viewport handling.
-2. **Interactive Spatial Layers:**
-   - [ ] **CTA Rail Layer:** Official line colors with interactive station hover cards.
-   - [ ] **Protected Bike Layer:** High-visibility green linestring overlay with trail access markers.
-   - [ ] **POI Density Markers:** Cafes, fitness studios, and supermarkets with distance radius rings.
-   - [ ] **Divvy Dock Layer:** Station markers with live capacity badges (display-only — Divvy is not a scored factor). Delivers `internal/clients/divvy.go` + the in-memory GBFS cache (5m TTL).
-   - [ ] **Solar Ray Widget:** 3D compass orientation ray projected from the address marker.
+
+Originally scoped as 5 items (map component + 4 interactive layers + solar widget). Expanded mid-phase into 10 deliverable-sized PRs after discovering no backend endpoint served bulk map geometry at all — `ScoreResponse` only ever returns distance-to-nearest-feature, never raw geometry (see ARCHITECTURE.md Decision Log rows 29–31 for the three resulting architecture decisions, and DATA_SOURCES.md "CTA 'L' Lines" for a new verified dataset this uncovered). Sequenced below so every frontend layer PR lands only after the backend piece it depends on; each PR branches off `origin/main`.
+
+1. [ ] **Map foundation** (frontend only, no dependency) — MapLibre GL JS map component (`packages/web/src/map/`), high-contrast Chicago basemap (CartoCDN / OpenFreeMap), responsive split-screen desktop & mobile viewport handling.
+2. [ ] **CTA rail line ingestion** (backend/DB only) — New migration + `cmd/seed` ingestion of the verified Chicago Data Portal dataset `xbyr-jnvx` ("CTA - 'L' (Rail) Lines") into a new `cta_rail_lines` table. This is the only real per-line rail track geometry available — `noise_sources`'s existing CTA track geometry is line-agnostic. See DATA_SOURCES.md "CTA 'L' Lines" for the verified schema, real `lines`/`type` field values, and parsing quirks (inconsistent `Express`/`Exp` abbreviation).
+3. [ ] **Map layer read endpoints** (backend only) — New `openapi.yaml` paths + Go handlers, all read-only GeoJSON `FeatureCollection`s over existing/new bulk-ingested tables (no per-request cost or budget concerns):
+   - `GET /api/v1/layers/cta-rail` (from deliverable 2's new `cta_rail_lines` table)
+   - `GET /api/v1/layers/cta-stations` (from existing `cta_stops`)
+   - `GET /api/v1/layers/bike-routes` (from existing `bike_routes`)
+   - `GET /api/v1/layers/trail-access` (from `parks WHERE park_class = 'LINEAR PARK'` — per the existing PRD §5.5 schema decision, **not** `bike_routes`)
+   - `GET /api/v1/layers/supermarkets` (from existing `osm_pois WHERE poi_type = 'supermarket'`)
+4. [ ] **CTA Rail Layer** (frontend, consumes 3) — Official line colors with interactive station hover cards.
+5. [ ] **Protected Bike Layer** (frontend, consumes 3) — High-visibility green linestring overlay with trail access markers.
+6. [ ] **Nearby-places endpoint** (backend only) — New `GET /api/v1/places?lat=&lon=`, scoped to a per-address radius, not city-wide (ARCHITECTURE.md Decision Log row 30). Blends the existing `S_third_place` Google Places grid-cache lookup (cafes/fitness) with an `osm_pois` supermarket query. Likely needs a small extraction from `factor_third_places.go` so the scoring path and this handler share one cache-fill/lookup implementation rather than duplicating it.
+7. [ ] **POI Density Markers** (frontend, consumes 6) — Cafes, fitness studios, and supermarkets with distance radius rings.
+8. [ ] **Divvy client + endpoint** (backend only) — `internal/clients/divvy.go` (GBFS client) + in-memory GBFS cache (5m TTL) + `GET /api/v1/layers/divvy-docks`.
+9. [ ] **Divvy Dock Layer** (frontend, consumes 8) — Station markers with live capacity badges (display-only — Divvy is not a scored factor).
+10. [ ] **Solar Ray Widget** (frontend only, no backend dependency) — 3D compass orientation ray projected from the address marker, using the `facing` direction `factor_solar.go` already infers/accepts.
 
 ### Validation Criteria
 - 60fps GPU-accelerated panning and zooming on desktop and mobile browsers.
 - Smooth layer toggle transitions with zero WebGL context leaks.
+- Each layer PR verified live in a browser against real data before merge, not just type-checked or unit-tested.
 
 ---
 
