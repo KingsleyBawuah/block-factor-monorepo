@@ -173,6 +173,10 @@ export function ProtectedBikeLayer({ map }: ProtectedBikeLayerProps) {
     return () => {
       map.off("mouseenter", TRAIL_FILL_LAYER_ID, handleMouseEnter);
       map.off("mouseleave", TRAIL_FILL_LAYER_ID, handleMouseLeave);
+      // Unmounting mid-hover skips handleMouseLeave (its mouseleave event
+      // never fires), which would otherwise leave the cursor stuck as
+      // "pointer" -- reset it here too.
+      map.getCanvas().style.cursor = "";
       popup.remove();
       if (map.getLayer(TRAIL_OUTLINE_LAYER_ID))
         map.removeLayer(TRAIL_OUTLINE_LAYER_ID);
