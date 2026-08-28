@@ -3,6 +3,7 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { Outlet } from "@tanstack/react-router";
 import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
+import { ScoreRing } from "./components/ui/score-ring";
 import { AddressSearchInput, type ResolvedAddress } from "./components/AddressSearchInput";
 import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, RESOLVED_ADDRESS_ZOOM, scoreTier } from "./map";
 
@@ -49,11 +50,8 @@ export default function App() {
                     <div className="mt-4 truncate font-mono text-xs text-zinc-500">
                       {resolved.formattedAddress}
                     </div>
-                    <div className="mt-1 flex items-baseline space-x-2">
-                      <span className="text-4xl font-mono font-bold text-zinc-100">
-                        {Math.round(resolved.score.compositeScore)}
-                      </span>
-                      <span className="text-xs font-mono text-zinc-500">/ 100</span>
+                    <div className="mt-3 flex justify-center">
+                      <ScoreRing score={resolved.score.compositeScore} />
                     </div>
                   </>
                 ) : (
