@@ -3,3 +3,4 @@ export { BASEMAP_STYLE_URL, CHICAGO_CENTER, CHICAGO_DEFAULT_ZOOM, DEMO_ADDRESS_L
 export { CtaRailLayer } from "./layers/CtaRailLayer";
 export { ProtectedBikeLayer } from "./layers/ProtectedBikeLayer";
 export { PoiDensityLayer } from "./layers/PoiDensityLayer";
+export { DivvyDockLayer } from "./layers/DivvyDockLayer";

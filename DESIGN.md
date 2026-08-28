@@ -25,6 +25,7 @@ colors:
   poi-cafe: "#c2703d"
   poi-fitness: "#6366f1"
   poi-supermarket: "#0d9488"
+  divvy-blue: "#41b6e6"
 typography:
   display:
     fontFamily: "Geist Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
@@ -136,6 +137,9 @@ Map-overlay-only accent colors for the POI Density Layer (`GET /api/v1/places`),
 - **POI Cafe** (`#c2703d`): Cafe/coffee shop markers.
 - **POI Fitness** (`#6366f1`): Gym/fitness studio/yoga markers.
 - **POI Supermarket** (`#0d9488`): Supermarket markers.
+
+### Divvy Dock Markers
+The Divvy Dock Layer (`GET /api/v1/layers/divvy-docks`) uses Divvy's real brand blue (`#41b6e6`, Pantone 298 C, sourced from Divvy's public identity guide — distinct from, but close in hue to, CTA Blue Line's `#00a1de`/Pantone 299 C). Because the hue alone is close enough to CTA Blue to risk the same "can't tell these two layers apart" problem the POI Category Markers were introduced to fix, the Divvy marker is a two-tone split icon (Divvy Blue + `text-secondary` `#a1a1aa`/zinc-400, standing in for the grey used on Divvy's retroreflective e-bike fleet — no verified digital hex exists for that physical coating) rather than a flat single-color dot: the split *pattern* itself is what reads as distinct at a glance, not the hue in isolation.
 
 ### Neutral
 - **Canvas Deep Zinc** (`#09090b` / `zinc-950`): Root viewport and map background.

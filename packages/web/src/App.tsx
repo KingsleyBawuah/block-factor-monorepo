@@ -3,7 +3,7 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { Outlet } from "@tanstack/react-router";
 import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
-import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DEMO_ADDRESS_LAT, DEMO_ADDRESS_LON } from "./map";
+import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, DEMO_ADDRESS_LAT, DEMO_ADDRESS_LON } from "./map";
 
 export default function App() {
   const [map, setMap] = useState<MapLibreMap | null>(null);
@@ -53,6 +53,7 @@ export default function App() {
               {map && <CtaRailLayer map={map} />}
               {map && <ProtectedBikeLayer map={map} />}
               {map && <PoiDensityLayer map={map} lat={DEMO_ADDRESS_LAT} lon={DEMO_ADDRESS_LON} />}
+              {map && <DivvyDockLayer map={map} />}
             </Card>
           </div>
         </div>
