@@ -3,6 +3,7 @@ package scoring
 import (
 	"context"
 	"errors"
+	"sort"
 )
 
 // NearbyPlacesRadiusMeters is the fixed per-address search radius for
@@ -119,6 +120,12 @@ func (r *NearbyPlacesResolver) FindNearby(ctx context.Context, lat, lon float64)
 			DistanceMeters: p.DistanceMeters,
 		})
 	}
+
+	// Cafes/fitness are appended before supermarkets above, so without this
+	// the response would be grouped by source rather than true proximity --
+	// sort once here rather than pushing that requirement onto every caller
+	// (map rendering, a future ranked list, ...).
+	sort.Slice(places, func(i, j int) bool { return places[i].DistanceMeters < places[j].DistanceMeters })
 
 	return places, nil
 }

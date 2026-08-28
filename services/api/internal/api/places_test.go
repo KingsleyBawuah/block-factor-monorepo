@@ -35,6 +35,7 @@ func newPlacesServer(finder *mockPlacesFinder, boundary *mockBoundaryChecker) *a
 func TestGetPlaces_Success(t *testing.T) {
 	finder := &mockPlacesFinder{places: []api.Place{
 		{Name: "Sip Coffee", Category: "cafe", Lat: 41.8999, Lon: -87.6506, DistanceMeters: 120.5},
+		{Name: "Equinox The Loop", Category: "fitness", Lat: 41.8996, Lon: -87.6503, DistanceMeters: 210.0},
 		{Name: "Jewel-Osco", Category: "supermarket", Lat: 41.9, Lon: -87.65, DistanceMeters: 300.0},
 	}}
 	boundary := &mockBoundaryChecker{within: true}
@@ -59,11 +60,17 @@ func TestGetPlaces_Success(t *testing.T) {
 	if resp.Type != api.PlacesResponseTypeFeatureCollection {
 		t.Errorf("expected type FeatureCollection, got %q", resp.Type)
 	}
-	if len(resp.Features) != 2 {
-		t.Fatalf("expected 2 features, got %d", len(resp.Features))
+	if len(resp.Features) != 3 {
+		t.Fatalf("expected 3 features, got %d", len(resp.Features))
 	}
-	cafe := resp.Features[0]
-	if cafe.Properties.Name != "Sip Coffee" || cafe.Properties.Category != api.Cafe || cafe.Properties.DistanceMeters != 120.5 {
+
+	byName := map[string]api.PlaceFeature{}
+	for _, f := range resp.Features {
+		byName[f.Properties.Name] = f
+	}
+
+	cafe := byName["Sip Coffee"]
+	if cafe.Properties.Category != api.Cafe || cafe.Properties.DistanceMeters != 120.5 {
 		t.Errorf("unexpected cafe feature: %+v", cafe.Properties)
 	}
 	if cafe.Geometry.Type != api.PlaceFeatureGeometryTypePoint {
@@ -73,25 +80,64 @@ func TestGetPlaces_Success(t *testing.T) {
 	if len(cafe.Geometry.Coordinates) != 2 || cafe.Geometry.Coordinates[0] != wantCoords[0] || cafe.Geometry.Coordinates[1] != wantCoords[1] {
 		t.Errorf("expected coordinates [lon, lat] = %v, got %v", wantCoords, cafe.Geometry.Coordinates)
 	}
+
+	fitness := byName["Equinox The Loop"]
+	if fitness.Properties.Category != api.Fitness || fitness.Properties.DistanceMeters != 210.0 {
+		t.Errorf("unexpected fitness feature: %+v", fitness.Properties)
+	}
+
+	supermarket := byName["Jewel-Osco"]
+	if supermarket.Properties.Category != api.Supermarket || supermarket.Properties.DistanceMeters != 300.0 {
+		t.Errorf("unexpected supermarket feature: %+v", supermarket.Properties)
+	}
 }
 
 func TestGetPlaces_InvalidLatLon(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{"lat above 90", "lat=200&lon=-87.6505"},
+		{"lat below -90", "lat=-200&lon=-87.6505"},
+		{"lon above 180", "lat=41.8998&lon=200"},
+		{"lon below -180", "lat=41.8998&lon=-200"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			finder := &mockPlacesFinder{}
+			boundary := &mockBoundaryChecker{within: true}
+			srv := newPlacesServer(finder, boundary)
+			router := api.NewRouter(srv)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/places?"+tt.query, nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected status 400, got %d", w.Code)
+			}
+			var errResp api.Error
+			_ = json.NewDecoder(w.Body).Decode(&errResp)
+			if errResp.Code != "VALIDATION_ERROR" {
+				t.Errorf("expected VALIDATION_ERROR, got %q", errResp.Code)
+			}
+		})
+	}
+}
+
+func TestGetPlaces_MissingRequiredParam(t *testing.T) {
 	finder := &mockPlacesFinder{}
 	boundary := &mockBoundaryChecker{within: true}
 	srv := newPlacesServer(finder, boundary)
 	router := api.NewRouter(srv)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/places?lat=200&lon=-87.6505", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/places?lat=41.8998", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d", w.Code)
-	}
-	var errResp api.Error
-	_ = json.NewDecoder(w.Body).Decode(&errResp)
-	if errResp.Code != "VALIDATION_ERROR" {
-		t.Errorf("expected VALIDATION_ERROR, got %q", errResp.Code)
+		t.Fatalf("expected status 400 for a missing 'lon' param, got %d", w.Code)
 	}
 }
 

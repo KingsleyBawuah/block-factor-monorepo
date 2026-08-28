@@ -41,22 +41,38 @@ func TestNearbyPlacesResolver_FindNearby_BlendsCafesFitnessAndSupermarkets(t *te
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 places (pharmacy excluded), got %d: %+v", len(got), got)
+	}
 
-	byCategory := map[NearbyPlaceCategory]int{}
-	for _, p := range got {
-		byCategory[p.Category]++
+	// Also asserts sort order: the two Places-sourced POIs sit ~15m from
+	// origin, well inside Jewel-Osco's 120m -- ascending DistanceMeters
+	// order must put them first.
+	byName := map[string]NearbyPlace{}
+	for i, p := range got {
+		byName[p.Name] = p
+		if i > 0 && p.DistanceMeters < got[i-1].DistanceMeters {
+			t.Errorf("expected places sorted ascending by DistanceMeters, got %+v", got)
+		}
 	}
-	if byCategory[NearbyPlaceCafe] != 1 {
-		t.Errorf("expected 1 cafe, got %d", byCategory[NearbyPlaceCafe])
+
+	cafe, ok := byName["Sip Coffee"]
+	if !ok || cafe.Category != NearbyPlaceCafe || cafe.Lat != 41.8999 || cafe.Lon != -87.6506 {
+		t.Errorf("unexpected cafe: %+v", cafe)
 	}
-	if byCategory[NearbyPlaceFitness] != 1 {
-		t.Errorf("expected 1 fitness venue, got %d", byCategory[NearbyPlaceFitness])
+
+	fitness, ok := byName["CrossFit Loop"]
+	if !ok || fitness.Category != NearbyPlaceFitness || fitness.Lat != 41.8997 || fitness.Lon != -87.6504 {
+		t.Errorf("unexpected fitness venue: %+v", fitness)
 	}
-	if byCategory[NearbyPlaceSupermarket] != 1 {
-		t.Errorf("expected 1 supermarket, got %d", byCategory[NearbyPlaceSupermarket])
+
+	supermarket, ok := byName["Jewel-Osco"]
+	if !ok || supermarket.Category != NearbyPlaceSupermarket || supermarket.Lat != 41.9 || supermarket.Lon != -87.65 || supermarket.DistanceMeters != 120.0 {
+		t.Errorf("unexpected supermarket: %+v", supermarket)
 	}
-	if byCategory["pharmacy"] != 0 {
-		t.Errorf("expected pharmacy POIs to be excluded, got %d", byCategory["pharmacy"])
+
+	if _, ok := byName["Walgreens"]; ok {
+		t.Error("expected the pharmacy POI to be excluded -- GET /api/v1/places only advertises supermarkets from osm_pois, not the full grocery taxonomy")
 	}
 }
 
@@ -124,6 +140,19 @@ func TestNearbyPlacesResolver_FindNearby_DegradedThirdPlacesStillReturnsSupermar
 	}
 	if len(got) != 1 || got[0].Category != NearbyPlaceSupermarket {
 		t.Fatalf("expected only the supermarket to survive a degraded third-place lookup, got %+v", got)
+	}
+}
+
+func TestNearbyPlacesResolver_FindNearby_ThirdPlaceResolverErrorPropagates(t *testing.T) {
+	cache := &mockThirdPlaceCache{err: errors.New("cache unavailable")}
+	places := &mockPlacesQuerier{}
+	budget := &mockPlacesBudget{withinBudget: true}
+	resolver := NewThirdPlacePoiResolver(places, cache, budget, 100)
+	supermarkets := &mockSupermarketQuerier{}
+
+	resolver2 := NewNearbyPlacesResolver(resolver, supermarkets)
+	if _, err := resolver2.FindNearby(context.Background(), 41.8998, -87.6505); err == nil {
+		t.Fatal("expected the third-place resolver's own error to propagate, got nil")
 	}
 }
 
