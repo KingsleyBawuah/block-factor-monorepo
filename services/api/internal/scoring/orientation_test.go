@@ -79,6 +79,39 @@ func TestInferStreetFacingOrientation_ChicagoGrid(t *testing.T) {
 			address:  "1501 N Fakestreet Ave, Chicago, IL 60614",
 			expected: api.W,
 		},
+		{
+			// Real GET /api/v1/geocode formattedAddress for "233 S Wacker Dr,
+			// Chicago, IL" (fetched live 2026-08-28): Nominatim prefixes the
+			// landmark name before the house number, unlike a plain address.
+			// 233 is odd, "wacker" isn't in either street-name table, and
+			// "south" doesn't match the E/W-prefix default rule, so this
+			// falls through to the same North-South parity default (odd ->
+			// West) as the hand-typed "233 S Wacker Dr" case already covered
+			// elsewhere -- confirming the landmark prefix doesn't change the
+			// inferred facing, only the ability to parse the house number at
+			// all (previously fell all the way back to South/100).
+			name:     "Willis Tower, 233, South Wacker Drive (real Nominatim landmark-prefixed result -> faces West)",
+			address:  "Willis Tower, 233, South Wacker Drive, Financial District, Loop, Chicago, South Chicago Township, Cook County, Illinois, 60606, United States",
+			expected: api.W,
+		},
+		{
+			// Real GET /api/v1/geocode formattedAddress for "1400 N Wells St,
+			// Chicago, IL" (fetched live 2026-08-28), no landmark prefix: house
+			// number leads, comma-separated. "wells" is a registered
+			// North-South street name; 1400 is even -> East.
+			name:     "1400, North Wells Street (real Nominatim non-landmark result -> faces East)",
+			address:  "1400, North Wells Street, Old Town, Near North Side, Chicago, North Chicago Township, Cook County, Illinois, 60610, United States",
+			expected: api.E,
+		},
+		{
+			// Real GET /api/v1/geocode formattedAddress for the same address's
+			// rank-1 landmark-prefixed candidate (fetched live 2026-08-28):
+			// confirms the fix handles a real POI name even when it isn't the
+			// top-ranked candidate.
+			name:     "Broken English Taco Pub, 1400, North Wells Street (real Nominatim landmark-prefixed result -> faces East)",
+			address:  "Broken English Taco Pub, 1400, North Wells Street, Old Town, Near North Side, Chicago, North Chicago Township, Cook County, Illinois, 60610, United States",
+			expected: api.E,
+		},
 	}
 
 	for _, tt := range tests {

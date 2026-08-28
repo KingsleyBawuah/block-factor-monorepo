@@ -94,6 +94,7 @@ func InferStreetFacingOrientation(address string) api.UnitMetadataFacing {
 	if clean == "" {
 		return api.S // Default fallback
 	}
+	clean = stripLeadingNonNumericSegments(clean)
 
 	match := houseNumberRegex.FindStringSubmatch(clean)
 	if len(match) < 2 {
@@ -106,7 +107,16 @@ func InferStreetFacingOrientation(address string) api.UnitMetadataFacing {
 	}
 	isOdd := houseNum%2 != 0
 
-	axis := detectStreetAxis(clean)
+	// Bounded to the house-number segment plus the immediate next segment
+	// (the actual street) before any classification runs. Real Nominatim
+	// results carry the full admin hierarchy after the street (neighborhood,
+	// city, township, county, ...), and Cook County's real "South Chicago
+	// Township" (verified live in the Willis Tower geocode result) false-
+	// matched diagonalNWSERegex's "south chicago" alternative (meant for
+	// South Chicago Ave) when the unbounded remainder was searched.
+	streetScope := scopeToStreetSegment(clean)
+
+	axis := detectStreetAxis(streetScope)
 	switch axis {
 	case AxisEastWest:
 		if isOdd {
@@ -130,7 +140,7 @@ func InferStreetFacingOrientation(address string) api.UnitMetadataFacing {
 		return api.SE
 	default:
 		// Default rule: check directional prefixes (e.g. "W 17th St" vs "N Halsted St")
-		if isDirEastWestPrefix(clean) {
+		if isDirEastWestPrefix(streetScope) {
 			if isOdd {
 				return api.N
 			}
@@ -141,6 +151,61 @@ func InferStreetFacingOrientation(address string) api.UnitMetadataFacing {
 		}
 		return api.E
 	}
+}
+
+// stripLeadingNonNumericSegments drops any comma-separated segments before
+// the first one that is purely a house number. Real Nominatim
+// formattedAddress results prefix a landmark/POI name before the house
+// number for well-known buildings -- e.g. "Willis Tower, 233, South Wacker
+// Drive, Financial District, ..." for 233 S Wacker Dr (verified live
+// against GET /api/v1/geocode) -- rather than starting with the number the
+// way a plain, unnamed address does ("1400, North Wells Street, ...",
+// also verified live). Without this, houseNumberRegex's `^\s*(\d+)` never
+// matches a landmark-prefixed result, and every such address silently fell
+// back to the default South/100 orientation. Returns the address
+// unchanged if no purely-numeric segment is found, so the plain
+// space-separated address strings this function's own tests already cover
+// (e.g. "1801 W 18th St, Chicago, IL", which has no comma before the
+// house number) fall through exactly as before.
+func stripLeadingNonNumericSegments(clean string) string {
+	segments := strings.Split(clean, ",")
+	for i, seg := range segments {
+		if isAllDigits(strings.TrimSpace(seg)) {
+			return strings.Join(segments[i:], ",")
+		}
+	}
+	return clean
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// scopeToStreetSegment bounds an address (already past
+// stripLeadingNonNumericSegments, so it starts at the house-number segment)
+// to just that segment plus the very next one, dropping everything after --
+// neighborhood, city, township, county, state, zip, country. A plain
+// hand-typed address packs the house number, direction, and street name into
+// one comma-free segment (e.g. "1801 w 18th st"), so its second segment is
+// just the city; a real Nominatim result puts the street in its own second
+// segment. Either way, nothing past that second segment is ever needed for
+// classification, and leaving it in only risks a false match against
+// unrelated address-hierarchy text (see the "South Chicago Township"
+// docstring above).
+func scopeToStreetSegment(clean string) string {
+	segments := strings.SplitN(clean, ",", 3)
+	if len(segments) <= 2 {
+		return clean
+	}
+	return segments[0] + "," + segments[1]
 }
 
 func isDirEastWestPrefix(clean string) bool {

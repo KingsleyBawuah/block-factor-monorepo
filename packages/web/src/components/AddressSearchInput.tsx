@@ -54,8 +54,17 @@ export function AddressSearchInput({ onResolved, onReset }: AddressSearchInputPr
 
   const scoreMutation = useMutation({
     mutationFn: async (candidate: GeocodeCandidate) => {
+      // Scores by the resolved formattedAddress text, not `origin`
+      // coordinates: S_solar's street-facing orientation inference
+      // (InferStreetFacingOrientation, services/api/internal/scoring/
+      // factor_solar.go) only runs when the request carries an address
+      // string -- with `origin` it silently defaults to South (100/100)
+      // for every address. Re-geocoding this exact, already-disambiguated
+      // string server-side is safe (unlike the original free-text query,
+      // it's no longer ambiguous) and reliably resolves to this same
+      // candidate.
       const { data, error } = await apiClient.POST("/api/v1/score", {
-        body: { origin: candidate.coordinates },
+        body: { address: candidate.formattedAddress },
       });
       if (error) throw error;
       return data;
