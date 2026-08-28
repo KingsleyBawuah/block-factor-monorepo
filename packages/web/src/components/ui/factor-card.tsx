@@ -33,21 +33,34 @@ export function FactorCard({ label, icon, factor }: FactorCardProps) {
   const [expanded, setExpanded] = useState(false);
   const panelId = useId();
   const hasPois = !!factor.contributingPois?.length;
-  const rounded = factor.score != null ? Math.round(factor.score) : null;
+  // Clamped the same way ScoreRing's own display value is -- aria-valuenow
+  // below must stay within the aria-valuemin/aria-valuemax bounds it also
+  // declares even if an out-of-range score were ever passed.
+  const rounded = factor.score != null ? Math.round(Math.min(100, Math.max(0, factor.score))) : null;
   const tier = rounded != null ? scoreTier(rounded) : null;
+
+  // Non-expandable cards (no contributingPois) render as a plain <div>, not
+  // a disabled <button>: a disabled button drops out of the tab order and
+  // screen readers announce it as "disabled", implying a broken/inactive
+  // factor rather than simply non-expandable informational content.
+  const Header = hasPois ? "button" : "div";
+  const headerProps = hasPois
+    ? {
+        type: "button" as const,
+        onClick: () => setExpanded((v) => !v),
+        "aria-expanded": expanded,
+        "aria-controls": panelId,
+      }
+    : {};
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/60">
-      <button
-        type="button"
+      <Header
         className={cn(
           "flex w-full items-center gap-3 p-3 text-left",
           hasPois && "cursor-pointer"
         )}
-        onClick={() => hasPois && setExpanded((v) => !v)}
-        aria-expanded={hasPois ? expanded : undefined}
-        aria-controls={hasPois ? panelId : undefined}
-        disabled={!hasPois}
+        {...headerProps}
       >
         <i className={cn("lni", icon, "shrink-0 text-sm text-zinc-400")} aria-hidden="true" />
 
@@ -83,8 +96,8 @@ export function FactorCard({ label, icon, factor }: FactorCardProps) {
           )}
 
           {factor.distanceMeters != null && (
-            <div className="mt-1.5 font-mono text-[11px] text-zinc-500">
-              {formatDistanceMiles(factor.distanceMeters)} <span className="text-zinc-600">straight-line</span>
+            <div className="mt-1.5 font-mono text-[11px] text-zinc-400">
+              {formatDistanceMiles(factor.distanceMeters)} <span className="text-zinc-400">straight-line</span>
             </div>
           )}
         </div>
@@ -98,17 +111,17 @@ export function FactorCard({ label, icon, factor }: FactorCardProps) {
             aria-hidden="true"
           />
         )}
-      </button>
+      </Header>
 
       {hasPois && expanded && (
         <ul id={panelId} className="space-y-1 border-t border-zinc-800 px-3 py-2">
-          {factor.contributingPois?.map((poi) => (
+          {factor.contributingPois?.map((poi, index) => (
             <li
-              key={poi.name}
+              key={`${poi.name}-${poi.distanceMeters}-${index}`}
               className="flex items-center justify-between gap-2 font-mono text-[11px] text-zinc-400"
             >
               <span className="truncate">{poi.name}</span>
-              <span className="shrink-0 text-zinc-500">{formatDistanceMiles(poi.distanceMeters)}</span>
+              <span className="shrink-0 text-zinc-400">{formatDistanceMiles(poi.distanceMeters)}</span>
             </li>
           ))}
         </ul>

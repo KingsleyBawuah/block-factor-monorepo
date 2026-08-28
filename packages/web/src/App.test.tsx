@@ -164,8 +164,11 @@ describe("App component", () => {
     // 75 falls in the "lime" score tier (65-79) -- asserts the Solar
     // Exposure card's progress bar fill carries that tier's color, not just
     // that the number rendered somewhere.
+    // Solar has no contributingPois in this fixture, so its card header
+    // renders as a plain <div> rather than a <button> -- scope by the card's
+    // own rounded-lg wrapper instead, which is stable either way.
     const solarLabel = await screen.findByText("Solar Exposure");
-    const solarRow = solarLabel.closest("button") as HTMLElement;
+    const solarRow = solarLabel.closest("div.rounded-lg") as HTMLElement;
     expect(within(solarRow).getByText("75")).toBeTruthy();
     expect(solarRow.querySelector(".bg-lime-400")).toBeTruthy();
     expect(screen.queryByText("Search an address above to see its BlockFactor score.")).toBeNull();
