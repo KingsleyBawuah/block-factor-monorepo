@@ -4,6 +4,10 @@ import { Outlet } from "@tanstack/react-router";
 import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
 import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, SolarRayWidget, DEMO_ADDRESS_LAT, DEMO_ADDRESS_LON, DEMO_ADDRESS_FACING } from "./map";
+import { solarBaseScore, solarScoreTier } from "./map/layers/solarRay";
+
+const solarScore = solarBaseScore(DEMO_ADDRESS_FACING);
+const solarTier = solarScoreTier(solarScore);
 
 export default function App() {
   const [map, setMap] = useState<MapLibreMap | null>(null);
@@ -41,6 +45,14 @@ export default function App() {
                   <Badge variant="cta-red">Red Line</Badge>
                   <Badge variant="cta-pink">Pink Line</Badge>
                   <Badge variant="cta-green">Green Line</Badge>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-xs font-mono uppercase tracking-wider text-zinc-500">
+                    Solar
+                  </span>
+                  <Badge variant={`score-${solarTier}`}>
+                    {DEMO_ADDRESS_FACING}-Facing · {solarScore}
+                  </Badge>
                 </div>
               </CardContent>
             </Card>

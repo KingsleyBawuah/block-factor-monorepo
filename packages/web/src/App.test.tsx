@@ -63,6 +63,16 @@ describe("App component", () => {
     expect(await screen.findByText("Green Line")).toBeTruthy();
   });
 
+  it("renders the solar exposure badge for the demo address's facing and score", async () => {
+    renderApp();
+
+    // 233 S Wacker Dr infers West-facing (verified against
+    // InferStreetFacingOrientation, see map/constants.ts), which is a 75/100
+    // S_solar base score -- shown here as a plain sidebar badge rather than
+    // requiring a viewer to interpret the 3D ray's color/height on the map.
+    expect(await screen.findByText("W-Facing · 75")).toBeTruthy();
+  });
+
   it("renders outlet child route content", async () => {
     renderApp();
 

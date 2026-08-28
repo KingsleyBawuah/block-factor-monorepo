@@ -7,6 +7,7 @@ import {
   solarRayHeightMeters,
   solarRayTipPoint,
   solarScoreColor,
+  solarScoreTier,
 } from "./solarRay";
 
 describe("compassBearingDegrees", () => {
@@ -127,6 +128,32 @@ describe("solarScoreColor", () => {
     expect(solarScoreColor(solarBaseScore("NE"))).toBe("#f59e0b");
     expect(solarScoreColor(solarBaseScore("NW"))).toBe("#f59e0b");
     expect(solarScoreColor(solarBaseScore("N"))).toBe("#f43f5e");
+  });
+});
+
+describe("solarScoreTier", () => {
+  it("maps each score boundary to its exact tier name, the sidebar Badge variant name depends on", () => {
+    expect(solarScoreTier(100)).toBe("emerald");
+    expect(solarScoreTier(80)).toBe("emerald");
+    expect(solarScoreTier(79)).toBe("lime");
+    expect(solarScoreTier(65)).toBe("lime");
+    expect(solarScoreTier(64)).toBe("amber");
+    expect(solarScoreTier(45)).toBe("amber");
+    expect(solarScoreTier(44)).toBe("rose");
+    expect(solarScoreTier(0)).toBe("rose");
+  });
+
+  it("agrees with solarScoreColor for every real S_solar base score", () => {
+    const tierHexes: Record<string, string> = {
+      emerald: "#10b981",
+      lime: "#84cc16",
+      amber: "#f59e0b",
+      rose: "#f43f5e",
+    };
+    for (const facing of ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]) {
+      const score = solarBaseScore(facing);
+      expect(tierHexes[solarScoreTier(score)]).toBe(solarScoreColor(score));
+    }
   });
 });
 

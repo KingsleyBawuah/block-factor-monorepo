@@ -56,22 +56,33 @@ export function solarBaseScore(facing: string): number {
   return SOLAR_BASE_SCORES[facing.toUpperCase()] ?? 100;
 }
 
-// The exact score-tier hexes DESIGN.md's "Score Indicators" already define
-// (Optimal/Emerald 80-100, Good/Lime 65-79, Moderate/Amber 45-64,
-// Alert/Rose 0-44) -- reused here deliberately: unlike the POI/Divvy
-// category markers, this widget genuinely represents a score, so the score
-// palette is the *correct* semantic fit, not a borrowed one.
-const SCORE_EMERALD = "#10b981";
-const SCORE_LIME = "#84cc16";
-const SCORE_AMBER = "#f59e0b";
-const SCORE_ROSE = "#f43f5e";
+export type ScoreTier = "emerald" | "lime" | "amber" | "rose";
+
+/**
+ * Maps an S_solar base score to its DESIGN.md score tier (Optimal/Emerald
+ * 80-100, Good/Lime 65-79, Moderate/Amber 45-64, Alert/Rose 0-44) -- reused
+ * here deliberately: unlike the POI/Divvy category markers, this widget
+ * genuinely represents a score, so the score palette is the *correct*
+ * semantic fit, not a borrowed one. The tier name (rather than just a hex)
+ * is also what the sidebar's <Badge variant={`score-${tier}`}> needs.
+ */
+export function solarScoreTier(score: number): ScoreTier {
+  if (score >= 80) return "emerald";
+  if (score >= 65) return "lime";
+  if (score >= 45) return "amber";
+  return "rose";
+}
+
+const SCORE_TIER_COLORS: Record<ScoreTier, string> = {
+  emerald: "#10b981",
+  lime: "#84cc16",
+  amber: "#f59e0b",
+  rose: "#f43f5e",
+};
 
 /** Maps an S_solar base score to its DESIGN.md score-tier color. */
 export function solarScoreColor(score: number): string {
-  if (score >= 80) return SCORE_EMERALD;
-  if (score >= 65) return SCORE_LIME;
-  if (score >= 45) return SCORE_AMBER;
-  return SCORE_ROSE;
+  return SCORE_TIER_COLORS[solarScoreTier(score)];
 }
 
 const MIN_RAY_HEIGHT_METERS = 10;
