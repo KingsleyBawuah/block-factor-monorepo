@@ -165,13 +165,15 @@ Assemble the high-density Split-Screen Analytics Workspace and reactive weight c
 Affiliate integration (contextual cards + click instrumentation) originally scoped here has moved to Phase 8, bundled with the cloud hosting migration it's meant to help fund — see Phase 8 below. Shipping both together means affiliate links go live at the same time as the public cloud deployment they help pay for, rather than sitting live earlier on the free home-server deployment.
 
 ### Deliverables
-1. **Left Scored Analytics Panel:**
+1. **Address Search & Geocoding Input:**
+   - [ ] Address input box wired to the existing `GET /api/v1/geocode` endpoint, with a candidate picker for ambiguous results, feeding `POST /api/v1/score` once an address resolves. The first real entry point for a user-supplied address anywhere in the app — every map layer/endpoint before this (Phase 4) works against a fixed demo coordinate or a bulk city-wide dataset.
+2. **Left Scored Analytics Panel:**
    - [ ] Hero Composite Score Ring (0–100). (Neighborhood archetype badge deferred to v2.)
    - [ ] Collapsible Weight Customization Slider Drawer with instant reactive recalculation and URL search param sync.
    - [ ] 9–10 Dense Factor Breakdown Cards (the commute card renders only when a destination is set) with distance badges ("straight-line" qualifier) and sub-score progress bars.
-2. **Bottom Multi-Address Comparison Tray:**
+3. **Bottom Multi-Address Comparison Tray:**
    - [ ] Sticky dock to pin and compare up to 3 addresses side-by-side.
-3. **Error & Empty States:**
+4. **Error & Empty States:**
    - [ ] Address-not-found, ambiguous-address candidate picker, out-of-coverage (422 `OUT_OF_COVERAGE`), geocoding failure, OTP2-unavailable, and degraded-factor (`null`) states — styled per AGENTS.md (high-density copy, no emojis).
 
 ### Validation Criteria
