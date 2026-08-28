@@ -101,7 +101,7 @@ The application must look and feel like an analytical, high-density location int
   - Prioritize high information density: lead with the metric, entity name, and distance.
 - **Data & Typography Precision:**
   - Use a tabular monospace font (`Geist Mono`) for all coordinates, distances, travel durations, and numeric scores.
-  - Maintain strict layout geometry: a consistent `rounded-xl` corner radius across cards and interactive controls (small chips/badges may use `rounded-sm`), consistent padding scales (`p-4`, `p-6`), and zero bubbly floating elements.
+  - Maintain strict layout geometry: a consistent `rounded-lg` corner radius across cards and interactive controls (small chips/badges may use `rounded-sm`), consistent padding scales (`p-4`, `p-6`), and zero bubbly floating elements.
 - **Authentic Spatial Imagery:**
   - Never use generic abstract placeholder divs; utilize real MapLibre GL vector tiles, authentic CTA rail badges, and real spatial overlays.
 

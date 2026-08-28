@@ -94,10 +94,10 @@ export default function App() {
               Bugzilla #915492, #537433), confirmed live (rounded in Chrome,
               square in Firefox/Zen at the same commit). clip-path is a real
               compositor-level clip Firefox does honor on canvas layers.
-              0.75rem matches rounded-xl's default Tailwind value (no
-              --radius-xl token is defined in index.css to reference).
+              0.375rem matches index.css's --radius-lg override (rounded-lg's
+              Tailwind default of 0.5rem is NOT what actually renders here).
             */}
-            <Card className="h-[70vh] overflow-hidden p-0 [clip-path:inset(0_round_0.75rem)] lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
+            <Card className="h-[70vh] overflow-hidden p-0 [clip-path:inset(0_round_0.375rem)] lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
               <MapCanvas onMapReady={setMap} />
               {map && <CtaRailLayer map={map} />}
               {map && <ProtectedBikeLayer map={map} />}
