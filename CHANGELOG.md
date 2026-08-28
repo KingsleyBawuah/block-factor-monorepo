@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Hero Composite Score Ring (`packages/web/src/components/ui/score-ring.tsx`, Phase 5 deliverable 2): a circular SVG progress ring around the resolved address's composite score, colored by the same score tier a `Badge` would use (`stroke-emerald/lime/amber/rose-400`, matching `Badge`'s own score-* variant colors exactly rather than the currently-unused `--color-score-*` theme tokens). Replaces the sidebar's plain `81 / 100` text. Hand-rolled SVG (`stroke-dasharray`/`stroke-dashoffset`) rather than a charting library, since a single arc doesn't need one.
 - `addressHint` field on `POST /api/v1/score`'s `ScoreRequest` (`docs/openapi.yaml`): an always-optional string, ignored when `address` is set, used only for `S_solar`'s street-facing orientation inference when scoring by pre-resolved `origin` coordinates — never triggers a geocoding call. Fixes the redundant-geocode latency regression noted under Fixed below.
 
 - Water bodies on the map (Lake Michigan, the Chicago River) now render in `#5c8da0` instead of `dark-matter-gl-style`'s own near-black default (`#2C353C`, verified by fetching the live style JSON), via `map.setPaintProperty("water", "fill-color", ...)` once the basemap loads (`packages/web/src/map/MapCanvas.tsx`, new `WATER_FILL_COLOR` constant).
