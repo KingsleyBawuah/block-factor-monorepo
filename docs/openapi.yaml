@@ -27,7 +27,7 @@ tags:
   - name: Isochrones
     description: Walk/transit reach polygons.
   - name: Layers
-    description: Static, city-wide spatial map layers (CTA rail, stations, bike routes, trail access, supermarkets).
+    description: City-wide spatial map layers — mostly static, bulk-ingested PostGIS data (CTA rail, stations, bike routes, trail access, supermarkets), plus live Divvy dock availability from the public GBFS feed.
   - name: Places
     description: Per-address nearby cafes, fitness venues, and supermarkets.
   - name: Health
@@ -250,6 +250,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SupermarketsResponse"
+
+  /api/v1/layers/divvy-docks:
+    get:
+      tags: [Layers]
+      operationId: getDivvyDocksLayer
+      summary: Get live Divvy bike-share dock locations and availability as GeoJSON.
+      description: >
+        Bulk, city-wide layer — no request parameters. Unlike the other
+        `/layers/*` endpoints, this is live third-party data (the public
+        Divvy/Lyft GBFS feed), not bulk-ingested PostGIS data — display-only,
+        not a scored factor. Backed by a 5-minute in-process cache
+        (docs/ARCHITECTURE.md §5.4), so results may lag the live feed by up
+        to that long.
+      responses:
+        "200":
+          description: Divvy docks as a GeoJSON FeatureCollection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DivvyDocksResponse"
+        "502":
+          description: The live Divvy GBFS feed is unreachable and no cached data is available yet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                divvyUnavailable:
+                  value:
+                    code: DIVVY_UNAVAILABLE
+                    message: Failed to load live Divvy dock data.
 
   /api/v1/health:
     get:
@@ -749,6 +780,65 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PlaceFeature"
+
+    DivvyDockFeature:
+      type: object
+      required: [type, properties, geometry]
+      properties:
+        type:
+          type: string
+          const: Feature
+        properties:
+          type: object
+          required:
+            [
+              name,
+              capacity,
+              bikesAvailable,
+              ebikesAvailable,
+              docksAvailable,
+              isRenting,
+              isReturning,
+            ]
+          properties:
+            name:
+              type: string
+            capacity:
+              type: integer
+            bikesAvailable:
+              type: integer
+            ebikesAvailable:
+              type: integer
+            docksAvailable:
+              type: integer
+            isRenting:
+              type: boolean
+              description: False when the station is temporarily closed for rebalancing, even though it's installed.
+            isReturning:
+              type: boolean
+        geometry:
+          type: object
+          description: GeoJSON Point geometry.
+          required: [type, coordinates]
+          properties:
+            type:
+              type: string
+              const: Point
+            coordinates:
+              type: array
+              items: {}
+
+    DivvyDocksResponse:
+      type: object
+      required: [type, features]
+      properties:
+        type:
+          type: string
+          const: FeatureCollection
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/DivvyDockFeature"
 
     HealthResponse:
       type: object

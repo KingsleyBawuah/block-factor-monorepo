@@ -217,6 +217,51 @@ func (e CtaStationsResponseType) Valid() bool {
 	}
 }
 
+// Defines values for DivvyDockFeatureGeometryType.
+const (
+	DivvyDockFeatureGeometryTypePoint DivvyDockFeatureGeometryType = "Point"
+)
+
+// Valid indicates whether the value is a known member of the DivvyDockFeatureGeometryType enum.
+func (e DivvyDockFeatureGeometryType) Valid() bool {
+	switch e {
+	case DivvyDockFeatureGeometryTypePoint:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DivvyDockFeatureType.
+const (
+	DivvyDockFeatureTypeFeature DivvyDockFeatureType = "Feature"
+)
+
+// Valid indicates whether the value is a known member of the DivvyDockFeatureType enum.
+func (e DivvyDockFeatureType) Valid() bool {
+	switch e {
+	case DivvyDockFeatureTypeFeature:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DivvyDocksResponseType.
+const (
+	DivvyDocksResponseTypeFeatureCollection DivvyDocksResponseType = "FeatureCollection"
+)
+
+// Valid indicates whether the value is a known member of the DivvyDocksResponseType enum.
+func (e DivvyDocksResponseType) Valid() bool {
+	switch e {
+	case DivvyDocksResponseTypeFeatureCollection:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthResponseStatus.
 const (
 	Ok HealthResponseStatus = "ok"
@@ -652,6 +697,42 @@ type CtaStationsResponse struct {
 // CtaStationsResponseType defines model for CtaStationsResponse.Type.
 type CtaStationsResponseType string
 
+// DivvyDockFeature defines model for DivvyDockFeature.
+type DivvyDockFeature struct {
+	// Geometry GeoJSON Point geometry.
+	Geometry struct {
+		Coordinates []interface{}                `json:"coordinates"`
+		Type        DivvyDockFeatureGeometryType `json:"type"`
+	} `json:"geometry"`
+	Properties struct {
+		BikesAvailable  int `json:"bikesAvailable"`
+		Capacity        int `json:"capacity"`
+		DocksAvailable  int `json:"docksAvailable"`
+		EbikesAvailable int `json:"ebikesAvailable"`
+
+		// IsRenting False when the station is temporarily closed for rebalancing, even though it's installed.
+		IsRenting   bool   `json:"isRenting"`
+		IsReturning bool   `json:"isReturning"`
+		Name        string `json:"name"`
+	} `json:"properties"`
+	Type DivvyDockFeatureType `json:"type"`
+}
+
+// DivvyDockFeatureGeometryType defines model for DivvyDockFeature.Geometry.Type.
+type DivvyDockFeatureGeometryType string
+
+// DivvyDockFeatureType defines model for DivvyDockFeature.Type.
+type DivvyDockFeatureType string
+
+// DivvyDocksResponse defines model for DivvyDocksResponse.
+type DivvyDocksResponse struct {
+	Features []DivvyDockFeature     `json:"features"`
+	Type     DivvyDocksResponseType `json:"type"`
+}
+
+// DivvyDocksResponseType defines model for DivvyDocksResponse.Type.
+type DivvyDocksResponseType string
+
 // Error defines model for Error.
 type Error struct {
 	// Code Machine-readable error code, e.g. `OUT_OF_COVERAGE`.
@@ -936,6 +1017,9 @@ type ServerInterface interface {
 	// GetCtaStationsLayer Get CTA 'L' station locations as GeoJSON.
 	// (GET /api/v1/layers/cta-stations)
 	GetCtaStationsLayer(w http.ResponseWriter, r *http.Request)
+	// GetDivvyDocksLayer Get live Divvy bike-share dock locations and availability as GeoJSON.
+	// (GET /api/v1/layers/divvy-docks)
+	GetDivvyDocksLayer(w http.ResponseWriter, r *http.Request)
 	// GetSupermarketsLayer Get supermarket locations as GeoJSON.
 	// (GET /api/v1/layers/supermarkets)
 	GetSupermarketsLayer(w http.ResponseWriter, r *http.Request)
@@ -1085,6 +1169,20 @@ func (siw *ServerInterfaceWrapper) GetCtaStationsLayer(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCtaStationsLayer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDivvyDocksLayer operation middleware
+func (siw *ServerInterfaceWrapper) GetDivvyDocksLayer(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDivvyDocksLayer(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1311,6 +1409,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/layers/bike-routes", wrapper.GetBikeRoutesLayer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/layers/trail-access", wrapper.GetTrailAccessLayer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/layers/supermarkets", wrapper.GetSupermarketsLayer)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/layers/divvy-docks", wrapper.GetDivvyDocksLayer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/health", wrapper.GetHealth)
 
 	return m

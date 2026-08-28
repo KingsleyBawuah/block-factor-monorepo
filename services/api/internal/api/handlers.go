@@ -23,12 +23,13 @@ type Geocoder interface {
 
 // Server implements the generated ServerInterface.
 type Server struct {
-	logger          *slog.Logger
-	geocoder        Geocoder
-	boundaryChecker spatial.BoundaryChecker
-	scoreEngine     ScoreEngine
-	layerReader     spatial.LayerReader
-	placesFinder    PlacesFinder
+	logger           *slog.Logger
+	geocoder         Geocoder
+	boundaryChecker  spatial.BoundaryChecker
+	scoreEngine      ScoreEngine
+	layerReader      spatial.LayerReader
+	placesFinder     PlacesFinder
+	divvyDocksReader DivvyDocksReader
 }
 
 // ServerOption configures a Server instance.
