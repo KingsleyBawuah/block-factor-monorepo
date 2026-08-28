@@ -6,23 +6,11 @@ import "lineicons/dist/lineicons.css";
 import { apiClient } from "../../lib/api/client";
 import { escapeHtml } from "./escapeHtml";
 import { createDivvyMarkerIcon, DIVVY_MARKER_ICON_ID } from "./divvyMarkerIcon";
+import { LABEL_FONT_STACK } from "./mapFonts";
 import type { FeatureCollection, PointGeometry } from "../geojson";
 
 const DOCKS_SOURCE_ID = "divvy-docks";
 const DOCKS_LAYER_ID = "divvy-docks-layer";
-
-// The exact font stack CARTO's dark-matter-gl-style basemap itself already
-// uses for its own labels (verified live against the style's own JSON,
-// https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json) --
-// text-font must reference a stack the style's glyphs endpoint actually
-// serves, or the label silently fails to render.
-const LABEL_FONT_STACK = [
-  "Montserrat Regular",
-  "Open Sans Regular",
-  "Noto Sans Regular",
-  "HanWangHeiLight Regular",
-  "NanumBarunGothic Regular",
-];
 
 type DivvyDockProperties = {
   name: string;
