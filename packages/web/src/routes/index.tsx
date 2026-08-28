@@ -8,16 +8,6 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: () => (
-    <div className="space-y-4">
-      <div className="text-xs font-mono uppercase tracking-widest text-zinc-500">
-        Workspace / Split-Screen Location Intelligence
-      </div>
-      <p className="text-sm text-zinc-400">
-        Phase 1 Foundation & Contracts initialized. Enter an address or inspect API contract endpoints.
-      </p>
-    </div>
-  ),
 });
 
 const routeTree = rootRoute.addChildren([indexRoute]);
