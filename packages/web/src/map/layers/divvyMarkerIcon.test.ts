@@ -4,13 +4,26 @@ import { createDivvyMarkerIcon } from "./divvyMarkerIcon";
 type RecordedCall = { method: string; args: unknown[] };
 
 /**
- * happy-dom (this project's test environment) has no canvas 2D
- * implementation -- `getContext("2d")` returns null there, confirmed live.
- * This stands in a fake context recording every draw call, so the actual
- * drawing math (arc angles, fill colors, stroke) can be verified without a
- * real browser; every real browser supports canvas 2D natively, so this is
- * purely a test-environment workaround, not a change to app behavior.
+ * Bun's test runner shares one global/module registry across every test
+ * file by default (see src/test/setup.ts's own comment on this) -- so
+ * relying on happy-dom's ambient "no canvas 2D" behavior for the null-context
+ * test is fragile: it silently passes or fails depending on whatever any
+ * other test in the same run last left `HTMLCanvasElement.prototype.getContext`
+ * set to, confirmed live via a CI-only flaky failure this assumption caused
+ * (passed in isolation, failed as part of the full suite). Both tests here
+ * instead explicitly patch and restore the prototype around themselves, so
+ * neither depends on the environment's default or on run order.
  */
+function withPatchedGetContext<T>(returnValue: T) {
+  const original = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = mock(() => returnValue) as unknown as typeof original;
+  return {
+    restore: () => {
+      HTMLCanvasElement.prototype.getContext = original;
+    },
+  };
+}
+
 function withMockCanvasContext() {
   const calls: RecordedCall[] = [];
   const state = { fillStyle: "", strokeStyle: "", lineWidth: 0 };
@@ -46,20 +59,18 @@ function withMockCanvasContext() {
     },
   };
 
-  const original = HTMLCanvasElement.prototype.getContext;
-  HTMLCanvasElement.prototype.getContext = mock(() => ctx) as unknown as typeof original;
-
-  return {
-    calls,
-    restore: () => {
-      HTMLCanvasElement.prototype.getContext = original;
-    },
-  };
+  const { restore } = withPatchedGetContext(ctx);
+  return { calls, restore };
 }
 
 describe("createDivvyMarkerIcon", () => {
   it("returns null when no 2D canvas context is available", () => {
-    expect(createDivvyMarkerIcon()).toBeNull();
+    const { restore } = withPatchedGetContext(null);
+    try {
+      expect(createDivvyMarkerIcon()).toBeNull();
+    } finally {
+      restore();
+    }
   });
 
   it("draws two semicircle halves in Divvy Blue and grey, plus a stroke outline, and reads back the full 24x24 image", () => {
