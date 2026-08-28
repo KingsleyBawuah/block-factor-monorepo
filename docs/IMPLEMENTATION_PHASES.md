@@ -148,7 +148,7 @@ Originally scoped as 5 items (map component + 4 interactive layers + solar widge
 7. [x] **POI Density Markers** (frontend, consumes 6) — Cafes, fitness studios, and supermarkets with distance radius rings.
 8. [x] **Divvy client + endpoint** (backend only) — `internal/clients/divvy.go` (GBFS client) + in-memory GBFS cache (5m TTL) + `GET /api/v1/layers/divvy-docks`.
 9. [x] **Divvy Dock Layer** (frontend, consumes 8) — Station markers with live capacity badges (display-only — Divvy is not a scored factor).
-10. [ ] **Solar Ray Widget** (frontend only, no backend dependency) — 3D compass orientation ray projected from the address marker, using the `facing` direction `factor_solar.go` already infers/accepts.
+10. [x] **Solar Ray Widget** (frontend only, no backend dependency) — 3D compass orientation ray projected from the address marker, using the `facing` direction `factor_solar.go` already infers/accepts.
 
 ### Validation Criteria
 - 60fps GPU-accelerated panning and zooming on desktop and mobile browsers.

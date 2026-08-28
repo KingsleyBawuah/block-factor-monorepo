@@ -23,3 +23,13 @@ export const CHICAGO_DEFAULT_ZOOM = 11;
  */
 export const DEMO_ADDRESS_LAT = 41.8781;
 export const DEMO_ADDRESS_LON = -87.6298;
+
+/**
+ * The real street-facing window orientation services/api/internal/scoring/orientation.go's
+ * InferStreetFacingOrientation infers for 233 S Wacker Dr (verified by
+ * running that exact function against that exact address, not guessed --
+ * house number 233 is odd, and "Wacker" matches neither a known named
+ * street nor a diagonal-avenue pattern, so it falls through to the
+ * default odd-house-number rule: West). Feeds SolarRayWidget.
+ */
+export const DEMO_ADDRESS_FACING = "W";
