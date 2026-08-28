@@ -22,13 +22,21 @@ const STROKE_COLOR = "#18181b";
  * solid color per feature, so a genuine half-and-half marker needs a
  * custom icon rendered via the Canvas API instead.
  *
- * Returns null when no 2D canvas context is available (this project's own
- * test environment, happy-dom, has no canvas 2D implementation --
- * confirmed live, `getContext("2d")` returns null there; every real
- * browser supports this).
+ * Takes an optional canvas factory purely for test injection -- happy-dom
+ * (this project's test environment) has no canvas 2D implementation, and
+ * monkey-patching `HTMLCanvasElement.prototype.getContext` globally to fake
+ * one proved unreliable across test runs (observed to leak between tests in
+ * CI in a way that never reproduced locally). Passing a fake canvas in
+ * directly sidesteps that global-state fragility entirely; every real
+ * caller relies on the default, a real `<canvas>`.
+ *
+ * Returns null when no 2D canvas context is available; every real browser
+ * supports this, so this path is test-environment-only in practice.
  */
-export function createDivvyMarkerIcon(): ImageData | null {
-  const canvas = document.createElement("canvas");
+export function createDivvyMarkerIcon(
+  createCanvas: () => HTMLCanvasElement = () => document.createElement("canvas")
+): ImageData | null {
+  const canvas = createCanvas();
   canvas.width = ICON_SIZE;
   canvas.height = ICON_SIZE;
   const ctx = canvas.getContext("2d");
