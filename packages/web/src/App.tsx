@@ -23,7 +23,8 @@ export default function App() {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <span className="text-sm font-semibold tracking-wider uppercase">
-              BlockFactor
+              <span className="text-flag-blue">Block</span>
+              <span className="text-flag-red">Factor</span>
             </span>
             <span className="text-xs font-mono text-zinc-500">v0.1.0-alpha</span>
           </div>

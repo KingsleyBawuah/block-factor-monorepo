@@ -49,9 +49,17 @@ describe("App component", () => {
   it("renders header and livability score card", async () => {
     renderApp();
 
-    expect(await screen.findByText("BlockFactor")).toBeTruthy();
     expect(await screen.findByText("Livability Score")).toBeTruthy();
     expect(await screen.findByText("Status / Online")).toBeTruthy();
+  });
+
+  it("renders the BlockFactor wordmark split into Chicago flag blue/red halves", async () => {
+    renderApp();
+
+    const block = await screen.findByText("Block");
+    const factor = await screen.findByText("Factor");
+    expect(block.className).toContain("text-flag-blue");
+    expect(factor.className).toContain("text-flag-red");
   });
 
   it("renders authentic CTA rail badges", async () => {
