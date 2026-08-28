@@ -67,6 +67,11 @@ export default function App() {
   // never fires just because a search happened -- no separate "skip the
   // next one" flag needed.
   const originRef = useRef<Origin | null>(null);
+  // Monotonic counter guarding against out-of-order responses: if two
+  // rescores are in flight at once (e.g. two presets toggled in quick
+  // succession, each past its own debounce window), a slower earlier
+  // response landing after a faster later one must not clobber it.
+  const rescoreSeqRef = useRef(0);
 
   const rescoreMutation = useMutation({
     mutationFn: async (vars: { origin: Origin; weights: Weights }): Promise<ScoreResponse> => {
@@ -95,15 +100,23 @@ export default function App() {
   useEffect(() => {
     const origin = originRef.current;
     if (!origin) return;
+    const seq = ++rescoreSeqRef.current;
     rescoreMutation.mutate(
       { origin, weights: debouncedWeights },
       {
         onSuccess: (score) => {
-          // Guards against a slow rescore for an address the user has
-          // since navigated away from landing after a newer search already
-          // resolved -- rescoreMutation isn't itself cancelled, so this
-          // keeps a stale response from overwriting a newer one.
-          if (originRef.current?.lat === origin.lat && originRef.current?.lon === origin.lon) {
+          // Two guards against a stale response overwriting a newer one --
+          // rescoreMutation isn't itself cancelled, so neither is
+          // redundant: the origin check covers landing after the user has
+          // since searched a different address, and the sequence check
+          // covers landing out of order relative to a second rescore for
+          // this same address (e.g. two presets toggled in quick
+          // succession, each past its own debounce window).
+          if (
+            seq === rescoreSeqRef.current &&
+            originRef.current?.lat === origin.lat &&
+            originRef.current?.lon === origin.lon
+          ) {
             setResolved((prev) => (prev ? { ...prev, score } : prev));
           }
         },
@@ -114,7 +127,10 @@ export default function App() {
   }, [debouncedWeights, rescoreMutation.mutate]);
 
   function handleWeightsChange(next: Weights) {
-    navigate({ search: (prev) => ({ ...prev, ...weightsToSearch(next) }) });
+    // replace: true -- a slider drag fires this on every tick, so pushing a
+    // new history entry per tick would make the browser Back button
+    // effectively unusable after any drag.
+    navigate({ search: (prev) => ({ ...prev, ...weightsToSearch(next) }), replace: true });
   }
 
   useEffect(() => {

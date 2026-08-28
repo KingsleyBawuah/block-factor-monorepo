@@ -51,6 +51,24 @@ describe("WeightDrawer", () => {
     expect(onChange).toHaveBeenCalledWith(weightsForPreset("hybridCommuter"));
   });
 
+  it("renders exactly 9 sliders, one per active factor (commute excluded)", () => {
+    const { getByRole, getAllByRole } = renderDrawer();
+    fireEvent.click(getByRole("button", { name: /weight customization/i }));
+
+    expect(getAllByRole("slider")).toHaveLength(9);
+  });
+
+  it("collapses again on a second click of the header, hiding the sliders", () => {
+    const { getByRole, queryByText } = renderDrawer();
+    const toggle = getByRole("button", { name: /weight customization/i });
+
+    fireEvent.click(toggle);
+    expect(queryByText("Transit")).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(queryByText("Transit")).toBeNull();
+  });
+
   it("calls onChange with a redistributed weight set when a slider moves", () => {
     const { getByRole, onChange } = renderDrawer();
     fireEvent.click(getByRole("button", { name: /weight customization/i }));

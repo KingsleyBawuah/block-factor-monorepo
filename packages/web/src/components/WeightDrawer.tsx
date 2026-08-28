@@ -38,14 +38,14 @@ export function WeightDrawer({ weights, onChange }: WeightDrawerProps) {
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-center justify-between text-left"
         aria-expanded={expanded}
-        aria-controls={panelId}
+        aria-controls={expanded ? panelId : undefined}
       >
         <div className="flex items-center gap-2">
           <i className="lni lni-sliders-horizontal-square-2 text-sm text-zinc-400" aria-hidden="true" />
           <span className="text-xs font-medium tracking-wide text-zinc-300 uppercase">Weight Customization</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-xs text-zinc-500">
+          <span className="font-mono text-xs text-zinc-400">
             {activePreset ? PRESET_LABELS[activePreset] : "Custom"}
           </span>
           <i

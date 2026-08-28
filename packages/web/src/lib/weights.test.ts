@@ -128,6 +128,16 @@ describe("redistributeWeights", () => {
     expect(sum(result)).toBe(100);
   });
 
+  it("evenly splits freed weight across the other 8 when they all start at 0 (scaleToSum's zero-fallback branch)", () => {
+    const allFlood = redistributeWeights(remoteWorker, "flood", 100); // flood:100, every other factor:0
+    const result = redistributeWeights(allFlood, "flood", 60);
+    expect(result.flood).toBe(60);
+    for (const k of WEIGHT_FACTOR_ORDER) {
+      if (k !== "flood") expect(result[k]).toBe(5); // 40 freed / 8 factors, evenly
+    }
+    expect(sum(result)).toBe(100);
+  });
+
   it("hands a dragged-to-0 slider's freed weight back to the others proportionally", () => {
     const result = redistributeWeights(remoteWorker, "transit", 0);
     expect(result.transit).toBe(0);

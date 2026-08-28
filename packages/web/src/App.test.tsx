@@ -109,11 +109,12 @@ function renderApp() {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const testRouter = createTestRouter();
-  return render(
+  const utils = render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={testRouter} />
     </QueryClientProvider>
   );
+  return { ...utils, router: testRouter };
 }
 
 async function searchFor233Wacker() {
@@ -224,16 +225,24 @@ describe("App component", () => {
   });
 
   it("re-scores the same address (no re-geocode) once a dragged weight slider settles, debounced", async () => {
-    renderApp();
+    const { router } = renderApp();
 
     await searchFor233Wacker();
     await screen.findByText("233 S Wacker Dr, Chicago, IL");
 
     const scoreCallsBefore = postMock.mock.calls.filter((c) => c[0] === "/api/v1/score").length;
     const geocodeCallsBefore = getMock.mock.calls.filter((c) => c[0] === "/api/v1/geocode").length;
+    const historyLengthBefore = router.history.length;
 
     fireEvent.click(screen.getByRole("button", { name: /weight customization/i }));
     fireEvent.change(screen.getByRole("slider", { name: /transit/i }), { target: { value: "40" } });
+
+    // The URL updates instantly, synchronously with the slider drag -- not
+    // gated behind the debounced re-score request below.
+    expect(router.state.location.search.w_transit).toBe(40);
+    // navigate({ replace: true }) -- a slider tick must not push a new
+    // history entry, or the browser Back button breaks after any drag.
+    expect(router.history.length).toBe(historyLengthBefore);
 
     // App.tsx debounces the actual re-score request (RESCORE_DEBOUNCE_MS)
     // -- it shouldn't fire on every drag tick.

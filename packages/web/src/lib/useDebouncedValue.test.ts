@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, spyOn } from "bun:test";
 import { renderHook, waitFor, act } from "@testing-library/react";
 import { useDebouncedValue } from "./useDebouncedValue";
 
@@ -39,5 +39,18 @@ describe("useDebouncedValue", () => {
     expect(result.current).toBe(1); // still the initial value -- no gap >= 30ms yet
 
     await waitFor(() => expect(result.current).toBe(4));
+  });
+
+  it("clears its pending timer on unmount, so a stale setDebounced never fires against an unmounted component", () => {
+    const clearTimeoutSpy = spyOn(globalThis, "clearTimeout");
+    const { rerender, unmount } = renderHook(({ value }) => useDebouncedValue(value, 30), {
+      initialProps: { value: "a" },
+    });
+
+    rerender({ value: "b" }); // schedules a pending timer
+    unmount();
+
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+    clearTimeoutSpy.mockRestore();
   });
 });
