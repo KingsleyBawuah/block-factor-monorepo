@@ -170,7 +170,7 @@ Affiliate integration (contextual cards + click instrumentation) originally scop
 2. **Left Scored Analytics Panel:**
    - [x] Hero Composite Score Ring (0–100). (Neighborhood archetype badge deferred to v2.)
    - [ ] Collapsible Weight Customization Slider Drawer with instant reactive recalculation and URL search param sync.
-   - [ ] 9–10 Dense Factor Breakdown Cards (the commute card renders only when a destination is set) with distance badges ("straight-line" qualifier) and sub-score progress bars.
+   - [x] 9–10 Dense Factor Breakdown Cards (the commute card renders only when a destination is set) with distance badges ("straight-line" qualifier) and sub-score progress bars.
 3. **Bottom Multi-Address Comparison Tray:**
    - [ ] Sticky dock to pin and compare up to 3 addresses side-by-side.
 4. **Error & Empty States:**

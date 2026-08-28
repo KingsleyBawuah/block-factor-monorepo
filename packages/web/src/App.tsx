@@ -5,7 +5,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
 import { ScoreRing } from "./components/ui/score-ring";
 import { AddressSearchInput, type ResolvedAddress } from "./components/AddressSearchInput";
-import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, RESOLVED_ADDRESS_ZOOM, scoreTier } from "./map";
+import { FactorBreakdownList } from "./components/FactorBreakdownList";
+import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, RESOLVED_ADDRESS_ZOOM } from "./map";
 
 export default function App() {
   const [map, setMap] = useState<MapLibreMap | null>(null);
@@ -15,8 +16,6 @@ export default function App() {
     if (!map || !resolved) return;
     map.flyTo({ center: [resolved.lon, resolved.lat], zoom: RESOLVED_ADDRESS_ZOOM });
   }, [map, resolved]);
-
-  const solar = resolved?.score.factors.solar;
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950 font-sans text-zinc-100">
@@ -66,21 +65,11 @@ export default function App() {
                   <Badge variant="cta-pink">Pink Line</Badge>
                   <Badge variant="cta-green">Green Line</Badge>
                 </div>
-
-                {solar && (
-                  <div className="mt-3 flex items-center gap-2">
-                    <span className="text-xs font-mono uppercase tracking-wider text-zinc-500">
-                      Solar
-                    </span>
-                    {solar.degraded || solar.score == null ? (
-                      <Badge variant="outline">Unavailable</Badge>
-                    ) : (
-                      <Badge variant={`score-${scoreTier(solar.score)}`}>{Math.round(solar.score)}</Badge>
-                    )}
-                  </div>
-                )}
               </CardContent>
             </Card>
+
+            {resolved && <FactorBreakdownList factors={resolved.score.factors} />}
+
             <Outlet />
           </div>
 
