@@ -3,8 +3,7 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { Outlet } from "@tanstack/react-router";
 import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
-import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, DEMO_ADDRESS_LAT, DEMO_ADDRESS_LON, DEMO_ADDRESS_FACING } from "./map";
-import { solarBaseScore, solarScoreTier } from "./map/layers/solarScore";
+import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, DEMO_ADDRESS_LAT, DEMO_ADDRESS_LON, DEMO_ADDRESS_FACING, solarBaseScore, solarScoreTier } from "./map";
 
 const solarScore = solarBaseScore(DEMO_ADDRESS_FACING);
 const solarTier = solarScoreTier(solarScore);

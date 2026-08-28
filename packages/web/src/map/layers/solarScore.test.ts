@@ -43,6 +43,12 @@ describe("solarScoreTier", () => {
     expect(solarScoreTier(150)).toBe("emerald");
   });
 
+  it("resolves fractional scores just below each boundary to the lower tier", () => {
+    expect(solarScoreTier(79.9)).toBe("lime");
+    expect(solarScoreTier(64.9)).toBe("amber");
+    expect(solarScoreTier(44.9)).toBe("rose");
+  });
+
   it("maps every real S_solar base score to the tier PRD §5.8's own ranking implies", () => {
     expect(solarScoreTier(solarBaseScore("S"))).toBe("emerald");
     expect(solarScoreTier(solarBaseScore("SE"))).toBe("emerald");
