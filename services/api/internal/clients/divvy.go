@@ -10,6 +10,9 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -117,14 +120,26 @@ func (c *DivvyClient) FetchStations(ctx context.Context) ([]DivvyStation, error)
 		return nil, errors.New("clients: divvy GBFS feed URLs not configured")
 	}
 
+	// The two feeds are independent HTTP resources -- fetch them
+	// concurrently rather than back-to-back, roughly halving cold-start/
+	// cache-miss latency (confirmed live: ~400ms sequential).
 	var info gbfsStationInformationResponse
-	if err := c.fetchJSON(ctx, c.stationInfoURL, &info); err != nil {
-		return nil, fmt.Errorf("clients: fetch divvy station information: %w", err)
-	}
-
 	var status gbfsStationStatusResponse
-	if err := c.fetchJSON(ctx, c.stationStatusURL, &status); err != nil {
-		return nil, fmt.Errorf("clients: fetch divvy station status: %w", err)
+	g, gCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		if err := c.fetchJSON(gCtx, c.stationInfoURL, &info); err != nil {
+			return fmt.Errorf("clients: fetch divvy station information: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		if err := c.fetchJSON(gCtx, c.stationStatusURL, &status); err != nil {
+			return fmt.Errorf("clients: fetch divvy station status: %w", err)
+		}
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	type liveStatus struct {
@@ -210,6 +225,18 @@ func (c *DivvyClient) doFetch(ctx context.Context, url string, dest any) (retrya
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		// A canceled/expired context isn't a transient failure worth
+		// retrying -- most commonly here, the *other* concurrently-fetched
+		// feed (FetchStations' errgroup) failed first and canceled the
+		// shared group context; retrying this one would just immediately
+		// hit that same cancellation again. Checked via ctx.Err() itself
+		// (not errors.Is against context.Canceled/DeadlineExceeded)
+		// because errgroup cancels its derived context with the triggering
+		// goroutine's own error as the cause, and net/http's client surfaces
+		// that cause -- not the plain sentinel -- in the returned error.
+		if ctx.Err() != nil {
+			return false, fmt.Errorf("clients: execute divvy request: %w", err)
+		}
 		return true, fmt.Errorf("clients: execute divvy request: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck // response already consumed by the time this runs
@@ -223,7 +250,11 @@ func (c *DivvyClient) doFetch(ctx context.Context, url string, dest any) (retrya
 		return false, fmt.Errorf("clients: divvy request returned non-retryable status %d: %s", resp.StatusCode, body)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(dest); err != nil {
+	// The real Chicago feed is ~600KB (2050 stations, confirmed live); 10MB
+	// is a generous ceiling that guards against unbounded memory allocation
+	// on a malformed or runaway upstream response without ever being a
+	// real constraint on legitimate data.
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 10*1024*1024)).Decode(dest); err != nil {
 		return false, fmt.Errorf("clients: decode divvy response: %w", err)
 	}
 	return false, nil
@@ -246,15 +277,30 @@ type DivvyStationsCache struct {
 	fetcher divvyStationFetcher
 	ttl     time.Duration
 	logger  *slog.Logger
+	sf      singleflight.Group
 
-	mu        sync.Mutex
-	stations  []DivvyStation
+	mu   sync.RWMutex
+	data divvyCachedData
+}
+
+type divvyCachedData struct {
+	stations []DivvyStation
+	// fetchedAt is the last *successful* fetch -- used only for the
+	// stale-data warning log's "how old is what I'm serving" figure, never
+	// for the refresh-cooldown decision (see lastAttempt).
 	fetchedAt time.Time
+	// lastAttempt is the last fetch attempt, success or failure. Get's
+	// freshness check gates on this, not fetchedAt -- otherwise a failed
+	// refresh (which leaves fetchedAt untouched) would look "expired"
+	// again to the very next caller, triggering another full retry cycle
+	// immediately, and the one after that, for as long as the upstream
+	// outage lasts.
+	lastAttempt time.Time
 }
 
 // NewDivvyStationsCache creates a DivvyStationsCache. ttl is the freshness
 // window before a Get triggers a live refresh (DivvyCacheTTL in
-// production).
+// production), and also the cooldown before a *failed* refresh is retried.
 func NewDivvyStationsCache(fetcher divvyStationFetcher, ttl time.Duration, logger *slog.Logger) *DivvyStationsCache {
 	if logger == nil {
 		logger = slog.Default()
@@ -262,29 +308,52 @@ func NewDivvyStationsCache(fetcher divvyStationFetcher, ttl time.Duration, logge
 	return &DivvyStationsCache{fetcher: fetcher, ttl: ttl, logger: logger}
 }
 
-// Get returns the cached station list, refreshing it first if the cache is
-// empty or older than ttl.
-func (c *DivvyStationsCache) Get(ctx context.Context) ([]DivvyStation, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if len(c.stations) > 0 && time.Since(c.fetchedAt) < c.ttl {
-		return c.stations, nil
+// Get returns the cached station list, refreshing it first if the last
+// fetch attempt (successful or not) is older than ttl. Concurrent callers
+// during a refresh share one singleflight.Group call rather than each
+// blocking a mutex across the network round trip or each independently
+// hitting the upstream feed. The incoming context is deliberately unused
+// (kept in the signature to satisfy the caller-facing shape a data reader
+// is expected to have) -- see the singleflight callback below for why the
+// shared fetch can't be tied to any one caller's own context.
+func (c *DivvyStationsCache) Get(_ context.Context) ([]DivvyStation, error) {
+	c.mu.RLock()
+	data := c.data
+	c.mu.RUnlock()
+	if len(data.stations) > 0 && time.Since(data.lastAttempt) < c.ttl {
+		return data.stations, nil
 	}
 
-	fresh, err := c.fetcher.FetchStations(ctx)
-	if err != nil {
-		if len(c.stations) > 0 {
-			c.logger.Warn("divvy GBFS refresh failed, serving stale cached data",
-				slog.String("error", err.Error()),
-				slog.Duration("stale_for", time.Since(c.fetchedAt)),
-			)
-			return c.stations, nil
+	v, err, _ := c.sf.Do("divvy_stations", func() (any, error) {
+		// Deliberately not ctx: this fetch is shared across every caller
+		// waiting on this singleflight call, so one caller's own
+		// request-scoped context being cancelled (e.g. its HTTP client
+		// disconnected) must not cancel the shared in-flight fetch for
+		// everyone else. DivvyClient's own http.Client timeout (15s) still
+		// bounds each attempt.
+		fresh, fetchErr := c.fetcher.FetchStations(context.Background())
+
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.data.lastAttempt = time.Now()
+
+		if fetchErr != nil {
+			if len(c.data.stations) > 0 {
+				c.logger.Warn("divvy GBFS refresh failed, serving stale cached data",
+					slog.String("error", fetchErr.Error()),
+					slog.Duration("stale_for", time.Since(c.data.fetchedAt)),
+				)
+				return c.data.stations, nil
+			}
+			return nil, fetchErr
 		}
+
+		c.data.stations = fresh
+		c.data.fetchedAt = c.data.lastAttempt
+		return c.data.stations, nil
+	})
+	if err != nil {
 		return nil, err
 	}
-
-	c.stations = fresh
-	c.fetchedAt = time.Now()
-	return c.stations, nil
+	return v.([]DivvyStation), nil
 }
