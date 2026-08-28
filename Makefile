@@ -9,9 +9,15 @@ dev:
 	# runs concurrently via air and bun run --bun dev
 
 # Run all unit and integration tests
+#
+# --isolate: this suite shares one global/module registry across all web
+# test files by default (see packages/web/src/test/setup.ts), which CI has
+# shown can bleed state between files in a way that never reproduces
+# locally -- --isolate resets the global object and module registry between
+# each file, trading a little speed for eliminating that class of flake.
 test:
 	go test -v ./services/api/...
-	cd packages/web && bun test
+	cd packages/web && bun test --isolate
 
 # Run linters across Go and TypeScript
 lint:
