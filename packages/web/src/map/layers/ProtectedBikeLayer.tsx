@@ -26,7 +26,10 @@ type TrailAccessProperties = {
 };
 
 const ROUTES_SOURCE_ID = "bike-routes";
-const ROUTES_LAYER_ID = "bike-routes-layer";
+// Exported so other layers (PoiDensityLayer's distance rings) can position
+// themselves relative to this layer -- same pattern as CtaRailLayer's
+// exported RAIL_LAYER_ID (docs/ARCHITECTURE.md Decision Log row 33).
+export const ROUTES_LAYER_ID = "bike-routes-layer";
 const TRAIL_SOURCE_ID = "trail-access";
 const TRAIL_FILL_LAYER_ID = "trail-access-fill-layer";
 const TRAIL_OUTLINE_LAYER_ID = "trail-access-outline-layer";

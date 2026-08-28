@@ -7,6 +7,8 @@ import { apiClient } from "../../lib/api/client";
 import { escapeHtml } from "./escapeHtml";
 import { poiIcon, poiCircleColorExpression } from "./poi-icons";
 import { distanceRingsGeoJSON } from "./distanceRing";
+import { RAIL_LAYER_ID as CTA_RAIL_LAYER_ID } from "./CtaRailLayer";
+import { ROUTES_LAYER_ID as BIKE_ROUTES_LAYER_ID } from "./ProtectedBikeLayer";
 import type { FeatureCollection, PointGeometry } from "../geojson";
 
 const RINGS_SOURCE_ID = "poi-density-rings";
@@ -52,16 +54,32 @@ export function PoiDensityLayer({ map, lat, lon }: PoiDensityLayerProps) {
   useEffect(() => {
     const rings = distanceRingsGeoJSON(lat, lon, [INNER_RING_METERS, OUTER_RING_METERS]);
     map.addSource(RINGS_SOURCE_ID, { type: "geojson", data: rings });
-    map.addLayer({
-      id: RINGS_LAYER_ID,
-      type: "line",
-      source: RINGS_SOURCE_ID,
-      paint: {
-        "line-color": "#71717a", // zinc-500, matches DESIGN.md text-muted -- a spatial reference guide, not scored data, so deliberately not an accent color
-        "line-width": 1,
-        "line-dasharray": ["literal", [2, 2]],
+    // A spatial reference guide belongs visually beneath the real transit/
+    // bike infrastructure lines it's drawn under, not on top of them --
+    // without an explicit beforeId here, this effect's own addLayer would
+    // default to the very top, which can land above CTA rail/bike routes
+    // depending on load order (the same non-deterministic-z-order class of
+    // bug fixed for CtaRailLayer/ProtectedBikeLayer -- docs/ARCHITECTURE.md
+    // Decision Log row 33). Bike routes are checked first since they're
+    // already guaranteed to render below CTA rail once loaded.
+    const beforeId = map.getLayer(BIKE_ROUTES_LAYER_ID)
+      ? BIKE_ROUTES_LAYER_ID
+      : map.getLayer(CTA_RAIL_LAYER_ID)
+        ? CTA_RAIL_LAYER_ID
+        : undefined;
+    map.addLayer(
+      {
+        id: RINGS_LAYER_ID,
+        type: "line",
+        source: RINGS_SOURCE_ID,
+        paint: {
+          "line-color": "#71717a", // zinc-500, matches DESIGN.md text-muted -- a spatial reference guide, not scored data, so deliberately not an accent color
+          "line-width": 1,
+          "line-dasharray": ["literal", [2, 2]],
+        },
       },
-    });
+      beforeId
+    );
 
     return () => {
       if (map.getLayer(RINGS_LAYER_ID)) map.removeLayer(RINGS_LAYER_ID);
