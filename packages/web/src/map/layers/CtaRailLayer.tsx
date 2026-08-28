@@ -11,7 +11,12 @@ import { escapeHtml } from "./escapeHtml";
 import type { FeatureCollection, PointGeometry } from "../geojson";
 
 const RAIL_SOURCE_ID = "cta-rail-lines";
-const RAIL_LAYER_ID = "cta-rail-lines-layer";
+// Exported so ProtectedBikeLayer can position itself relative to this layer
+// (docs/ARCHITECTURE.md Decision Log row 33) -- real elevated track and
+// street-level bike lanes sometimes physically coincide (e.g. parts of the
+// Loop), and without an explicit z-order the two layers' paint order was
+// whichever async query happened to resolve last.
+export const RAIL_LAYER_ID = "cta-rail-lines-layer";
 const STATIONS_SOURCE_ID = "cta-stations";
 const STATIONS_LAYER_ID = "cta-stations-layer";
 

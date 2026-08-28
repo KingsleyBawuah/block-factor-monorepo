@@ -77,6 +77,7 @@ function fakeMap() {
     addLayer: mock(() => {}),
     removeLayer: mock(() => {}),
     removeSource: mock(() => {}),
+    moveLayer: mock(() => {}),
     getLayer: mock(() => undefined),
     getSource: mock(() => undefined),
     on: mock(() => {}),
@@ -151,6 +152,43 @@ describe("ProtectedBikeLayer", () => {
         ],
       },
     });
+  });
+
+  it("moves itself below the CTA rail layer when CTA rail already loaded first", async () => {
+    const map = fakeMap();
+    (map.getLayer as ReturnType<typeof mock>).mockImplementation((id: string) =>
+      id === "cta-rail-lines-layer" ? ({} as never) : undefined,
+    );
+    renderWithClient(map);
+
+    await waitFor(() =>
+      expect(
+        (map.addLayer as ReturnType<typeof mock>).mock.calls.some(
+          (call) => (call[0] as { id: string }).id === "bike-routes-layer",
+        ),
+      ).toBe(true),
+    );
+
+    // Elevated CTA track and street-level bike lanes sometimes physically
+    // coincide (parts of the Loop) -- without an explicit z-order, one
+    // layer non-deterministically hides the other depending on which
+    // async query resolves last.
+    expect(map.moveLayer).toHaveBeenCalledWith("bike-routes-layer", "cta-rail-lines-layer");
+  });
+
+  it("does not call moveLayer when CTA rail has not loaded yet (a plain addLayer already puts CTA on top once it does)", async () => {
+    const map = fakeMap(); // getLayer stubbed to always return undefined
+    renderWithClient(map);
+
+    await waitFor(() =>
+      expect(
+        (map.addLayer as ReturnType<typeof mock>).mock.calls.some(
+          (call) => (call[0] as { id: string }).id === "bike-routes-layer",
+        ),
+      ).toBe(true),
+    );
+
+    expect(map.moveLayer).not.toHaveBeenCalled();
   });
 
   it("adds the trail access source, fill+outline layers, and hover listeners", async () => {
