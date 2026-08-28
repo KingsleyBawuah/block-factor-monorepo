@@ -22,6 +22,9 @@ colors:
   score-lime: "#84cc16"
   score-amber: "#f59e0b"
   score-rose: "#f43f5e"
+  poi-cafe: "#c2703d"
+  poi-fitness: "#6366f1"
+  poi-supermarket: "#0d9488"
 typography:
   display:
     fontFamily: "Geist Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
@@ -128,6 +131,12 @@ The palette is anchored in deep dark neutrals with official municipal Chicago Tr
 - **Score Moderate / Amber** (`#f59e0b`): Average or moderate caution scores (45–64).
 - **Score Alert / Rose** (`#f43f5e`): High friction, severe noise, flood risk, or low scores (0–44).
 
+### POI Category Markers
+Map-overlay-only accent colors for the POI Density Layer (`GET /api/v1/places`), distinguishing cafe/fitness/supermarket points from each other and from CTA station markers. Deliberately never reused from the CTA or Score Indicator sets above — see "The Category Color Independence Rule" below.
+- **POI Cafe** (`#c2703d`): Cafe/coffee shop markers.
+- **POI Fitness** (`#6366f1`): Gym/fitness studio/yoga markers.
+- **POI Supermarket** (`#0d9488`): Supermarket markers.
+
 ### Neutral
 - **Canvas Deep Zinc** (`#09090b` / `zinc-950`): Root viewport and map background.
 - **Surface Card Zinc** (`#18181b` / `zinc-900`): Analytical cards, containers, and table rows.
@@ -141,6 +150,8 @@ The palette is anchored in deep dark neutrals with official municipal Chicago Tr
 **The Authentic Transit Palette Rule.** Transit badges and line indicators must use exact Chicago CTA hex codes (Red, Blue, Brown, Green, Pink, Orange, Purple, Yellow); never approximate or theme-shift official municipal lines.
 
 **The One Voice Rule.** Accent colors appear strictly on badges, score tiers, and map overlays. Surfaces and containers remain strictly neutral zinc to preserve high contrast and scanability.
+
+**The Category Color Independence Rule.** A color that carries meaning in one part of the app (a CTA line, a `score-*` livability tier) must never be reused for an unrelated category elsewhere, even on a different surface (e.g. a map marker) — a POI marker rendered in `score-amber` would misread as "this place scored 45–64," which isn't a thing a single POI has. POI category markers (cafe/fitness/supermarket) get their own dedicated `poi-*` tokens instead of borrowing from the CTA or Score Indicator sets.
 
 ## Typography
 
