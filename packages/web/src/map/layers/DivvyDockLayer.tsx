@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { Popup } from "maplibre-gl";
+import "lineicons/dist/lineicons.css";
 import { apiClient } from "../../lib/api/client";
 import { escapeHtml } from "./escapeHtml";
 import { createDivvyMarkerIcon, DIVVY_MARKER_ICON_ID } from "./divvyMarkerIcon";
@@ -89,6 +90,10 @@ export function DivvyDockLayer({ map }: DivvyDockLayerProps) {
         // (closed for rebalancing) dims rather than disappears -- it's
         // still a real dock, just temporarily unusable.
         "icon-opacity": ["case", ["all", ["get", "isRenting"], ["get", "isReturning"]], 1, 0.4],
+        // Dims in lockstep with the icon -- otherwise a closed station's
+        // bikes-available number stayed fully opaque while its marker
+        // faded, looking like two contradictory signals for one station.
+        "text-opacity": ["case", ["all", ["get", "isRenting"], ["get", "isReturning"]], 1, 0.4],
         "text-color": "#f4f4f5", // zinc-100, matches DESIGN.md text-primary
         "text-halo-color": "#09090b", // zinc-950, matches DESIGN.md bg-canvas
         "text-halo-width": 1,
@@ -108,11 +113,15 @@ export function DivvyDockLayer({ map }: DivvyDockLayerProps) {
       if (feature?.geometry.type !== "Point") return;
 
       const coords = feature.geometry.coordinates.slice(0, 2) as [number, number];
-      const props = feature.properties as Record<string, unknown>;
+      const props = (feature.properties ?? {}) as Record<string, unknown>;
       const name = typeof props.name === "string" ? props.name : "";
-      const bikesAvailable = Number(props.bikesAvailable);
-      const ebikesAvailable = Number(props.ebikesAvailable);
-      const docksAvailable = Number(props.docksAvailable);
+      const toCount = (value: unknown) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+      };
+      const bikesAvailable = toCount(props.bikesAvailable);
+      const ebikesAvailable = toCount(props.ebikesAvailable);
+      const docksAvailable = toCount(props.docksAvailable);
       const isRenting = props.isRenting === true || props.isRenting === "true";
       const isReturning = props.isReturning === true || props.isReturning === "true";
 

@@ -4,27 +4,28 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { Popup } from "maplibre-gl";
 
-const getMock = mock(async (path: string) => {
+const fakeStationFeature = {
+  type: "Feature" as const,
+  properties: {
+    name: "California Blvd & 29th St",
+    capacity: 8,
+    bikesAvailable: 2,
+    ebikesAvailable: 1,
+    docksAvailable: 5,
+    isRenting: true,
+    isReturning: true,
+  },
+  geometry: { type: "Point" as const, coordinates: [-87.69413, 41.84024] },
+};
+
+type DivvyDocksResult =
+  | { data: { type: "FeatureCollection"; features: (typeof fakeStationFeature)[] }; error: undefined }
+  | { data: undefined; error: { message: string } };
+
+const getMock = mock(async (path: string): Promise<DivvyDocksResult> => {
   if (path === "/api/v1/layers/divvy-docks") {
     return {
-      data: {
-        type: "FeatureCollection" as const,
-        features: [
-          {
-            type: "Feature" as const,
-            properties: {
-              name: "California Blvd & 29th St",
-              capacity: 8,
-              bikesAvailable: 2,
-              ebikesAvailable: 1,
-              docksAvailable: 5,
-              isRenting: true,
-              isReturning: true,
-            },
-            geometry: { type: "Point" as const, coordinates: [-87.69413, 41.84024] },
-          },
-        ],
-      },
+      data: { type: "FeatureCollection" as const, features: [fakeStationFeature] },
       error: undefined,
     };
   }
@@ -33,6 +34,20 @@ const getMock = mock(async (path: string) => {
 
 mock.module("../../lib/api/client", () => ({
   apiClient: { GET: getMock },
+}));
+
+// happy-dom (this test environment) has no canvas 2D implementation, so
+// createDivvyMarkerIcon() would return null here -- mocked to return a
+// real (fake) ImageData so DivvyDockLayer's addImage/hasImage/removeImage
+// lifecycle around it can actually be exercised. The drawing math itself
+// is covered separately in divvyMarkerIcon.test.ts (via a mocked canvas
+// context), not here.
+const fakeIcon = { width: 24, height: 24, data: new Uint8ClampedArray(24 * 24 * 4) } as ImageData;
+const createDivvyMarkerIconMock = mock(() => fakeIcon);
+
+mock.module("./divvyMarkerIcon", () => ({
+  DIVVY_MARKER_ICON_ID: "divvy-dock-marker",
+  createDivvyMarkerIcon: createDivvyMarkerIconMock,
 }));
 
 const { DivvyDockLayer } = await import("./DivvyDockLayer");
@@ -72,10 +87,11 @@ function renderWithClient(map: MapLibreMap) {
 describe("DivvyDockLayer", () => {
   beforeEach(() => {
     getMock.mockClear();
+    createDivvyMarkerIconMock.mockClear();
     (Popup as unknown as ReturnType<typeof mock>).mockClear();
   });
 
-  it("registers the marker icon once and adds the source, symbol layer, and hover listeners", async () => {
+  it("registers the marker icon and adds the source, symbol layer, and hover listeners", async () => {
     const map = fakeMap();
     renderWithClient(map);
 
@@ -85,31 +101,63 @@ describe("DivvyDockLayer", () => {
       ).toBe(true)
     );
 
-    // happy-dom (this test environment) has no canvas 2D implementation,
-    // so createDivvyMarkerIcon() returns null here and addImage is never
-    // actually called with real image data -- this only asserts the layer
-    // wires icon-image to the expected id, not the icon's pixel content.
+    expect(map.addImage).toHaveBeenCalledWith("divvy-dock-marker", fakeIcon);
+
     const layerCall = (map.addLayer as ReturnType<typeof mock>).mock.calls.find(
       (call) => (call[0] as { id: string }).id === "divvy-docks-layer"
     );
-    const layerOptions = layerCall?.[0] as
-      | { type: string; layout: Record<string, unknown>; paint: Record<string, unknown> }
-      | undefined;
-    expect(layerOptions?.type).toBe("symbol");
-    expect(layerOptions?.layout["icon-image"]).toBe("divvy-dock-marker");
-    expect(layerOptions?.layout["text-field"]).toEqual(["to-string", ["get", "bikesAvailable"]]);
-    expect(layerOptions?.paint["icon-opacity"]).toEqual([
-      "case",
-      ["all", ["get", "isRenting"], ["get", "isReturning"]],
-      1,
-      0.4,
-    ]);
+    // Full layout/paint assertion -- a mutated icon-size, text-font,
+    // icon-allow-overlap, or text-opacity would otherwise pass every other
+    // test in this file silently.
+    expect(layerCall?.[0]).toEqual({
+      id: "divvy-docks-layer",
+      type: "symbol",
+      source: "divvy-docks",
+      layout: {
+        "icon-image": "divvy-dock-marker",
+        "icon-size": 0.5,
+        "icon-allow-overlap": true,
+        "text-field": ["to-string", ["get", "bikesAvailable"]],
+        "text-font": [
+          "Montserrat Regular",
+          "Open Sans Regular",
+          "Noto Sans Regular",
+          "HanWangHeiLight Regular",
+          "NanumBarunGothic Regular",
+        ],
+        "text-size": 10,
+        "text-offset": [0, 1.1],
+        "text-anchor": "top",
+      },
+      paint: {
+        "icon-opacity": ["case", ["all", ["get", "isRenting"], ["get", "isReturning"]], 1, 0.4],
+        "text-opacity": ["case", ["all", ["get", "isRenting"], ["get", "isReturning"]], 1, 0.4],
+        "text-color": "#f4f4f5",
+        "text-halo-color": "#09090b",
+        "text-halo-width": 1,
+      },
+    });
 
     expect(map.on).toHaveBeenCalledWith("mouseenter", "divvy-docks-layer", expect.any(Function));
     expect(map.on).toHaveBeenCalledWith("mouseleave", "divvy-docks-layer", expect.any(Function));
   });
 
-  it("renders a popup with the escaped name, bike/dock counts, and open status on hover", async () => {
+  it("does not re-register the icon if it's already registered", async () => {
+    const map = fakeMap();
+    (map.hasImage as ReturnType<typeof mock>).mockReturnValue(true);
+    renderWithClient(map);
+
+    await waitFor(() =>
+      expect(
+        (map.addSource as ReturnType<typeof mock>).mock.calls.some((call) => call[0] === "divvy-docks")
+      ).toBe(true)
+    );
+
+    expect(createDivvyMarkerIconMock).not.toHaveBeenCalled();
+    expect(map.addImage).not.toHaveBeenCalled();
+  });
+
+  it("renders a popup positioned at the feature and with the escaped name, bike/dock counts, and open status on hover", async () => {
     const map = fakeMap();
     renderWithClient(map);
 
@@ -140,9 +188,14 @@ describe("DivvyDockLayer", () => {
     } as unknown as MapLayerMouseEvent);
 
     const popupInstance = (Popup as unknown as ReturnType<typeof mock>).mock.results[0]?.value as {
+      setLngLat: ReturnType<typeof mock>;
       setHTML: ReturnType<typeof mock>;
+      addTo: ReturnType<typeof mock>;
     };
+    expect(popupInstance.setLngLat).toHaveBeenCalledWith([-87.69413, 41.84024]);
     expect(popupInstance.setHTML).toHaveBeenCalledTimes(1);
+    expect(popupInstance.addTo).toHaveBeenCalledWith(map);
+
     const html = popupInstance.setHTML.mock.calls[0][0] as string;
     expect(html).toContain("Foster &amp; Sheridan");
     expect(html).toContain("3 bikes / 2 e-bikes");
@@ -190,6 +243,75 @@ describe("DivvyDockLayer", () => {
     expect(html).toContain("Closed for rebalancing");
   });
 
+  it("shows closed-for-rebalancing for an asymmetric status (renting but not returning)", async () => {
+    const map = fakeMap();
+    renderWithClient(map);
+
+    await waitFor(() =>
+      expect(map.on).toHaveBeenCalledWith("mouseenter", "divvy-docks-layer", expect.any(Function))
+    );
+
+    const enterCall = (map.on as ReturnType<typeof mock>).mock.calls.find(
+      (call) => call[0] === "mouseenter" && call[1] === "divvy-docks-layer"
+    );
+    if (!enterCall) throw new Error("expected a mouseenter listener");
+    const handleMouseEnter = enterCall[2] as (e: MapLayerMouseEvent) => void;
+
+    handleMouseEnter({
+      features: [
+        {
+          geometry: { type: "Point", coordinates: [-87.69413, 41.84024] },
+          properties: {
+            name: "Full Dock, Not Accepting Returns",
+            bikesAvailable: 6,
+            ebikesAvailable: 0,
+            docksAvailable: 0,
+            isRenting: true,
+            isReturning: false,
+          },
+        },
+      ],
+    } as unknown as MapLayerMouseEvent);
+
+    const popupInstance = (Popup as unknown as ReturnType<typeof mock>).mock.results[0]?.value as {
+      setHTML: ReturnType<typeof mock>;
+    };
+    const html = popupInstance.setHTML.mock.calls[0][0] as string;
+    expect(html).toContain("Closed for rebalancing");
+  });
+
+  it("falls back to 0 for missing/non-numeric counts instead of rendering NaN", async () => {
+    const map = fakeMap();
+    renderWithClient(map);
+
+    await waitFor(() =>
+      expect(map.on).toHaveBeenCalledWith("mouseenter", "divvy-docks-layer", expect.any(Function))
+    );
+
+    const enterCall = (map.on as ReturnType<typeof mock>).mock.calls.find(
+      (call) => call[0] === "mouseenter" && call[1] === "divvy-docks-layer"
+    );
+    if (!enterCall) throw new Error("expected a mouseenter listener");
+    const handleMouseEnter = enterCall[2] as (e: MapLayerMouseEvent) => void;
+
+    handleMouseEnter({
+      features: [
+        {
+          geometry: { type: "Point", coordinates: [-87.69413, 41.84024] },
+          properties: {},
+        },
+      ],
+    } as unknown as MapLayerMouseEvent);
+
+    const popupInstance = (Popup as unknown as ReturnType<typeof mock>).mock.results[0]?.value as {
+      setHTML: ReturnType<typeof mock>;
+    };
+    const html = popupInstance.setHTML.mock.calls[0][0] as string;
+    expect(html).toContain("0 bikes / 0 e-bikes");
+    expect(html).toContain("0 docks open");
+    expect(html).not.toContain("NaN");
+  });
+
   it("resets the cursor and removes the popup on mouse leave", async () => {
     const map = fakeMap();
     renderWithClient(map);
@@ -215,7 +337,7 @@ describe("DivvyDockLayer", () => {
     expect(popupInstance.remove).toHaveBeenCalled();
   });
 
-  it("removes the layer, source, and hover listeners on unmount", async () => {
+  it("removes the layer, source, icon, and hover listeners on unmount", async () => {
     const map = fakeMap();
     (map.getLayer as ReturnType<typeof mock>).mockImplementation(() => ({}) as never);
     (map.getSource as ReturnType<typeof mock>).mockImplementation(() => ({}) as never);
@@ -231,6 +353,7 @@ describe("DivvyDockLayer", () => {
 
     expect(map.removeLayer).toHaveBeenCalledWith("divvy-docks-layer");
     expect(map.removeSource).toHaveBeenCalledWith("divvy-docks");
+    expect(map.removeImage).toHaveBeenCalledWith("divvy-dock-marker");
     expect(map.off).toHaveBeenCalledWith("mouseenter", "divvy-docks-layer", expect.any(Function));
     expect(map.off).toHaveBeenCalledWith("mouseleave", "divvy-docks-layer", expect.any(Function));
   });
@@ -241,5 +364,21 @@ describe("DivvyDockLayer", () => {
 
     await waitFor(() => expect(getMock).toHaveBeenCalledTimes(1));
     expect(getMock).toHaveBeenCalledWith("/api/v1/layers/divvy-docks");
+  });
+
+  it("adds no source or layer when the query fails", async () => {
+    const map = fakeMap();
+    getMock.mockImplementationOnce(async () => ({
+      data: undefined,
+      error: { message: "upstream unavailable" },
+    }));
+    renderWithClient(map);
+
+    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(1));
+    // Give the failed query's effect a tick to (not) run.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(map.addSource).not.toHaveBeenCalled();
+    expect(map.addLayer).not.toHaveBeenCalled();
   });
 });
