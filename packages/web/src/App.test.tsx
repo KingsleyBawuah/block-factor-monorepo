@@ -8,6 +8,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
+import { validateWeightSearch } from "./lib/weight-search-params";
 
 // maplibre-gl is mocked globally in src/test/setup.ts (the bun:test
 // preload) — happy-dom has no WebGL context, so the real Map constructor
@@ -45,8 +46,12 @@ type MockScoreData = {
   benchmarkCommutes: never[];
 };
 
+type ScoreRequestOptions = {
+  body?: { origin?: { lat: number; lon: number }; addressHint?: string; weights?: Record<string, number> };
+};
+
 const postMock = mock(
-  async (path: string): Promise<{ data?: MockScoreData; error?: unknown }> => {
+  async (path: string, _options?: ScoreRequestOptions): Promise<{ data?: MockScoreData; error?: unknown }> => {
     if (path === "/api/v1/score") {
       return {
         data: {
@@ -78,7 +83,10 @@ mock.module("./lib/api/client", () => ({
 const { default: App } = await import("./App");
 
 function createTestRouter() {
-  const rootRoute = createRootRoute({ component: App });
+  // validateSearch mirrors the real app's root route (routes/index.tsx) --
+  // without it, App's useSearch({ strict: false }) reads an unvalidated
+  // empty object under test, and every weight comes back undefined.
+  const rootRoute = createRootRoute({ component: App, validateSearch: validateWeightSearch });
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/",
@@ -213,6 +221,35 @@ describe("App component", () => {
       expect(screen.queryByText("Search an address above to see its BlockFactor score.")).toBeTruthy()
     );
     expect(screen.queryByText("233 S Wacker Dr, Chicago, IL")).toBeNull();
+  });
+
+  it("re-scores the same address (no re-geocode) once a dragged weight slider settles, debounced", async () => {
+    renderApp();
+
+    await searchFor233Wacker();
+    await screen.findByText("233 S Wacker Dr, Chicago, IL");
+
+    const scoreCallsBefore = postMock.mock.calls.filter((c) => c[0] === "/api/v1/score").length;
+    const geocodeCallsBefore = getMock.mock.calls.filter((c) => c[0] === "/api/v1/geocode").length;
+
+    fireEvent.click(screen.getByRole("button", { name: /weight customization/i }));
+    fireEvent.change(screen.getByRole("slider", { name: /transit/i }), { target: { value: "40" } });
+
+    // App.tsx debounces the actual re-score request (RESCORE_DEBOUNCE_MS)
+    // -- it shouldn't fire on every drag tick.
+    expect(postMock.mock.calls.filter((c) => c[0] === "/api/v1/score").length).toBe(scoreCallsBefore);
+
+    await waitFor(
+      () => expect(postMock.mock.calls.filter((c) => c[0] === "/api/v1/score").length).toBe(scoreCallsBefore + 1),
+      { timeout: 1000 }
+    );
+
+    const rescoreCall = postMock.mock.calls.filter((c) => c[0] === "/api/v1/score").at(-1);
+    expect(rescoreCall?.[1]?.body?.origin).toEqual({ lat: 41.8781, lon: -87.6298 });
+    expect(rescoreCall?.[1]?.body?.weights?.transit).toBe(40);
+
+    // Re-scores the already-resolved coordinates directly -- no redundant geocode.
+    expect(getMock.mock.calls.filter((c) => c[0] === "/api/v1/geocode").length).toBe(geocodeCallsBefore);
   });
 
   it("renders outlet child route content", async () => {
