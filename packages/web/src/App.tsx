@@ -85,8 +85,19 @@ export default function App() {
             <Outlet />
           </div>
 
-          <div className="lg:col-span-8">
-            <Card className="h-[70vh] overflow-hidden p-0 lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
+          <div className="min-w-0 lg:col-span-8">
+            {/*
+              clip-path (not just overflow-hidden) is required here: Firefox
+              renders the MapLibre WebGL canvas on its own GPU-composited
+              layer, which its overflow:hidden + border-radius clipping
+              doesn't reach -- a long-standing Gecko bug (e.g. Mozilla
+              Bugzilla #915492, #537433), confirmed live (rounded in Chrome,
+              square in Firefox/Zen at the same commit). clip-path is a real
+              compositor-level clip Firefox does honor on canvas layers.
+              0.75rem matches rounded-xl's default Tailwind value (no
+              --radius-xl token is defined in index.css to reference).
+            */}
+            <Card className="h-[70vh] overflow-hidden p-0 [clip-path:inset(0_round_0.75rem)] lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
               <MapCanvas onMapReady={setMap} />
               {map && <CtaRailLayer map={map} />}
               {map && <ProtectedBikeLayer map={map} />}
