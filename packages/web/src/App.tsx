@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { Outlet, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
@@ -31,19 +31,42 @@ export default function App() {
   // import (App.tsx is the root route's own component, so App.tsx can't
   // import the root Route object back from routes/index.tsx to call its
   // typed Route.useSearch()) at the cost of this one asserted cast.
-  const weights = searchToWeights(useSearch({ strict: false }) as WeightSearch);
+  const rawSearch = useSearch({ strict: false }) as WeightSearch;
+  // Memoized on the 9 raw primitive values, not just `useMemo(..., [rawSearch])`
+  // -- searchToWeights would otherwise return a brand-new object every
+  // render regardless of whether any weight actually changed, which fed a
+  // real infinite loop: useDebouncedValue's effect compares its input by
+  // reference, so a same-content-but-new-reference `weights` every render
+  // meant debouncedWeights never settled, kept re-firing the rescore
+  // mutation, which called setResolved, which re-rendered, which produced
+  // yet another new `weights` reference -- forever (confirmed live: ~20
+  // POST /api/v1/score calls/sec with no slider ever touched).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: depending on rawSearch itself (Biome's suggested fix) is exactly what caused the loop above -- rawSearch is a new object every render regardless of content, so it can never be a valid memo dependency here. The 9 listed fields are the complete, exact set searchToWeights reads (weight-search-params.ts) -- nothing is actually missing.
+  const weights = useMemo(
+    () => searchToWeights(rawSearch),
+    [
+      rawSearch.w_transit,
+      rawSearch.w_bike,
+      rawSearch.w_grocery,
+      rawSearch.w_thirdPlace,
+      rawSearch.w_green,
+      rawSearch.w_noise,
+      rawSearch.w_safety,
+      rawSearch.w_flood,
+      rawSearch.w_solar,
+    ]
+  );
   const navigate = useNavigate({ from: "/" });
   const debouncedWeights = useDebouncedValue(weights, RESCORE_DEBOUNCE_MS);
 
   // Holds the scored origin outside React state: writing it must never
   // itself re-trigger the rescore effect below (only a real weight change
-  // should), and a ref read isn't a reactive dependency.
+  // should), and a ref read isn't a reactive dependency. Resolving a new
+  // address writes this without touching `weights`/`debouncedWeights` at
+  // all, so the rescore effect below (keyed only on debouncedWeights)
+  // never fires just because a search happened -- no separate "skip the
+  // next one" flag needed.
   const originRef = useRef<Origin | null>(null);
-  // The address that was JUST resolved already carries a score computed
-  // from the current weights (AddressSearchInput's own initial fetch) --
-  // set for exactly one rescore-effect run so that fetch isn't immediately
-  // duplicated by this effect reacting to the same (unchanged) weights.
-  const skipNextRescoreRef = useRef(false);
 
   const rescoreMutation = useMutation({
     mutationFn: async (vars: { origin: Origin; weights: Weights }): Promise<ScoreResponse> => {
@@ -61,7 +84,6 @@ export default function App() {
 
   function handleResolved(next: ResolvedAddress) {
     originRef.current = { lat: next.lat, lon: next.lon, formattedAddress: next.formattedAddress };
-    skipNextRescoreRef.current = true;
     setResolved(next);
   }
 
@@ -73,10 +95,6 @@ export default function App() {
   useEffect(() => {
     const origin = originRef.current;
     if (!origin) return;
-    if (skipNextRescoreRef.current) {
-      skipNextRescoreRef.current = false;
-      return;
-    }
     rescoreMutation.mutate(
       { origin, weights: debouncedWeights },
       {
