@@ -42,6 +42,19 @@ func main() {
 	var serverOpts []api.ServerOption
 	serverOpts = append(serverOpts, api.WithGeocoder(geocoder))
 
+	// Divvy is genuinely Postgres-independent (a live third-party GBFS feed
+	// behind an in-process cache, docs/ARCHITECTURE.md §5.4) -- wired here,
+	// unconditionally, rather than inside the DATABASE_URL block below.
+	divvyInfoURL := os.Getenv("DIVVY_GBFS_STATION_INFO_URL")
+	divvyStatusURL := os.Getenv("DIVVY_GBFS_STATION_STATUS_URL")
+	if divvyInfoURL != "" && divvyStatusURL != "" {
+		divvyClient := clients.NewDivvyClient(divvyInfoURL, divvyStatusURL)
+		divvyCache := clients.NewDivvyStationsCache(divvyClient, clients.DivvyCacheTTL, logger)
+		serverOpts = append(serverOpts, api.WithDivvyDocksReader(&divvyDocksReaderAdapter{cache: divvyCache}))
+	} else {
+		logger.Warn("DIVVY_GBFS_STATION_INFO_URL/DIVVY_GBFS_STATION_STATUS_URL not set; Divvy dock layer will be unconfigured")
+	}
+
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL != "" {
 		initCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

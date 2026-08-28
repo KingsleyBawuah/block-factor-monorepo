@@ -184,6 +184,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/layers/divvy-docks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get live Divvy bike-share dock locations and availability as GeoJSON.
+         * @description Bulk, city-wide layer — no request parameters. Unlike the other `/layers/*` endpoints, this is live third-party data (the public Divvy/Lyft GBFS feed), not bulk-ingested PostGIS data — display-only, not a scored factor. Backed by a 5-minute in-process cache (docs/ARCHITECTURE.md §5.4), so results may lag the live feed by up to that long.
+         */
+        get: operations["getDivvyDocksLayer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -437,6 +457,31 @@ export interface components {
             type: "FeatureCollection";
             features: components["schemas"]["PlaceFeature"][];
         };
+        DivvyDockFeature: {
+            /** @constant */
+            type: "Feature";
+            properties: {
+                name: string;
+                capacity: number;
+                bikesAvailable: number;
+                ebikesAvailable: number;
+                docksAvailable: number;
+                /** @description False when the station is temporarily closed for rebalancing, even though it's installed. */
+                isRenting: boolean;
+                isReturning: boolean;
+            };
+            /** @description GeoJSON Point geometry. */
+            geometry: {
+                /** @constant */
+                type: "Point";
+                coordinates: unknown[];
+            };
+        };
+        DivvyDocksResponse: {
+            /** @constant */
+            type: "FeatureCollection";
+            features: components["schemas"]["DivvyDockFeature"][];
+        };
         HealthResponse: {
             /** @enum {string} */
             status: "ok";
@@ -669,6 +714,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupermarketsResponse"];
+                };
+            };
+        };
+    };
+    getDivvyDocksLayer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Divvy docks as a GeoJSON FeatureCollection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DivvyDocksResponse"];
+                };
+            };
+            /** @description The live Divvy GBFS feed is unreachable and no cached data is available yet. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
