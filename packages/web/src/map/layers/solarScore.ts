@@ -29,14 +29,14 @@ export function solarBaseScore(facing: string): number {
 export type ScoreTier = "emerald" | "lime" | "amber" | "rose";
 
 /**
- * Maps an S_solar base score to its DESIGN.md score tier (Optimal/Emerald
- * 80-100, Good/Lime 65-79, Moderate/Amber 45-64, Alert/Rose 0-44) --
- * reused here deliberately: unlike the POI/Divvy category markers, this
- * badge genuinely represents a score, so the score palette is the
- * *correct* semantic fit, not a borrowed one. The tier name is what the
- * sidebar's `<Badge variant={`score-${tier}`}>` needs.
+ * Maps any 0-100 BlockFactor score (composite or per-factor) to its
+ * DESIGN.md score tier (Optimal/Emerald 80-100, Good/Lime 65-79,
+ * Moderate/Amber 45-64, Alert/Rose 0-44). Lives alongside `solarBaseScore`
+ * since the solar badge was its first caller, but the mapping itself isn't
+ * solar-specific -- the sidebar's composite score badge reuses it too. The
+ * tier name is what `<Badge variant={`score-${tier}`}>` needs.
  */
-export function solarScoreTier(score: number): ScoreTier {
+export function scoreTier(score: number): ScoreTier {
   if (score >= 80) return "emerald";
   if (score >= 65) return "lime";
   if (score >= 45) return "amber";

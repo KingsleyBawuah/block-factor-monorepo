@@ -1,15 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { Outlet } from "@tanstack/react-router";
 import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
-import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, DEMO_ADDRESS_LAT, DEMO_ADDRESS_LON, DEMO_ADDRESS_FACING, solarBaseScore, solarScoreTier } from "./map";
-
-const solarScore = solarBaseScore(DEMO_ADDRESS_FACING);
-const solarTier = solarScoreTier(solarScore);
+import { AddressSearchInput, type ResolvedAddress } from "./components/AddressSearchInput";
+import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, RESOLVED_ADDRESS_ZOOM, scoreTier } from "./map";
 
 export default function App() {
   const [map, setMap] = useState<MapLibreMap | null>(null);
+  const [resolved, setResolved] = useState<ResolvedAddress | null>(null);
+
+  useEffect(() => {
+    if (!map || !resolved) return;
+    map.flyTo({ center: [resolved.lon, resolved.lat], zoom: RESOLVED_ADDRESS_ZOOM });
+  }, [map, resolved]);
+
+  const solar = resolved?.score.factors.solar;
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950 font-sans text-zinc-100">
@@ -35,24 +41,45 @@ export default function App() {
                 <CardTitle>Livability Score</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-baseline space-x-2">
-                  <span className="text-4xl font-mono font-bold text-zinc-100">--</span>
-                  <span className="text-xs font-mono text-zinc-500">/ 100</span>
-                </div>
+                <AddressSearchInput onResolved={setResolved} onReset={() => setResolved(null)} />
+
+                {resolved ? (
+                  <>
+                    <div className="mt-4 truncate font-mono text-xs text-zinc-500">
+                      {resolved.formattedAddress}
+                    </div>
+                    <div className="mt-1 flex items-baseline space-x-2">
+                      <span className="text-4xl font-mono font-bold text-zinc-100">
+                        {Math.round(resolved.score.compositeScore)}
+                      </span>
+                      <span className="text-xs font-mono text-zinc-500">/ 100</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-4 py-2 font-mono text-xs text-zinc-500">
+                    Search an address above to see its BlockFactor score.
+                  </div>
+                )}
+
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   <Badge variant="cta-blue">Blue Line</Badge>
                   <Badge variant="cta-red">Red Line</Badge>
                   <Badge variant="cta-pink">Pink Line</Badge>
                   <Badge variant="cta-green">Green Line</Badge>
                 </div>
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="text-xs font-mono uppercase tracking-wider text-zinc-500">
-                    Solar
-                  </span>
-                  <Badge variant={`score-${solarTier}`}>
-                    {DEMO_ADDRESS_FACING}-Facing · {solarScore}
-                  </Badge>
-                </div>
+
+                {solar && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="text-xs font-mono uppercase tracking-wider text-zinc-500">
+                      Solar
+                    </span>
+                    {solar.degraded || solar.score == null ? (
+                      <Badge variant="outline">Unavailable</Badge>
+                    ) : (
+                      <Badge variant={`score-${scoreTier(solar.score)}`}>{Math.round(solar.score)}</Badge>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
             <Outlet />
@@ -63,7 +90,7 @@ export default function App() {
               <MapCanvas onMapReady={setMap} />
               {map && <CtaRailLayer map={map} />}
               {map && <ProtectedBikeLayer map={map} />}
-              {map && <PoiDensityLayer map={map} lat={DEMO_ADDRESS_LAT} lon={DEMO_ADDRESS_LON} />}
+              {map && resolved && <PoiDensityLayer map={map} lat={resolved.lat} lon={resolved.lon} />}
               {map && <DivvyDockLayer map={map} />}
             </Card>
           </div>

@@ -63,17 +63,13 @@ describe("App component", () => {
     expect(await screen.findByText("Green Line")).toBeTruthy();
   });
 
-  it("renders the solar exposure badge for the demo address's facing and score", async () => {
+  it("prompts to search before any address has resolved, with no solar badge", async () => {
     renderApp();
 
-    // 233 S Wacker Dr infers West-facing (verified against
-    // InferStreetFacingOrientation, see map/constants.ts), which is a 75/100
-    // S_solar base score -- shown here as a plain sidebar badge rather than
-    // requiring a viewer to interpret the 3D ray's color/height on the map.
-    // 75 falls in the "lime" score tier (65-79), so the badge itself (not
-    // just its text) should carry that tier's text-lime-400 styling.
-    const badge = await screen.findByText("W-Facing · 75");
-    expect(badge.className).toContain("text-lime-400");
+    expect(
+      await screen.findByText("Search an address above to see its BlockFactor score.")
+    ).toBeTruthy();
+    expect(screen.queryByText("Solar")).toBeNull();
   });
 
   it("renders outlet child route content", async () => {

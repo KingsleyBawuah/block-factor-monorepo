@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { solarBaseScore, solarScoreTier } from "./solarScore";
+import { solarBaseScore, scoreTier } from "./solarScore";
 
 describe("solarBaseScore", () => {
   it("matches factor_solar.go's exact orientation base-score table", () => {
@@ -26,37 +26,37 @@ describe("solarBaseScore", () => {
   });
 });
 
-describe("solarScoreTier", () => {
+describe("scoreTier", () => {
   it("maps each score boundary to its exact tier name, the sidebar Badge variant name depends on", () => {
-    expect(solarScoreTier(100)).toBe("emerald");
-    expect(solarScoreTier(80)).toBe("emerald");
-    expect(solarScoreTier(79)).toBe("lime");
-    expect(solarScoreTier(65)).toBe("lime");
-    expect(solarScoreTier(64)).toBe("amber");
-    expect(solarScoreTier(45)).toBe("amber");
-    expect(solarScoreTier(44)).toBe("rose");
-    expect(solarScoreTier(0)).toBe("rose");
+    expect(scoreTier(100)).toBe("emerald");
+    expect(scoreTier(80)).toBe("emerald");
+    expect(scoreTier(79)).toBe("lime");
+    expect(scoreTier(65)).toBe("lime");
+    expect(scoreTier(64)).toBe("amber");
+    expect(scoreTier(45)).toBe("amber");
+    expect(scoreTier(44)).toBe("rose");
+    expect(scoreTier(0)).toBe("rose");
   });
 
   it("treats out-of-range scores as clamped to their nearest real boundary", () => {
-    expect(solarScoreTier(-10)).toBe("rose");
-    expect(solarScoreTier(150)).toBe("emerald");
+    expect(scoreTier(-10)).toBe("rose");
+    expect(scoreTier(150)).toBe("emerald");
   });
 
   it("resolves fractional scores just below each boundary to the lower tier", () => {
-    expect(solarScoreTier(79.9)).toBe("lime");
-    expect(solarScoreTier(64.9)).toBe("amber");
-    expect(solarScoreTier(44.9)).toBe("rose");
+    expect(scoreTier(79.9)).toBe("lime");
+    expect(scoreTier(64.9)).toBe("amber");
+    expect(scoreTier(44.9)).toBe("rose");
   });
 
   it("maps every real S_solar base score to the tier PRD §5.8's own ranking implies", () => {
-    expect(solarScoreTier(solarBaseScore("S"))).toBe("emerald");
-    expect(solarScoreTier(solarBaseScore("SE"))).toBe("emerald");
-    expect(solarScoreTier(solarBaseScore("SW"))).toBe("emerald");
-    expect(solarScoreTier(solarBaseScore("E"))).toBe("emerald");
-    expect(solarScoreTier(solarBaseScore("W"))).toBe("lime");
-    expect(solarScoreTier(solarBaseScore("NE"))).toBe("amber");
-    expect(solarScoreTier(solarBaseScore("NW"))).toBe("amber");
-    expect(solarScoreTier(solarBaseScore("N"))).toBe("rose");
+    expect(scoreTier(solarBaseScore("S"))).toBe("emerald");
+    expect(scoreTier(solarBaseScore("SE"))).toBe("emerald");
+    expect(scoreTier(solarBaseScore("SW"))).toBe("emerald");
+    expect(scoreTier(solarBaseScore("E"))).toBe("emerald");
+    expect(scoreTier(solarBaseScore("W"))).toBe("lime");
+    expect(scoreTier(solarBaseScore("NE"))).toBe("amber");
+    expect(scoreTier(solarBaseScore("NW"))).toBe("amber");
+    expect(scoreTier(solarBaseScore("N"))).toBe("rose");
   });
 });

@@ -25,11 +25,7 @@ const INNER_RING_METERS = OUTER_RING_METERS / 2;
 
 export type PoiDensityLayerProps = {
   map: MapLibreMap;
-  /**
-   * Coordinate to query GET /api/v1/places around. Currently always a
-   * fixed demo coordinate (App.tsx) -- there's no real address-search UI
-   * yet (docs/IMPLEMENTATION_PHASES.md Phase 5 deliverable 1).
-   */
+  /** Coordinate to query GET /api/v1/places around -- the current resolved address (App.tsx). */
   lat: number;
   lon: number;
 };
