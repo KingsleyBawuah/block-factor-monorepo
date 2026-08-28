@@ -64,6 +64,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/places": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get nearby cafes, fitness venues, and supermarkets around a coordinate.
+         * @description Per-address radius, not city-wide (docs/ARCHITECTURE.md Decision Log row 30) -- reuses S_third_place's existing Google Places grid-cache lookup for cafes/fitness, blended with a radius-scoped osm_pois supermarket query. Requests outside the City of Chicago boundary are rejected with 422 OUT_OF_COVERAGE to avoid spending Places API budget on out-of-coverage coordinates.
+         */
+        get: operations["getPlaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/layers/cta-rail": {
         parameters: {
             query?: never;
@@ -396,6 +416,27 @@ export interface components {
             type: "FeatureCollection";
             features: components["schemas"]["SupermarketFeature"][];
         };
+        PlaceFeature: {
+            /** @constant */
+            type: "Feature";
+            properties: {
+                name: string;
+                /** @enum {string} */
+                category: "cafe" | "fitness" | "supermarket";
+                distanceMeters: number;
+            };
+            /** @description GeoJSON Point geometry. */
+            geometry: {
+                /** @constant */
+                type: "Point";
+                coordinates: unknown[];
+            };
+        };
+        PlacesResponse: {
+            /** @constant */
+            type: "FeatureCollection";
+            features: components["schemas"]["PlaceFeature"][];
+        };
         HealthResponse: {
             /** @enum {string} */
             status: "ok";
@@ -504,6 +545,31 @@ export interface operations {
                     "application/json": components["schemas"]["IsochroneResponse"];
                 };
             };
+            422: components["responses"]["OutOfCoverage"];
+        };
+    };
+    getPlaces: {
+        parameters: {
+            query: {
+                lat: number;
+                lon: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Nearby places as GeoJSON. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlacesResponse"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
             422: components["responses"]["OutOfCoverage"];
         };
     };

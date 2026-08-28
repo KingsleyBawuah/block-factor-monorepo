@@ -28,6 +28,7 @@ type Server struct {
 	boundaryChecker spatial.BoundaryChecker
 	scoreEngine     ScoreEngine
 	layerReader     spatial.LayerReader
+	placesFinder    PlacesFinder
 }
 
 // ServerOption configures a Server instance.

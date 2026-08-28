@@ -67,16 +67,24 @@ func main() {
 				}
 			}
 
+			// Shared by both S_third_place scoring and the nearby-places
+			// endpoint below (docs/IMPLEMENTATION_PHASES.md Phase 4
+			// deliverable 6) -- one singleflight.Group and one daily budget
+			// counter, so a concurrent request from each for the same grid
+			// cell dedupes into a single Places API call.
+			groceryQuerier := scoring.NewDBGroceryQuerier(pool)
+			thirdPlaceResolver := scoring.NewThirdPlacePoiResolver(placesClient, cache.New(pool), scoring.NewDBPlacesBudget(pool), dailyBudgetCalls)
+
 			calculators := []scoring.FactorCalculator{
 				scoring.NewTransitCalculator(scoring.NewDBTransitQuerier(pool)),
 				scoring.NewBikeCalculator(scoring.NewDBBikeQuerier(pool)),
-				scoring.NewGroceryCalculator(scoring.NewDBGroceryQuerier(pool)),
+				scoring.NewGroceryCalculator(groceryQuerier),
 				scoring.NewGreenCalculator(scoring.NewDBGreenQuerier(pool)),
 				scoring.NewNoiseCalculator(scoring.NewDBNoiseQuerier(pool)),
 				scoring.NewFloodCalculator(scoring.NewDBFloodQuerier(pool)),
 				scoring.NewSafetyCalculator(scoring.NewDBSafetyQuerier(pool)),
 				scoring.NewSolarCalculator(),
-				scoring.NewThirdPlaceCalculator(placesClient, cache.New(pool), scoring.NewDBPlacesBudget(pool), dailyBudgetCalls),
+				scoring.NewThirdPlaceCalculatorFromResolver(thirdPlaceResolver),
 				// No live OTP2 client exists yet (Phase 6) -- registered
 				// with a nil querier so S_commute still appears in the
 				// response, correctly degraded, whenever a destination is
@@ -86,6 +94,9 @@ func main() {
 			}
 			engine := scoring.NewEngine(calculators, logger)
 			serverOpts = append(serverOpts, api.WithScoreEngine(&scoreEngineAdapter{engine: engine}))
+
+			placesResolver := scoring.NewNearbyPlacesResolver(thirdPlaceResolver, groceryQuerier)
+			serverOpts = append(serverOpts, api.WithPlacesFinder(&placesFinderAdapter{resolver: placesResolver}))
 		}
 	} else {
 		logger.Warn("DATABASE_URL not set; spatial database checks and scoring will be unconfigured")

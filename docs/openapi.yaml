@@ -28,6 +28,8 @@ tags:
     description: Walk/transit reach polygons.
   - name: Layers
     description: Static, city-wide spatial map layers (CTA rail, stations, bike routes, trail access, supermarkets).
+  - name: Places
+    description: Per-address nearby cafes, fitness venues, and supermarkets.
   - name: Health
     description: Service liveness.
 
@@ -126,6 +128,47 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IsochroneResponse"
+        "422":
+          $ref: "#/components/responses/OutOfCoverage"
+
+  /api/v1/places:
+    get:
+      tags: [Places]
+      operationId: getPlaces
+      summary: Get nearby cafes, fitness venues, and supermarkets around a coordinate.
+      description: >
+        Per-address radius, not city-wide (docs/ARCHITECTURE.md Decision Log
+        row 30) -- reuses S_third_place's existing Google Places grid-cache
+        lookup for cafes/fitness, blended with a radius-scoped osm_pois
+        supermarket query. Requests outside the City of Chicago boundary are
+        rejected with 422 OUT_OF_COVERAGE to avoid spending Places API
+        budget on out-of-coverage coordinates.
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+            minimum: -90
+            maximum: 90
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+            minimum: -180
+            maximum: 180
+      responses:
+        "200":
+          description: Nearby places as GeoJSON.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlacesResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
         "422":
           $ref: "#/components/responses/OutOfCoverage"
 
@@ -664,6 +707,48 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SupermarketFeature"
+
+    PlaceFeature:
+      type: object
+      required: [type, properties, geometry]
+      properties:
+        type:
+          type: string
+          const: Feature
+        properties:
+          type: object
+          required: [name, category, distanceMeters]
+          properties:
+            name:
+              type: string
+            category:
+              type: string
+              enum: [cafe, fitness, supermarket]
+            distanceMeters:
+              type: number
+        geometry:
+          type: object
+          description: GeoJSON Point geometry.
+          required: [type, coordinates]
+          properties:
+            type:
+              type: string
+              const: Point
+            coordinates:
+              type: array
+              items: {}
+
+    PlacesResponse:
+      type: object
+      required: [type, features]
+      properties:
+        type:
+          type: string
+          const: FeatureCollection
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaceFeature"
 
     HealthResponse:
       type: object
