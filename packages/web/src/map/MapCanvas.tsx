@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Map as MapLibreMap, NavigationControl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { BASEMAP_STYLE_URL, CHICAGO_CENTER, CHICAGO_DEFAULT_ZOOM } from "./constants";
+import { BASEMAP_STYLE_URL, CHICAGO_CENTER, CHICAGO_DEFAULT_ZOOM, WATER_FILL_COLOR } from "./constants";
 
 export type MapCanvasProps = {
   /**
@@ -42,7 +42,10 @@ export function MapCanvas({ onMapReady }: MapCanvasProps) {
     });
     map.addControl(new NavigationControl({ showCompass: true }), "top-right");
     mapRef.current = map;
-    map.on("load", () => onMapReadyRef.current?.(map));
+    map.on("load", () => {
+      map.setPaintProperty("water", "fill-color", WATER_FILL_COLOR);
+      onMapReadyRef.current?.(map);
+    });
 
     return () => {
       map.remove();

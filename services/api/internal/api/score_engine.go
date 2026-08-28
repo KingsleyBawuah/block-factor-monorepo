@@ -29,6 +29,7 @@ var ErrInvalidWeights = errors.New("api: active weights sum to zero")
 type ScoreEngineParams struct {
 	Address                *string
 	Origin                 Coordinates
+	AddressHint            *string
 	DestinationCoordinates *Coordinates
 	Unit                   *UnitMetadata
 	Weights                *WeightOverrides

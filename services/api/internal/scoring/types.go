@@ -42,6 +42,7 @@ type FactorCalculator interface {
 type ScoreParams struct {
 	Address                *string
 	Origin                 api.Coordinates
+	AddressHint            *string
 	DestinationCoordinates *api.Coordinates
 	Unit                   *api.UnitMetadata
 	Weights                *api.WeightOverrides

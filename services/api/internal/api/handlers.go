@@ -204,6 +204,7 @@ func (s *Server) ScoreAddress(w http.ResponseWriter, r *http.Request) {
 	composite, factors, err := s.scoreEngine.Score(ctx, ScoreEngineParams{
 		Address:                req.Address,
 		Origin:                 *origin,
+		AddressHint:            req.AddressHint,
 		DestinationCoordinates: destination,
 		Unit:                   req.Unit,
 		Weights:                req.Weights,

@@ -259,6 +259,8 @@ export interface components {
             address?: string;
             /** @description Pre-resolved origin coordinates from a prior /api/v1/geocode call. Mutually exclusive with `address`. */
             origin?: components["schemas"]["Coordinates"];
+            /** @description Optional raw address text to accompany `origin`, used only for `S_solar`'s street-facing orientation inference — it has no effect on which coordinate is actually scored, and never triggers a geocoding call. Lets a client that already resolved `origin` from its own prior /api/v1/geocode call (and so has the matching address text on hand) get real orientation inference without paying for a second, redundant geocode of that same address just to recover the string `address` would have provided. Ignored when `address` is set (orientation already infers from `address` directly in that case). */
+            addressHint?: string;
             /** @description Optional workplace/destination address for the custom commute factor. */
             destination?: string;
             /** @description Pre-resolved destination coordinates. Mutually exclusive with `destination`. */

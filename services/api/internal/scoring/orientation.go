@@ -37,6 +37,24 @@ var (
 		"taylor": true, "roosevelt": true, "cermak": true, "pershing": true, "garfield": true,
 	}
 
+	// streetSuffixWords are generic street-type words (both abbreviated and
+	// full spellings, since real Nominatim results always spell these out --
+	// "North Wells Street", never "N Wells St") that can immediately follow
+	// a direction word without that direction word being part of the
+	// street's own name.
+	streetSuffixWords = map[string]bool{
+		"st": true, "street": true,
+		"ave": true, "avenue": true,
+		"rd": true, "road": true,
+		"blvd": true, "boulevard": true,
+		"dr": true, "drive": true,
+		"pkwy": true, "parkway": true,
+		"pl": true, "place": true,
+		"ln": true, "lane": true,
+		"ct": true, "court": true,
+		"way": true,
+	}
+
 	// northSouthNames lists major named North-South thoroughfares in Chicago.
 	northSouthNames = map[string]bool{
 		"state": true, "wabash": true, "michigan": true, "indiana": true, "prairie": true,
@@ -94,6 +112,7 @@ func InferStreetFacingOrientation(address string) api.UnitMetadataFacing {
 	if clean == "" {
 		return api.S // Default fallback
 	}
+	clean = stripLeadingNonNumericSegments(clean)
 
 	match := houseNumberRegex.FindStringSubmatch(clean)
 	if len(match) < 2 {
@@ -106,7 +125,16 @@ func InferStreetFacingOrientation(address string) api.UnitMetadataFacing {
 	}
 	isOdd := houseNum%2 != 0
 
-	axis := detectStreetAxis(clean)
+	// Bounded to the house-number segment plus the immediate next segment
+	// (the actual street) before any classification runs. Real Nominatim
+	// results carry the full admin hierarchy after the street (neighborhood,
+	// city, township, county, ...), and Cook County's real "South Chicago
+	// Township" (verified live in the Willis Tower geocode result) false-
+	// matched diagonalNWSERegex's "south chicago" alternative (meant for
+	// South Chicago Ave) when the unbounded remainder was searched.
+	streetScope := scopeToStreetSegment(clean)
+
+	axis := detectStreetAxis(streetScope)
 	switch axis {
 	case AxisEastWest:
 		if isOdd {
@@ -130,7 +158,7 @@ func InferStreetFacingOrientation(address string) api.UnitMetadataFacing {
 		return api.SE
 	default:
 		// Default rule: check directional prefixes (e.g. "W 17th St" vs "N Halsted St")
-		if isDirEastWestPrefix(clean) {
+		if isDirEastWestPrefix(streetScope) {
 			if isOdd {
 				return api.N
 			}
@@ -143,9 +171,68 @@ func InferStreetFacingOrientation(address string) api.UnitMetadataFacing {
 	}
 }
 
+// stripLeadingNonNumericSegments drops any comma-separated segments before
+// the first one that is purely a house number. Real Nominatim
+// formattedAddress results prefix a landmark/POI name before the house
+// number for well-known buildings -- e.g. "Willis Tower, 233, South Wacker
+// Drive, Financial District, ..." for 233 S Wacker Dr (verified live
+// against GET /api/v1/geocode) -- rather than starting with the number the
+// way a plain, unnamed address does ("1400, North Wells Street, ...",
+// also verified live). Without this, houseNumberRegex's `^\s*(\d+)` never
+// matches a landmark-prefixed result, and every such address silently fell
+// back to the default South/100 orientation. Returns the address
+// unchanged if no purely-numeric segment is found, so the plain
+// space-separated address strings this function's own tests already cover
+// (e.g. "1801 W 18th St, Chicago, IL", which has no comma before the
+// house number) fall through exactly as before.
+func stripLeadingNonNumericSegments(clean string) string {
+	segments := strings.Split(clean, ",")
+	for i, seg := range segments {
+		if isAllDigits(strings.TrimSpace(seg)) {
+			return strings.Join(segments[i:], ",")
+		}
+	}
+	return clean
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// scopeToStreetSegment bounds an address (already past
+// stripLeadingNonNumericSegments, so it starts at the house-number segment)
+// to just that segment plus the very next one, dropping everything after --
+// neighborhood, city, township, county, state, zip, country. A plain
+// hand-typed address packs the house number, direction, and street name into
+// one comma-free segment (e.g. "1801 w 18th st"), so its second segment is
+// just the city; a real Nominatim result puts the street in its own second
+// segment. Either way, nothing past that second segment is ever needed for
+// classification, and leaving it in only risks a false match against
+// unrelated address-hierarchy text (see the "South Chicago Township"
+// docstring above).
+func scopeToStreetSegment(clean string) string {
+	segments := strings.SplitN(clean, ",", 3)
+	if len(segments) <= 2 {
+		return clean
+	}
+	return segments[0] + "," + segments[1]
+}
+
 func isDirEastWestPrefix(clean string) bool {
-	// Look for " w " or " e " prefix after house number
-	parts := strings.Fields(clean)
+	// Look for " w " or " e " prefix after house number. Commas are
+	// normalized to spaces first, matching detectStreetAxis's own
+	// normalization -- without it, a comma glued directly onto the house
+	// number (no space) would fold into parts[0] and shift the real
+	// direction word out of parts[1].
+	parts := strings.Fields(strings.ReplaceAll(clean, ",", " "))
 	if len(parts) >= 2 {
 		dir := parts[1]
 		if dir == "w" || dir == "west" || dir == "e" || dir == "east" {
@@ -153,6 +240,36 @@ func isDirEastWestPrefix(clean string) bool {
 		}
 	}
 	return false
+}
+
+// isDirectionWord reports whether tok is a compass-direction word, in either
+// its single-letter or spelled-out form (Nominatim always spells these out;
+// hand-typed addresses often abbreviate).
+func isDirectionWord(tok string) bool {
+	return tok == "n" || tok == "s" || tok == "e" || tok == "w" ||
+		tok == "north" || tok == "south" || tok == "east" || tok == "west"
+}
+
+// matchRegisteredStreetName checks tokens (in order) against
+// northSouthNames/eastWestNames, trying the longest registered compound
+// name first (up to 3 words, e.g. "ida b wells") down to a single word, so
+// a multi-word registered name is never shadowed by a shorter accidental
+// match against its own first word or trailing city/state filler.
+func matchRegisteredStreetName(tokens []string) (StreetAxis, bool) {
+	maxN := 3
+	if len(tokens) < maxN {
+		maxN = len(tokens)
+	}
+	for n := maxN; n >= 1; n-- {
+		name := strings.Join(tokens[:n], " ")
+		if northSouthNames[name] {
+			return AxisNorthSouth, true
+		}
+		if eastWestNames[name] {
+			return AxisEastWest, true
+		}
+	}
+	return AxisUnknown, false
 }
 
 func detectStreetAxis(clean string) StreetAxis {
@@ -171,9 +288,17 @@ func detectStreetAxis(clean string) StreetAxis {
 
 	// Skip house number
 	tokens := parts[1:]
-	// Skip directional prefix if present (e.g. "w", "n", "s", "e")
-	if len(tokens) > 0 && (tokens[0] == "n" || tokens[0] == "s" || tokens[0] == "e" || tokens[0] == "w" ||
-		tokens[0] == "north" || tokens[0] == "south" || tokens[0] == "east" || tokens[0] == "west") {
+	// Skip a directional prefix (e.g. "w", "n", "s", "e") -- but only when
+	// it actually IS a prefix and not the street's own name. Some Chicago
+	// streets are literally named after a compass direction ("North Ave",
+	// "Ida B Wells Dr" starting with a direction-shaped word isn't a
+	// concern here, but "North Ave" is): when a direction word is
+	// immediately followed by a street-type suffix ("North" + "Ave"), it
+	// IS the name, not a prefix to discard. Only strip it when a distinct
+	// word (the real street name) sits between it and any suffix, e.g.
+	// "North Halsted Street" -> "Halsted" is the name, "North" is a
+	// prefix.
+	if len(tokens) > 1 && isDirectionWord(tokens[0]) && !streetSuffixWords[tokens[1]] {
 		tokens = tokens[1:]
 	}
 
@@ -186,18 +311,8 @@ func detectStreetAxis(clean string) StreetAxis {
 		return AxisEastWest
 	}
 
-	// Join remaining street name without city/state
-	streetName := tokens[0]
-	if len(tokens) > 1 && tokens[1] != "st" && tokens[1] != "ave" && tokens[1] != "rd" && tokens[1] != "blvd" &&
-		tokens[1] != "dr" && tokens[1] != "chicago" && tokens[1] != "il" {
-		streetName = tokens[0] + " " + tokens[1]
-	}
-
-	if northSouthNames[streetName] || northSouthNames[tokens[0]] {
-		return AxisNorthSouth
-	}
-	if eastWestNames[streetName] || eastWestNames[tokens[0]] {
-		return AxisEastWest
+	if axis, ok := matchRegisteredStreetName(tokens); ok {
+		return axis
 	}
 
 	return AxisUnknown

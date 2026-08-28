@@ -10,11 +10,13 @@ import { StrictMode } from "react";
 const removeMock = mock(() => {});
 const addControlMock = mock((_control: unknown, _position?: string) => {});
 const onMock = mock((_event: string, _handler: () => void) => {});
+const setPaintPropertyMock = mock((_layer: string, _prop: string, _value: unknown) => {});
 const MapConstructorMock = mock((options: unknown) => ({
   options,
   addControl: addControlMock,
   on: onMock,
   remove: removeMock,
+  setPaintProperty: setPaintPropertyMock,
 }));
 
 /** Finds and invokes the handler MapCanvas registered for `event` via `map.on(...)`. */
@@ -30,7 +32,7 @@ mock.module("maplibre-gl", () => ({
 }));
 
 const { MapCanvas } = await import("./MapCanvas");
-const { BASEMAP_STYLE_URL, CHICAGO_CENTER, CHICAGO_DEFAULT_ZOOM } = await import("./constants");
+const { BASEMAP_STYLE_URL, CHICAGO_CENTER, CHICAGO_DEFAULT_ZOOM, WATER_FILL_COLOR } = await import("./constants");
 
 describe("MapCanvas", () => {
   beforeEach(() => {
@@ -38,6 +40,7 @@ describe("MapCanvas", () => {
     addControlMock.mockClear();
     onMock.mockClear();
     removeMock.mockClear();
+    setPaintPropertyMock.mockClear();
   });
 
   it("renders a container with an accessible label", () => {
@@ -90,6 +93,14 @@ describe("MapCanvas", () => {
 
     expect(onMapReady).toHaveBeenCalledTimes(1);
     expect(onMapReady.mock.calls[0][0]).toBe(MapConstructorMock.mock.results[0].value);
+  });
+
+  it("overrides the basemap's water fill color once 'load' fires", () => {
+    render(<MapCanvas />);
+
+    fireMapEvent("load");
+
+    expect(setPaintPropertyMock).toHaveBeenCalledWith("water", "fill-color", WATER_FILL_COLOR);
   });
 
   it("survives a React StrictMode mount-unmount-remount cycle without leaking", () => {

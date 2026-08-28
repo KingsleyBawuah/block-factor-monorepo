@@ -220,3 +220,48 @@ func TestSolarCalculator_Calculate_AutoInferOrientation(t *testing.T) {
 		t.Errorf("expected override South score 100.0, got %v", resOverride.Score)
 	}
 }
+
+func TestSolarCalculator_Calculate_AddressHint(t *testing.T) {
+	calc := scoring.NewSolarCalculator()
+
+	// AddressHint alone (no Address, as a request scoring by pre-resolved
+	// Origin would send) must still drive real orientation inference rather
+	// than silently defaulting to South -- this is the whole point of the
+	// field (docs/openapi.yaml ScoreRequest.addressHint): avoid a second,
+	// redundant geocode of the same address just to get an Address string.
+	hint := "1801 W 18th St, Chicago, IL 60608" // odd, East-West -> North -> 40.0
+	res, err := calc.Calculate(context.Background(), scoring.ScoreParams{
+		AddressHint: &hint,
+		Unit: &api.UnitMetadata{
+			Exposure: ptr(api.Street),
+			Floor:    ptr(1),
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Score == nil || *res.Score != 40.0 {
+		t.Errorf("expected AddressHint-inferred North score 40.0, got %v", res.Score)
+	}
+
+	// Address, when also present, takes precedence over AddressHint -- a
+	// request should never send both, but the calculator's own priority
+	// must be unambiguous rather than depend on which happens to be checked
+	// last.
+	addr := "1600 North Ave, Chicago, IL 60614"      // even, East-West -> South -> 100.0
+	otherHint := "1801 W 18th St, Chicago, IL 60608" // would infer North -> 40.0 if used
+	resBothSet, err := calc.Calculate(context.Background(), scoring.ScoreParams{
+		Address:     &addr,
+		AddressHint: &otherHint,
+		Unit: &api.UnitMetadata{
+			Exposure: ptr(api.Street),
+			Floor:    ptr(1),
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resBothSet.Score == nil || *resBothSet.Score != 100.0 {
+		t.Errorf("expected Address to take precedence over AddressHint (South score 100.0), got %v", resBothSet.Score)
+	}
+}

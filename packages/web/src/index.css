@@ -21,6 +21,19 @@
 
   --color-divvy-blue: #41b6e6;
 
+  /*
+   * The 1917 municipal ordinance describes the Chicago flag's colors only
+   * qualitatively ("sky blue", "bright red") -- there's no single official
+   * numeric hex. #41b6e6/#ef002b is the most consistently-cited pairing
+   * across dedicated flag-color references (verified via web search, not
+   * assumed). --color-flag-blue intentionally matches --color-divvy-blue's
+   * value -- Divvy's own branding is itself Chicago-flag-derived -- but
+   * stays a separate token since it means something different here (the
+   * BlockFactor wordmark, not a Divvy dock marker).
+   */
+  --color-flag-blue: #41b6e6;
+  --color-flag-red: #ef002b;
+
   --font-sans: "Inter", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
