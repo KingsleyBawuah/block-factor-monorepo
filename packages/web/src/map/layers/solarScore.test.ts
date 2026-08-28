@@ -20,6 +20,10 @@ describe("solarBaseScore", () => {
   it("falls back to 100, matching factor_solar.go's own baseScore default", () => {
     expect(solarBaseScore("nonsense")).toBe(100);
   });
+
+  it("trims surrounding whitespace before matching", () => {
+    expect(solarBaseScore("  sw  ")).toBe(87.5);
+  });
 });
 
 describe("solarScoreTier", () => {
@@ -32,6 +36,11 @@ describe("solarScoreTier", () => {
     expect(solarScoreTier(45)).toBe("amber");
     expect(solarScoreTier(44)).toBe("rose");
     expect(solarScoreTier(0)).toBe("rose");
+  });
+
+  it("treats out-of-range scores as clamped to their nearest real boundary", () => {
+    expect(solarScoreTier(-10)).toBe("rose");
+    expect(solarScoreTier(150)).toBe("emerald");
   });
 
   it("maps every real S_solar base score to the tier PRD §5.8's own ranking implies", () => {

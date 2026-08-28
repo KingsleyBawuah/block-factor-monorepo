@@ -23,7 +23,7 @@ const SOLAR_BASE_SCORES: Record<string, number> = {
  * recognized facing, so an unrecognized one keeps that same default.
  */
 export function solarBaseScore(facing: string): number {
-  return SOLAR_BASE_SCORES[facing.toUpperCase()] ?? 100;
+  return SOLAR_BASE_SCORES[facing.trim().toUpperCase()] ?? 100;
 }
 
 export type ScoreTier = "emerald" | "lime" | "amber" | "rose";
