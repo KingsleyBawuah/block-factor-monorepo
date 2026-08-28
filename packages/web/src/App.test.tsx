@@ -1,5 +1,5 @@
 import { describe, it, expect, mock, beforeEach } from "bun:test";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
@@ -145,26 +145,29 @@ describe("App component", () => {
     expect(await screen.findByText("Green Line")).toBeTruthy();
   });
 
-  it("prompts to search before any address has resolved, with no solar badge", async () => {
+  it("prompts to search before any address has resolved, with no factor breakdown list", async () => {
     renderApp();
 
     expect(
       await screen.findByText("Search an address above to see its BlockFactor score.")
     ).toBeTruthy();
-    expect(screen.queryByText("Solar")).toBeNull();
+    expect(screen.queryByText("Solar Exposure")).toBeNull();
   });
 
-  it("updates the score card and solar badge once an address resolves", async () => {
+  it("updates the score card and factor breakdown once an address resolves", async () => {
     renderApp();
 
     await searchFor233Wacker();
 
     expect(await screen.findByText("233 S Wacker Dr, Chicago, IL")).toBeTruthy();
     expect(await screen.findByText("81")).toBeTruthy(); // Math.round(81.1)
-    // 75 falls in the "lime" score tier (65-79) -- asserts the badge itself
-    // carries that tier's styling, not just the number.
-    const solarBadge = await screen.findByText("75");
-    expect(solarBadge.className).toContain("text-lime-400");
+    // 75 falls in the "lime" score tier (65-79) -- asserts the Solar
+    // Exposure card's progress bar fill carries that tier's color, not just
+    // that the number rendered somewhere.
+    const solarLabel = await screen.findByText("Solar Exposure");
+    const solarRow = solarLabel.closest("button") as HTMLElement;
+    expect(within(solarRow).getByText("75")).toBeTruthy();
+    expect(solarRow.querySelector(".bg-lime-400")).toBeTruthy();
     expect(screen.queryByText("Search an address above to see its BlockFactor score.")).toBeNull();
   });
 
