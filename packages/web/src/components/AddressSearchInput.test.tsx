@@ -42,13 +42,11 @@ const getMock = mock(async (path: string, options?: { params?: { query?: Record<
   throw new Error(`unexpected GET path: ${path}`);
 });
 
-const postMock = mock(async (path: string, options?: { body?: { address?: string } }) => {
+const postMock = mock(async (path: string, options?: { body?: { origin?: { lat: number; lon: number } } }) => {
   if (path === "/api/v1/score") {
-    const address = options?.body?.address;
-    if (address === "1 Rural Rd, Downstate IL") {
-      return { data: undefined, error: { code: "OUT_OF_COVERAGE", message: "outside Chicago" } };
-    }
-    if (address === "500 Broken Ave, Chicago, IL") throw { code: "SERVER_ERROR", message: "boom" };
+    const lat = options?.body?.origin?.lat;
+    if (lat === 39) return { data: undefined, error: { code: "OUT_OF_COVERAGE", message: "outside Chicago" } };
+    if (lat === 41.85) throw { code: "SERVER_ERROR", message: "boom" };
     return {
       data: {
         compositeScore: 82,
@@ -112,11 +110,13 @@ describe("AddressSearchInput", () => {
       lon: -87.6298,
       score: expect.objectContaining({ compositeScore: 82 }),
     });
-    // Scores by address text, not origin coordinates -- S_solar's street-
-    // facing inference only runs when the request carries an address
-    // string (factor_solar.go), so sending origin here would silently
-    // default every score to South (100/100).
-    expect(postMock).toHaveBeenCalledWith("/api/v1/score", { body: { address: "233 S Wacker Dr, Chicago, IL" } });
+    // Scores by the exact resolved origin coordinates (not by re-sending
+    // address text, which would trigger a redundant, ~1s-blocking
+    // server-side geocode -- PR #62 review), plus addressHint so S_solar's
+    // street-facing inference still gets real address text to work with.
+    expect(postMock).toHaveBeenCalledWith("/api/v1/score", {
+      body: { origin: { lat: 41.8781, lon: -87.6298 }, addressHint: "233 S Wacker Dr, Chicago, IL" },
+    });
   });
 
   it("shows a not-found notice for zero geocode candidates", async () => {

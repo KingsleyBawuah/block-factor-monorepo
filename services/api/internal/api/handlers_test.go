@@ -274,6 +274,38 @@ func TestScoreAddress_SuccessWithPreResolvedOrigin(t *testing.T) {
 	}
 }
 
+// TestScoreAddress_OriginWithAddressHintNeverGeocodes is a regression guard
+// for a real, shipped latency bug: scoring by `address` alone (rather than
+// pre-resolved `origin`) re-geocodes that address server-side purely to get
+// S_solar an orientation-inference string, and NominatimClient rate-limits
+// to 1 request/second -- so a client that already geocoded once to resolve
+// `origin` paid a second, ~1-second-blocking geocode on every single score
+// request. addressHint exists specifically to give S_solar that same string
+// without ever triggering a second geocode. Passing a nil geocoder here
+// means any accidental call to it panics/fails this test outright, proving
+// none occurred.
+func TestScoreAddress_OriginWithAddressHintNeverGeocodes(t *testing.T) {
+	engine := &mockScoreEngine{compositeScore: 82.5, factors: fullFactorSet(80.0)}
+	boundary := &mockBoundaryChecker{within: true}
+	srv := newScoredServer(engine, boundary, nil) // nil geocoder: any Geocode call panics
+	router := api.NewRouter(srv)
+
+	body := `{"origin": {"lat": 41.8781, "lon": -87.6298}, "addressHint": "233 S Wacker Dr, Chicago, IL"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/score", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200 (addressHint must never trigger geocoding), got %d: %s", w.Code, w.Body.String())
+	}
+	if engine.capturedParams.AddressHint == nil || *engine.capturedParams.AddressHint != "233 S Wacker Dr, Chicago, IL" {
+		t.Errorf("expected addressHint passed through to the engine, got %v", engine.capturedParams.AddressHint)
+	}
+	if engine.capturedParams.Origin.Lat != 41.8781 || engine.capturedParams.Origin.Lon != -87.6298 {
+		t.Errorf("unexpected origin passed to engine: %+v", engine.capturedParams.Origin)
+	}
+}
+
 func TestScoreAddress_SuccessWithDestinationIncludesCommute(t *testing.T) {
 	factors := fullFactorSet(80.0)
 	factors["commute"] = api.ScoreFactorResult{Degraded: true}

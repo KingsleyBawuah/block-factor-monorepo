@@ -202,15 +202,15 @@ BlockFactor uses **flat tonal layering**. Surfaces are flat at rest with zero dr
 
 - **Form Language:** Strict geometric rectangles with tight corner radii.
 - **Radius Scale:**
-  - `sm` (`2px` / `0.125rem`): Cards, badges, chips, buttons, inputs.
+  - `sm` (`2px` / `0.125rem`): Badges and chips only.
   - `md` (`4px` / `0.25rem`): Modal containers, dropdown menus.
-  - `lg` (`6px` / `0.375rem`): Outer application wrappers.
+  - `lg` (`6px` / `0.375rem`): Cards, buttons, inputs, and outer application wrappers — the app-wide default (AGENTS.md §4).
 - **Borders:** 1px solid `zinc-800` on all cards and dividers; 1px colored strokes on score badges.
 
 ## Components
 
 ### Cards
-- **Corner Style:** `rounded-sm` (2px).
+- **Corner Style:** `rounded-lg` (6px).
 - **Background:** `zinc-900/80` (`#18181b`).
 - **Border:** 1px solid `zinc-800` (`#27272a`).
 - **Internal Padding:** `p-4` (16px).
@@ -224,12 +224,12 @@ BlockFactor uses **flat tonal layering**. Surfaces are flat at rest with zero dr
 - **Score Variants:** 40% tint background with 60% border stroke (`emerald-950/40 border-emerald-900/60 text-emerald-400`).
 
 ### Buttons
-- **Shape:** `rounded-sm` (2px).
+- **Shape:** `rounded-lg` (6px).
 - **Primary:** `bg-zinc-100 text-zinc-950 hover:bg-zinc-200` font-mono font-medium text-xs uppercase.
 - **Secondary / Ghost:** `bg-zinc-800 text-zinc-100 hover:bg-zinc-700` with 1px `zinc-700` border.
 
 ### Inputs & Address Search
-- **Style:** `bg-zinc-900 border border-zinc-800 rounded-sm px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 font-sans`.
+- **Style:** `bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 font-sans`.
 - **Focus:** 1px solid `zinc-500`, zero outer ring glow.
 
 ## Do's and Don'ts
@@ -237,7 +237,7 @@ BlockFactor uses **flat tonal layering**. Surfaces are flat at rest with zero dr
 ### Do:
 - **Do** use `Geist Mono` for all numeric scores, distances, coordinates, and travel durations.
 - **Do** use exact CTA transit line colors for route badges, transit chips, and map layers.
-- **Do** maintain tight border radii (`rounded-sm` 2px for cards and badges).
+- **Do** maintain tight border radii (`rounded-lg` 6px for cards/buttons/inputs, `rounded-sm` 2px for badges/chips).
 - **Do** lead component copy with metrics, entity names, and straight-line distances (e.g. `0.2 mi · CTA Blue Line`).
 - **Do** maintain 1px `zinc-800` borders between tonal surfaces for crisp visual delineation.
 

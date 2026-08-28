@@ -37,6 +37,24 @@ var (
 		"taylor": true, "roosevelt": true, "cermak": true, "pershing": true, "garfield": true,
 	}
 
+	// streetSuffixWords are generic street-type words (both abbreviated and
+	// full spellings, since real Nominatim results always spell these out --
+	// "North Wells Street", never "N Wells St") that can immediately follow
+	// a direction word without that direction word being part of the
+	// street's own name.
+	streetSuffixWords = map[string]bool{
+		"st": true, "street": true,
+		"ave": true, "avenue": true,
+		"rd": true, "road": true,
+		"blvd": true, "boulevard": true,
+		"dr": true, "drive": true,
+		"pkwy": true, "parkway": true,
+		"pl": true, "place": true,
+		"ln": true, "lane": true,
+		"ct": true, "court": true,
+		"way": true,
+	}
+
 	// northSouthNames lists major named North-South thoroughfares in Chicago.
 	northSouthNames = map[string]bool{
 		"state": true, "wabash": true, "michigan": true, "indiana": true, "prairie": true,
@@ -209,8 +227,12 @@ func scopeToStreetSegment(clean string) string {
 }
 
 func isDirEastWestPrefix(clean string) bool {
-	// Look for " w " or " e " prefix after house number
-	parts := strings.Fields(clean)
+	// Look for " w " or " e " prefix after house number. Commas are
+	// normalized to spaces first, matching detectStreetAxis's own
+	// normalization -- without it, a comma glued directly onto the house
+	// number (no space) would fold into parts[0] and shift the real
+	// direction word out of parts[1].
+	parts := strings.Fields(strings.ReplaceAll(clean, ",", " "))
 	if len(parts) >= 2 {
 		dir := parts[1]
 		if dir == "w" || dir == "west" || dir == "e" || dir == "east" {
@@ -218,6 +240,36 @@ func isDirEastWestPrefix(clean string) bool {
 		}
 	}
 	return false
+}
+
+// isDirectionWord reports whether tok is a compass-direction word, in either
+// its single-letter or spelled-out form (Nominatim always spells these out;
+// hand-typed addresses often abbreviate).
+func isDirectionWord(tok string) bool {
+	return tok == "n" || tok == "s" || tok == "e" || tok == "w" ||
+		tok == "north" || tok == "south" || tok == "east" || tok == "west"
+}
+
+// matchRegisteredStreetName checks tokens (in order) against
+// northSouthNames/eastWestNames, trying the longest registered compound
+// name first (up to 3 words, e.g. "ida b wells") down to a single word, so
+// a multi-word registered name is never shadowed by a shorter accidental
+// match against its own first word or trailing city/state filler.
+func matchRegisteredStreetName(tokens []string) (StreetAxis, bool) {
+	maxN := 3
+	if len(tokens) < maxN {
+		maxN = len(tokens)
+	}
+	for n := maxN; n >= 1; n-- {
+		name := strings.Join(tokens[:n], " ")
+		if northSouthNames[name] {
+			return AxisNorthSouth, true
+		}
+		if eastWestNames[name] {
+			return AxisEastWest, true
+		}
+	}
+	return AxisUnknown, false
 }
 
 func detectStreetAxis(clean string) StreetAxis {
@@ -236,9 +288,17 @@ func detectStreetAxis(clean string) StreetAxis {
 
 	// Skip house number
 	tokens := parts[1:]
-	// Skip directional prefix if present (e.g. "w", "n", "s", "e")
-	if len(tokens) > 0 && (tokens[0] == "n" || tokens[0] == "s" || tokens[0] == "e" || tokens[0] == "w" ||
-		tokens[0] == "north" || tokens[0] == "south" || tokens[0] == "east" || tokens[0] == "west") {
+	// Skip a directional prefix (e.g. "w", "n", "s", "e") -- but only when
+	// it actually IS a prefix and not the street's own name. Some Chicago
+	// streets are literally named after a compass direction ("North Ave",
+	// "Ida B Wells Dr" starting with a direction-shaped word isn't a
+	// concern here, but "North Ave" is): when a direction word is
+	// immediately followed by a street-type suffix ("North" + "Ave"), it
+	// IS the name, not a prefix to discard. Only strip it when a distinct
+	// word (the real street name) sits between it and any suffix, e.g.
+	// "North Halsted Street" -> "Halsted" is the name, "North" is a
+	// prefix.
+	if len(tokens) > 1 && isDirectionWord(tokens[0]) && !streetSuffixWords[tokens[1]] {
 		tokens = tokens[1:]
 	}
 
@@ -251,18 +311,8 @@ func detectStreetAxis(clean string) StreetAxis {
 		return AxisEastWest
 	}
 
-	// Join remaining street name without city/state
-	streetName := tokens[0]
-	if len(tokens) > 1 && tokens[1] != "st" && tokens[1] != "ave" && tokens[1] != "rd" && tokens[1] != "blvd" &&
-		tokens[1] != "dr" && tokens[1] != "chicago" && tokens[1] != "il" {
-		streetName = tokens[0] + " " + tokens[1]
-	}
-
-	if northSouthNames[streetName] || northSouthNames[tokens[0]] {
-		return AxisNorthSouth
-	}
-	if eastWestNames[streetName] || eastWestNames[tokens[0]] {
-		return AxisEastWest
+	if axis, ok := matchRegisteredStreetName(tokens); ok {
+		return axis
 	}
 
 	return AxisUnknown

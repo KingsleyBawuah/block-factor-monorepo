@@ -25,8 +25,15 @@ func (c *SolarCalculator) Name() FactorName {
 // the building's street-facing window direction if not explicitly supplied.
 func (c *SolarCalculator) Calculate(_ context.Context, params ScoreParams) (FactorResult, error) {
 	inferredFacing := api.S
-	if params.Address != nil {
+	switch {
+	case params.Address != nil:
 		inferredFacing = InferStreetFacingOrientation(*params.Address)
+	case params.AddressHint != nil:
+		// A client that resolved `origin` itself (e.g. from its own prior
+		// geocode call) can pass the matching address text here purely for
+		// orientation inference, without that text ever being re-geocoded
+		// -- see ScoreRequest.addressHint's doc comment (docs/openapi.yaml).
+		inferredFacing = InferStreetFacingOrientation(*params.AddressHint)
 	}
 
 	score := CalculateSolarScore(params.Unit, inferredFacing)

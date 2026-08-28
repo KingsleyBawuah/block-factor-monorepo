@@ -283,10 +283,10 @@ To prevent runaway third-party API costs or thundering-herd spikes during cold c
 To enforce an analytical, high-density tool aesthetic and avoid generic AI "vibe-coded" tropes:
 * **Component Primitives:** **`shadcn/ui` (Radix UI)** copied directly into `packages/web/src/components/ui/` with custom, sharp design tokens.
 * **Styling Engine:** **Tailwind CSS v4** with a strict design token scale:
-  * **Geometry:** Sharp, disciplined border radii (`rounded-sm` / `rounded-md`—no bubbly pill shapes).
+  * **Geometry:** Sharp, disciplined border radii — `rounded-lg` for cards/buttons/inputs, `rounded-sm` for badges/chips (no bubbly pill shapes).
   * **Palette:** Neutral Slate/Zinc base (`#09090b` / `#fafafa`) with zero purple/violet radial gradients.
   * **Transit Branding:** Authentic CTA Line colors for station badges (Red `#c60c30`, Blue `#00a1de`, Brown `#62361b`, Green `#009b3a`, Pink `#e27ea6`, Orange `#f9461c`, Purple `#522398`, Yellow `#f9e300`).
-  * **Score Indicators:** Emerald (≥ 85), Lime (70–84), Amber (50–69), Rose (< 50).
+  * **Score Indicators:** Emerald (≥ 80), Lime (65–79), Amber (45–64), Rose (< 45).
 * **Iconography:** **Lineicons** (14–16px, 1.5px stroke). Strictly no Lucide over-use and zero emoji slop in headers/cards.
 * **Typography:** **Inter / Geist** for body text; **Geist Mono** for all coordinates, distances (`0.28 mi`), commute times (`14 min`), and numeric scores.
 

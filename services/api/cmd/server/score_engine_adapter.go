@@ -21,6 +21,7 @@ func (a *scoreEngineAdapter) Score(ctx context.Context, params api.ScoreEnginePa
 	composite, results, err := a.engine.Score(ctx, scoring.ScoreParams{
 		Address:                params.Address,
 		Origin:                 params.Origin,
+		AddressHint:            params.AddressHint,
 		DestinationCoordinates: params.DestinationCoordinates,
 		Unit:                   params.Unit,
 		Weights:                params.Weights,

@@ -54,17 +54,19 @@ export function AddressSearchInput({ onResolved, onReset }: AddressSearchInputPr
 
   const scoreMutation = useMutation({
     mutationFn: async (candidate: GeocodeCandidate) => {
-      // Scores by the resolved formattedAddress text, not `origin`
-      // coordinates: S_solar's street-facing orientation inference
-      // (InferStreetFacingOrientation, services/api/internal/scoring/
-      // factor_solar.go) only runs when the request carries an address
-      // string -- with `origin` it silently defaults to South (100/100)
-      // for every address. Re-geocoding this exact, already-disambiguated
-      // string server-side is safe (unlike the original free-text query,
-      // it's no longer ambiguous) and reliably resolves to this same
-      // candidate.
+      // Scores by the exact resolved `origin` coordinates, not by
+      // re-sending `address` text -- sending `address` makes the server
+      // re-geocode it (resolveCoordinates, handlers.go) purely to recover
+      // a coordinate we already have, and NominatimClient rate-limits to 1
+      // req/sec, so that redundant geocode blocked every single search for
+      // close to a full second (confirmed live, PR #62 review). `origin`
+      // alone would silently default S_solar's street-facing inference to
+      // South (100/100), since InferStreetFacingOrientation needs address
+      // text -- addressHint supplies that same text purely for orientation
+      // inference, without ever triggering a geocode (docs/openapi.yaml
+      // ScoreRequest.addressHint).
       const { data, error } = await apiClient.POST("/api/v1/score", {
-        body: { address: candidate.formattedAddress },
+        body: { origin: candidate.coordinates, addressHint: candidate.formattedAddress },
       });
       if (error) throw error;
       return data;

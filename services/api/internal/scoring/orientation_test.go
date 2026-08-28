@@ -112,6 +112,71 @@ func TestInferStreetFacingOrientation_ChicagoGrid(t *testing.T) {
 			address:  "Broken English Taco Pub, 1400, North Wells Street, Old Town, Near North Side, Chicago, North Chicago Township, Cook County, Illinois, 60610, United States",
 			expected: api.E,
 		},
+		{
+			// North Ave is a real, major East-West Chicago street literally
+			// named after a compass direction. Before this test was added,
+			// detectStreetAxis unconditionally stripped "north" as a generic
+			// directional prefix before ever checking the street-name tables,
+			// leaving just "ave" (which matches nothing) -- so this fell
+			// through to South's the empty-match default regardless of house
+			// number parity. 1600 is even on an East-West street -> South.
+			name:     "1600 North Ave (real street literally named after a compass direction -> faces South)",
+			address:  "1600 North Ave, Chicago, IL 60614",
+			expected: api.S,
+		},
+		{
+			name:     "1601 North Ave (odd on the same street -> faces North)",
+			address:  "1601 North Ave, Chicago, IL 60614",
+			expected: api.N,
+		},
+		{
+			// Real Nominatim spells the suffix out in full ("Avenue", not
+			// "Ave") -- confirms the direction-word-is-the-name detection
+			// isn't limited to the abbreviated form.
+			name:     "1600 North Avenue (full-word Nominatim-style suffix spelling -> faces South)",
+			address:  "1600 North Avenue, Chicago, IL 60614",
+			expected: api.S,
+		},
+		{
+			// Regression guard for the opposite case: a real North-South
+			// street (Halsted) that happens to carry a spelled-out "North"
+			// prefix (Nominatim's real format, not the abbreviated "N" the
+			// rest of this table mostly uses) must NOT be swallowed by the
+			// "North Ave"-style direction-is-the-name detection above --
+			// "Halsted" is a distinct word before the suffix, so "North"
+			// here is a genuine prefix to strip, not the street's name.
+			name:     "2400 North Halsted Street (spelled-out prefix on an unrelated North-South street -> faces East)",
+			address:  "2400 North Halsted Street, Chicago, IL 60614",
+			expected: api.E,
+		},
+		{
+			// eastWestNames registers the full 3-word "ida b wells" name
+			// (PRD/DATA_SOURCES naming), but detectStreetAxis only ever
+			// joined 2 tokens when building a candidate name to look up, so
+			// "ida b" (not "ida b wells") was checked and never matched --
+			// falling through to the North-South parity default regardless
+			// of the street's real East-West orientation. 100 is even on an
+			// East-West street -> South.
+			name:     "100 Ida B Wells Dr (3-word registered street name -> faces South)",
+			address:  "100 Ida B Wells Dr, Chicago, IL 60616",
+			expected: api.S,
+		},
+		{
+			name:     "101 Ida B Wells Dr (odd on the same street -> faces North)",
+			address:  "101 Ida B Wells Dr, Chicago, IL 60616",
+			expected: api.N,
+		},
+		{
+			// isDirEastWestPrefix didn't normalize commas to spaces the way
+			// detectStreetAxis does, so a comma glued directly onto the house
+			// number with no space (never produced by Nominatim or this
+			// table's own hand-typed convention, but a real robustness gap)
+			// folded the direction word into the wrong token. 5500 is even
+			// with a West prefix -> South.
+			name:     "5500,W Fakestreet Ave (comma glued to the house number, no space -> faces South)",
+			address:  "5500,W Fakestreet Ave, Chicago, IL 60651",
+			expected: api.S,
+		},
 	}
 
 	for _, tt := range tests {

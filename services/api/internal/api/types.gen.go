@@ -850,6 +850,9 @@ type ScoreRequest struct {
 	// Address Raw address to geocode before scoring. Mutually exclusive with `origin`.
 	Address *string `json:"address,omitempty"`
 
+	// AddressHint Optional raw address text to accompany `origin`, used only for `S_solar`'s street-facing orientation inference — it has no effect on which coordinate is actually scored, and never triggers a geocoding call. Lets a client that already resolved `origin` from its own prior /api/v1/geocode call (and so has the matching address text on hand) get real orientation inference without paying for a second, redundant geocode of that same address just to recover the string `address` would have provided. Ignored when `address` is set (orientation already infers from `address` directly in that case).
+	AddressHint *string `json:"addressHint,omitempty"`
+
 	// Destination Optional workplace/destination address for the custom commute factor.
 	Destination *string `json:"destination,omitempty"`
 
