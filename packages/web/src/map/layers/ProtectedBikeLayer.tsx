@@ -4,6 +4,7 @@ import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { Popup } from "maplibre-gl";
 import { apiClient } from "../../lib/api/client";
 import { escapeHtml } from "./escapeHtml";
+import { RAIL_LAYER_ID as CTA_RAIL_LAYER_ID } from "./CtaRailLayer";
 import type {
   FeatureCollection,
   MultiLineStringGeometry,
@@ -113,6 +114,27 @@ export function ProtectedBikeLayer({ map }: ProtectedBikeLayerProps) {
         ],
       },
     });
+
+    // Real elevated CTA track and street-level bike lanes sometimes
+    // physically coincide (parts of the Loop) -- without an explicit
+    // z-order here, whichever layer's async query happened to resolve
+    // last would render on top, non-deterministically hiding the other.
+    // A plain addLayer() always places a new layer at the very top, which
+    // already puts CTA rail above bike routes when CTA loads second; this
+    // handles the other ordering (CTA already loaded first) by explicitly
+    // moving bike routes below it. Bike routes are usually wider (up to
+    // 3px vs. CTA's fixed 2px) so some color still peeks out on either
+    // side where they coincide -- a real but partial fix, since the
+    // narrowest bike tier (1.5px, Bike Lane/Marked Shared Lane) can still
+    // be mostly covered. True pixel-perfect separation would need
+    // cross-dataset overlap detection to offset one line off the other's
+    // centerline (the same technique expandRailSegments.ts already uses
+    // for multiple CTA lines sharing one segment, extended to a second,
+    // independently-sourced dataset) -- see docs/ARCHITECTURE.md Decision
+    // Log row 33 for why that's out of scope here.
+    if (map.getLayer(CTA_RAIL_LAYER_ID)) {
+      map.moveLayer(ROUTES_LAYER_ID, CTA_RAIL_LAYER_ID);
+    }
 
     return () => {
       if (map.getLayer(ROUTES_LAYER_ID)) map.removeLayer(ROUTES_LAYER_ID);
