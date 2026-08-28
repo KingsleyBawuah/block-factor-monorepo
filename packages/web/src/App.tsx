@@ -3,7 +3,7 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { Outlet } from "@tanstack/react-router";
 import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
-import { MapCanvas, CtaRailLayer } from "./map";
+import { MapCanvas, CtaRailLayer, ProtectedBikeLayer } from "./map";
 
 export default function App() {
   const [map, setMap] = useState<MapLibreMap | null>(null);
@@ -51,6 +51,7 @@ export default function App() {
             <Card className="h-[70vh] overflow-hidden p-0 lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
               <MapCanvas onMapReady={setMap} />
               {map && <CtaRailLayer map={map} />}
+              {map && <ProtectedBikeLayer map={map} />}
             </Card>
           </div>
         </div>

@@ -19,6 +19,11 @@ export type PointGeometry = {
   coordinates: GeoPosition;
 };
 
+export type MultiPolygonGeometry = {
+  type: "MultiPolygon";
+  coordinates: GeoPosition[][][];
+};
+
 export type Feature<Geometry, Properties> = {
   type: "Feature";
   geometry: Geometry;
