@@ -4,4 +4,3 @@ export { CtaRailLayer } from "./layers/CtaRailLayer";
 export { ProtectedBikeLayer } from "./layers/ProtectedBikeLayer";
 export { PoiDensityLayer } from "./layers/PoiDensityLayer";
 export { DivvyDockLayer } from "./layers/DivvyDockLayer";
-export { SolarRayWidget } from "./layers/SolarRayWidget";

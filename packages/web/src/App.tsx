@@ -3,8 +3,8 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { Outlet } from "@tanstack/react-router";
 import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
-import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, SolarRayWidget, DEMO_ADDRESS_LAT, DEMO_ADDRESS_LON, DEMO_ADDRESS_FACING } from "./map";
-import { solarBaseScore, solarScoreTier } from "./map/layers/solarRay";
+import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, DEMO_ADDRESS_LAT, DEMO_ADDRESS_LON, DEMO_ADDRESS_FACING } from "./map";
+import { solarBaseScore, solarScoreTier } from "./map/layers/solarScore";
 
 const solarScore = solarBaseScore(DEMO_ADDRESS_FACING);
 const solarTier = solarScoreTier(solarScore);
@@ -66,9 +66,6 @@ export default function App() {
               {map && <ProtectedBikeLayer map={map} />}
               {map && <PoiDensityLayer map={map} lat={DEMO_ADDRESS_LAT} lon={DEMO_ADDRESS_LON} />}
               {map && <DivvyDockLayer map={map} />}
-              {map && (
-                <SolarRayWidget map={map} lat={DEMO_ADDRESS_LAT} lon={DEMO_ADDRESS_LON} facing={DEMO_ADDRESS_FACING} />
-              )}
             </Card>
           </div>
         </div>

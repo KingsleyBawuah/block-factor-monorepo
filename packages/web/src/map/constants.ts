@@ -30,6 +30,7 @@ export const DEMO_ADDRESS_LON = -87.6298;
  * running that exact function against that exact address, not guessed --
  * house number 233 is odd, and "Wacker" matches neither a known named
  * street nor a diagonal-avenue pattern, so it falls through to the
- * default odd-house-number rule: West). Feeds SolarRayWidget.
+ * default odd-house-number rule: West). Feeds the sidebar's solar
+ * exposure badge (App.tsx).
  */
 export const DEMO_ADDRESS_FACING = "W";
