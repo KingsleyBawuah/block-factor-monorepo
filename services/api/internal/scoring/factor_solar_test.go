@@ -248,7 +248,7 @@ func TestSolarCalculator_Calculate_AddressHint(t *testing.T) {
 	// request should never send both, but the calculator's own priority
 	// must be unambiguous rather than depend on which happens to be checked
 	// last.
-	addr := "1600 North Ave, Chicago, IL 60614" // even, East-West -> South -> 100.0
+	addr := "1600 North Ave, Chicago, IL 60614"      // even, East-West -> South -> 100.0
 	otherHint := "1801 W 18th St, Chicago, IL 60608" // would infer North -> 40.0 if used
 	resBothSet, err := calc.Calculate(context.Background(), scoring.ScoreParams{
 		Address:     &addr,
