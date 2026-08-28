@@ -144,7 +144,7 @@ Originally scoped as 5 items (map component + 4 interactive layers + solar widge
    - `GET /api/v1/layers/supermarkets` (from existing `osm_pois WHERE poi_type = 'supermarket'`)
 4. [x] **CTA Rail Layer** (frontend, consumes 3) — Official line colors with interactive station hover cards.
 5. [x] **Protected Bike Layer** (frontend, consumes 3) — High-visibility green linestring overlay with trail access markers.
-6. [ ] **Nearby-places endpoint** (backend only) — New `GET /api/v1/places?lat=&lon=`, scoped to a per-address radius, not city-wide (ARCHITECTURE.md Decision Log row 30). Blends the existing `S_third_place` Google Places grid-cache lookup (cafes/fitness) with an `osm_pois` supermarket query. Likely needs a small extraction from `factor_third_places.go` so the scoring path and this handler share one cache-fill/lookup implementation rather than duplicating it.
+6. [x] **Nearby-places endpoint** (backend only) — New `GET /api/v1/places?lat=&lon=`, scoped to a per-address radius, not city-wide (ARCHITECTURE.md Decision Log row 30). Blends the existing `S_third_place` Google Places grid-cache lookup (cafes/fitness) with an `osm_pois` supermarket query. Likely needs a small extraction from `factor_third_places.go` so the scoring path and this handler share one cache-fill/lookup implementation rather than duplicating it.
 7. [ ] **POI Density Markers** (frontend, consumes 6) — Cafes, fitness studios, and supermarkets with distance radius rings.
 8. [ ] **Divvy client + endpoint** (backend only) — `internal/clients/divvy.go` (GBFS client) + in-memory GBFS cache (5m TTL) + `GET /api/v1/layers/divvy-docks`.
 9. [ ] **Divvy Dock Layer** (frontend, consumes 8) — Station markers with live capacity badges (display-only — Divvy is not a scored factor).

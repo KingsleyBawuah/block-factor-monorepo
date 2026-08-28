@@ -172,8 +172,17 @@ type thirdPlaceFillResult struct {
 	degraded bool
 }
 
-// ThirdPlaceCalculator calculates the S_third_place livability factor.
-type ThirdPlaceCalculator struct {
+// ThirdPlacePoiResolver resolves the classified cafe/fitness POIs around a
+// coordinate, filling the shared 30-day grid cache (thirdPlaceGridKey) on a
+// miss. Extracted out of ThirdPlaceCalculator so a single instance -- with
+// one singleflight.Group and one daily budget counter -- can be shared
+// between S_third_place's own scoring path and the Phase 4 nearby-places
+// map endpoint (docs/IMPLEMENTATION_PHASES.md Phase 4 deliverable 6): both
+// read/fill the exact same cache entries, so a concurrent request from each
+// for the same grid cell genuinely dedupes into one Places API call rather
+// than each maintaining its own independent (and duplicate-spending)
+// cache-fill logic.
+type ThirdPlacePoiResolver struct {
 	places        PlacesQuerier
 	cache         ThirdPlaceCache
 	budget        PlacesBudget
@@ -181,15 +190,96 @@ type ThirdPlaceCalculator struct {
 	sf            singleflight.Group
 }
 
-// NewThirdPlaceCalculator creates a new ThirdPlaceCalculator. dailyCapCalls
-// is the self-imposed daily Google Places call ceiling (GOOGLE_PLACES_DAILY_BUDGET_CALLS).
-func NewThirdPlaceCalculator(places PlacesQuerier, cache ThirdPlaceCache, budget PlacesBudget, dailyCapCalls int) *ThirdPlaceCalculator {
-	return &ThirdPlaceCalculator{
+// NewThirdPlacePoiResolver creates a new ThirdPlacePoiResolver.
+// dailyCapCalls is the self-imposed daily Google Places call ceiling
+// (GOOGLE_PLACES_DAILY_BUDGET_CALLS).
+func NewThirdPlacePoiResolver(places PlacesQuerier, cache ThirdPlaceCache, budget PlacesBudget, dailyCapCalls int) *ThirdPlacePoiResolver {
+	return &ThirdPlacePoiResolver{
 		places:        places,
 		cache:         cache,
 		budget:        budget,
 		dailyCapCalls: dailyCapCalls,
 	}
+}
+
+// Resolve returns the third-place POIs for the grid cell containing (lat,
+// lon), filling the cache on a miss. Concurrent misses for the same cell
+// are deduplicated via singleflight so only one goroutine per process
+// actually calls Places or spends budget for a given cell at a time.
+func (r *ThirdPlacePoiResolver) Resolve(ctx context.Context, lat, lon float64) (pois []ThirdPlacePoi, degraded bool, err error) {
+	if r.places == nil || r.cache == nil || r.budget == nil {
+		return nil, true, errors.New("scoring: third place resolver not configured")
+	}
+
+	gridKey := thirdPlaceGridKey(lat, lon)
+
+	var cached []ThirdPlacePoi
+	ok, err := r.cache.Get(ctx, gridKey, &cached)
+	if err != nil {
+		return nil, true, err
+	}
+	if ok {
+		return cached, false, nil
+	}
+
+	v, err, _ := r.sf.Do(gridKey, func() (any, error) {
+		// Re-check: another goroutine may have filled this cell between our
+		// miss above and acquiring the singleflight slot.
+		var recheck []ThirdPlacePoi
+		if ok, err := r.cache.Get(ctx, gridKey, &recheck); err != nil {
+			return thirdPlaceFillResult{}, err
+		} else if ok {
+			return thirdPlaceFillResult{pois: recheck}, nil
+		}
+
+		withinBudget, err := r.budget.IncrementAndCheck(ctx, r.dailyCapCalls)
+		if err != nil {
+			return thirdPlaceFillResult{}, err
+		}
+		if !withinBudget {
+			return thirdPlaceFillResult{degraded: true}, nil
+		}
+
+		// Search around the cell's own center, not the requesting address --
+		// see thirdPlaceFillRadiusMeters for why.
+		fillLat, fillLon := thirdPlaceGridCellCenter(lat, lon)
+		fetched, err := r.places.SearchNearby(ctx, fillLat, fillLon, thirdPlaceFillRadiusMeters, thirdPlaceIncludedTypes)
+		if err != nil {
+			return thirdPlaceFillResult{}, err
+		}
+
+		filled := classifyThirdPlacePois(fetched)
+		if err := r.cache.Set(ctx, gridKey, filled, ThirdPlaceCacheTTL); err != nil {
+			return thirdPlaceFillResult{}, err
+		}
+		return thirdPlaceFillResult{pois: filled}, nil
+	})
+	if err != nil {
+		return nil, true, err
+	}
+
+	result, _ := v.(thirdPlaceFillResult)
+	return result.pois, result.degraded, nil
+}
+
+// ThirdPlaceCalculator calculates the S_third_place livability factor.
+type ThirdPlaceCalculator struct {
+	resolver *ThirdPlacePoiResolver
+}
+
+// NewThirdPlaceCalculator creates a new ThirdPlaceCalculator backed by its
+// own dedicated ThirdPlacePoiResolver. dailyCapCalls is the self-imposed
+// daily Google Places call ceiling (GOOGLE_PLACES_DAILY_BUDGET_CALLS). Use
+// NewThirdPlaceCalculatorFromResolver instead when the resolver must be
+// shared with another consumer (e.g. the nearby-places endpoint).
+func NewThirdPlaceCalculator(places PlacesQuerier, cache ThirdPlaceCache, budget PlacesBudget, dailyCapCalls int) *ThirdPlaceCalculator {
+	return NewThirdPlaceCalculatorFromResolver(NewThirdPlacePoiResolver(places, cache, budget, dailyCapCalls))
+}
+
+// NewThirdPlaceCalculatorFromResolver creates a new ThirdPlaceCalculator
+// backed by an existing, possibly-shared ThirdPlacePoiResolver.
+func NewThirdPlaceCalculatorFromResolver(resolver *ThirdPlacePoiResolver) *ThirdPlaceCalculator {
+	return &ThirdPlaceCalculator{resolver: resolver}
 }
 
 // Name returns FactorThirdPlace.
@@ -199,12 +289,8 @@ func (c *ThirdPlaceCalculator) Name() FactorName {
 
 // Calculate computes S_third_place for the given origin coordinate.
 func (c *ThirdPlaceCalculator) Calculate(ctx context.Context, params ScoreParams) (FactorResult, error) {
-	if c.places == nil || c.cache == nil || c.budget == nil {
-		return FactorResult{Name: FactorThirdPlace, Degraded: true}, errors.New("scoring: third place calculator not configured")
-	}
-
 	lat, lon := params.Origin.Lat, params.Origin.Lon
-	pois, degraded, err := c.resolvePois(ctx, thirdPlaceGridKey(lat, lon), lat, lon)
+	pois, degraded, err := c.resolver.Resolve(ctx, lat, lon)
 	if err != nil {
 		return FactorResult{Name: FactorThirdPlace, Degraded: true}, err
 	}
@@ -220,60 +306,6 @@ func (c *ThirdPlaceCalculator) Calculate(ctx context.Context, params ScoreParams
 		ContributingPois: contributing,
 		Degraded:         false,
 	}, nil
-}
-
-// resolvePois returns the third-place POIs for a grid cell, filling the
-// cache on a miss. Concurrent misses for the same cell are deduplicated via
-// singleflight so only one goroutine per process actually calls Places or
-// spends budget for a given cell at a time.
-func (c *ThirdPlaceCalculator) resolvePois(ctx context.Context, gridKey string, lat, lon float64) (pois []ThirdPlacePoi, degraded bool, err error) {
-	var cached []ThirdPlacePoi
-	ok, err := c.cache.Get(ctx, gridKey, &cached)
-	if err != nil {
-		return nil, true, err
-	}
-	if ok {
-		return cached, false, nil
-	}
-
-	v, err, _ := c.sf.Do(gridKey, func() (any, error) {
-		// Re-check: another goroutine may have filled this cell between our
-		// miss above and acquiring the singleflight slot.
-		var recheck []ThirdPlacePoi
-		if ok, err := c.cache.Get(ctx, gridKey, &recheck); err != nil {
-			return thirdPlaceFillResult{}, err
-		} else if ok {
-			return thirdPlaceFillResult{pois: recheck}, nil
-		}
-
-		withinBudget, err := c.budget.IncrementAndCheck(ctx, c.dailyCapCalls)
-		if err != nil {
-			return thirdPlaceFillResult{}, err
-		}
-		if !withinBudget {
-			return thirdPlaceFillResult{degraded: true}, nil
-		}
-
-		// Search around the cell's own center, not the requesting address --
-		// see thirdPlaceFillRadiusMeters for why.
-		fillLat, fillLon := thirdPlaceGridCellCenter(lat, lon)
-		fetched, err := c.places.SearchNearby(ctx, fillLat, fillLon, thirdPlaceFillRadiusMeters, thirdPlaceIncludedTypes)
-		if err != nil {
-			return thirdPlaceFillResult{}, err
-		}
-
-		filled := classifyThirdPlacePois(fetched)
-		if err := c.cache.Set(ctx, gridKey, filled, ThirdPlaceCacheTTL); err != nil {
-			return thirdPlaceFillResult{}, err
-		}
-		return thirdPlaceFillResult{pois: filled}, nil
-	})
-	if err != nil {
-		return nil, true, err
-	}
-
-	result, _ := v.(thirdPlaceFillResult)
-	return result.pois, result.degraded, nil
 }
 
 // isCafeType reports whether primaryType is either of the two Table A

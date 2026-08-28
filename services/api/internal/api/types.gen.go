@@ -316,6 +316,72 @@ func (e IsochroneResponseType) Valid() bool {
 	}
 }
 
+// Defines values for PlaceFeatureGeometryType.
+const (
+	PlaceFeatureGeometryTypePoint PlaceFeatureGeometryType = "Point"
+)
+
+// Valid indicates whether the value is a known member of the PlaceFeatureGeometryType enum.
+func (e PlaceFeatureGeometryType) Valid() bool {
+	switch e {
+	case PlaceFeatureGeometryTypePoint:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlaceFeaturePropertiesCategory.
+const (
+	Cafe        PlaceFeaturePropertiesCategory = "cafe"
+	Fitness     PlaceFeaturePropertiesCategory = "fitness"
+	Supermarket PlaceFeaturePropertiesCategory = "supermarket"
+)
+
+// Valid indicates whether the value is a known member of the PlaceFeaturePropertiesCategory enum.
+func (e PlaceFeaturePropertiesCategory) Valid() bool {
+	switch e {
+	case Cafe:
+		return true
+	case Fitness:
+		return true
+	case Supermarket:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlaceFeatureType.
+const (
+	PlaceFeatureTypeFeature PlaceFeatureType = "Feature"
+)
+
+// Valid indicates whether the value is a known member of the PlaceFeatureType enum.
+func (e PlaceFeatureType) Valid() bool {
+	switch e {
+	case PlaceFeatureTypeFeature:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlacesResponseType.
+const (
+	PlacesResponseTypeFeatureCollection PlacesResponseType = "FeatureCollection"
+)
+
+// Valid indicates whether the value is a known member of the PlacesResponseType enum.
+func (e PlacesResponseType) Valid() bool {
+	switch e {
+	case PlacesResponseTypeFeatureCollection:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SupermarketFeatureGeometryType.
 const (
 	SupermarketFeatureGeometryTypePoint SupermarketFeatureGeometryType = "Point"
@@ -665,6 +731,39 @@ type IsochroneResponse struct {
 // IsochroneResponseType defines model for IsochroneResponse.Type.
 type IsochroneResponseType string
 
+// PlaceFeature defines model for PlaceFeature.
+type PlaceFeature struct {
+	// Geometry GeoJSON Point geometry.
+	Geometry struct {
+		Coordinates []interface{}            `json:"coordinates"`
+		Type        PlaceFeatureGeometryType `json:"type"`
+	} `json:"geometry"`
+	Properties struct {
+		Category       PlaceFeaturePropertiesCategory `json:"category"`
+		DistanceMeters float32                        `json:"distanceMeters"`
+		Name           string                         `json:"name"`
+	} `json:"properties"`
+	Type PlaceFeatureType `json:"type"`
+}
+
+// PlaceFeatureGeometryType defines model for PlaceFeature.Geometry.Type.
+type PlaceFeatureGeometryType string
+
+// PlaceFeaturePropertiesCategory defines model for PlaceFeature.Properties.Category.
+type PlaceFeaturePropertiesCategory string
+
+// PlaceFeatureType defines model for PlaceFeature.Type.
+type PlaceFeatureType string
+
+// PlacesResponse defines model for PlacesResponse.
+type PlacesResponse struct {
+	Features []PlaceFeature     `json:"features"`
+	Type     PlacesResponseType `json:"type"`
+}
+
+// PlacesResponseType defines model for PlacesResponse.Type.
+type PlacesResponseType string
+
 // ScoreRequest Exactly one of `address` or `origin` must be provided; the API returns 400 if neither or both are set. Deliberately not expressed as a `oneOf` in this schema — with `oapi-codegen`, `oneOf` produces a wrapper type requiring `AsX`/`FromX`/`MergeX` accessor methods rather than a flat struct, which is worse ergonomics than a plain optional-pointer field validated in the handler. Same rule applies to `destination` vs. `destinationCoordinates`; if omitted entirely, the commute factor is hidden and weights renormalize across the remaining 8 factors.
 type ScoreRequest struct {
 	// Address Raw address to geocode before scoring. Mutually exclusive with `origin`.
@@ -808,6 +907,12 @@ type GetIsochronesParams struct {
 	Lon float64 `form:"lon" json:"lon"`
 }
 
+// GetPlacesParams defines parameters for GetPlaces.
+type GetPlacesParams struct {
+	Lat float64 `form:"lat" json:"lat"`
+	Lon float64 `form:"lon" json:"lon"`
+}
+
 // ScoreAddressJSONRequestBody defines body for ScoreAddress for application/json ContentType.
 type ScoreAddressJSONRequestBody = ScoreRequest
 
@@ -837,6 +942,9 @@ type ServerInterface interface {
 	// GetTrailAccessLayer Get off-street trail (linear park) boundaries as GeoJSON.
 	// (GET /api/v1/layers/trail-access)
 	GetTrailAccessLayer(w http.ResponseWriter, r *http.Request)
+	// GetPlaces Get nearby cafes, fitness venues, and supermarkets around a coordinate.
+	// (GET /api/v1/places)
+	GetPlaces(w http.ResponseWriter, r *http.Request, params GetPlacesParams)
 	// ScoreAddress Compute a composite livability score for an address.
 	// (POST /api/v1/score)
 	ScoreAddress(w http.ResponseWriter, r *http.Request)
@@ -1014,6 +1122,52 @@ func (siw *ServerInterfaceWrapper) GetTrailAccessLayer(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// GetPlaces operation middleware
+func (siw *ServerInterfaceWrapper) GetPlaces(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPlacesParams
+
+	// ------------- Required query parameter "lat" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "lat", r.URL.Query(), &params.Lat, runtime.BindQueryParameterOptions{Type: "number", Format: "double"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lat"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lat", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "lon" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "lon", r.URL.Query(), &params.Lon, runtime.BindQueryParameterOptions{Type: "number", Format: "double"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lon"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lon", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPlaces(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ScoreAddress operation middleware
 func (siw *ServerInterfaceWrapper) ScoreAddress(w http.ResponseWriter, r *http.Request) {
 
@@ -1151,6 +1305,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/score", wrapper.ScoreAddress)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/geocode", wrapper.GeocodeAddress)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/isochrones", wrapper.GetIsochrones)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/places", wrapper.GetPlaces)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/layers/cta-rail", wrapper.GetCtaRailLinesLayer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/layers/cta-stations", wrapper.GetCtaStationsLayer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/layers/bike-routes", wrapper.GetBikeRoutesLayer)

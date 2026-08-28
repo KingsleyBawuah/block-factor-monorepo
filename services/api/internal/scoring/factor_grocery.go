@@ -35,6 +35,8 @@ const (
 type OsmPoi struct {
 	Name           string
 	PoiType        string // 'supermarket', 'convenience', 'pharmacy'
+	Lat            float64
+	Lon            float64
 	DistanceMeters float64
 }
 
@@ -63,6 +65,8 @@ func (q *DBGroceryQuerier) GetNearbyGroceryPois(ctx context.Context, lat, lon fl
 		SELECT
 			COALESCE(poi_name, ''),
 			poi_type,
+			ST_Y(geom::geometry) AS lat,
+			ST_X(geom::geometry) AS lon,
 			ST_Distance(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_meters
 		FROM osm_pois
 		WHERE ST_DWithin(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3)
@@ -78,7 +82,7 @@ func (q *DBGroceryQuerier) GetNearbyGroceryPois(ctx context.Context, lat, lon fl
 	var pois []OsmPoi
 	for rows.Next() {
 		var p OsmPoi
-		if err := rows.Scan(&p.Name, &p.PoiType, &p.DistanceMeters); err != nil {
+		if err := rows.Scan(&p.Name, &p.PoiType, &p.Lat, &p.Lon, &p.DistanceMeters); err != nil {
 			return nil, fmt.Errorf("scoring: scan grocery poi row: %w", err)
 		}
 		pois = append(pois, p)

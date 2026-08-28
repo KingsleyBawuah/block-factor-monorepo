@@ -627,3 +627,42 @@ func TestThirdPlaceCalculator_Calculate_ConcurrentMissesDedupedBySingleflight(t 
 		t.Errorf("expected exactly 1 Places API call across %d concurrent cache misses on the same cell, got %d", concurrency, got)
 	}
 }
+
+// TestThirdPlacePoiResolver_SharedAcrossConsumers_DedupesFetch is the whole
+// point of extracting ThirdPlacePoiResolver out of ThirdPlaceCalculator
+// (docs/IMPLEMENTATION_PHASES.md Phase 4 deliverable 6): a
+// ThirdPlaceCalculator and a second, independent consumer (standing in for
+// the nearby-places endpoint) sharing one resolver instance must dedupe a
+// concurrent cache miss for the same grid cell into a single Places API
+// call, not one each.
+func TestThirdPlacePoiResolver_SharedAcrossConsumers_DedupesFetch(t *testing.T) {
+	cache := &mockThirdPlaceCache{}
+	places := &mockPlacesQuerier{
+		places: []clients.Place{{Name: "Sip Coffee", PrimaryType: "cafe"}},
+		delay:  50 * time.Millisecond,
+	}
+	budget := &mockPlacesBudget{withinBudget: true}
+
+	resolver := NewThirdPlacePoiResolver(places, cache, budget, 100)
+	calc := NewThirdPlaceCalculatorFromResolver(resolver)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		if _, err := calc.Calculate(context.Background(), ScoreParams{Origin: api.Coordinates{Lat: 41.8998, Lon: -87.6505}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if _, _, err := resolver.Resolve(context.Background(), 41.8998, -87.6505); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}()
+	wg.Wait()
+
+	if got := atomic.LoadInt32(&places.callCount); got != 1 {
+		t.Errorf("expected exactly 1 Places API call shared between both consumers, got %d", got)
+	}
+}
