@@ -151,3 +151,50 @@
   font-size: 0.6875rem;
   color: var(--color-zinc-400);
 }
+
+/*
+ * Weight Customization slider (components/WeightDrawer.tsx). A native
+ * <input type="range"> rather than a component library -- cross-browser
+ * thumb/track styling needs actual vendor pseudo-elements
+ * (::-webkit-slider-thumb, ::-moz-range-thumb) either way, so a library
+ * buys nothing here that plain CSS doesn't already need to write. Neutral
+ * zinc, not a score-tier color: a weight percentage isn't a score
+ * (AGENTS.md §4's Category Color Independence intent extended to this new
+ * control).
+ */
+.bf-weight-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 0.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-zinc-800);
+  outline: none;
+}
+.bf-weight-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 9999px;
+  background: var(--color-zinc-100);
+  cursor: pointer;
+  transition: background-color 150ms ease-out;
+}
+.bf-weight-slider::-moz-range-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: none;
+  border-radius: 9999px;
+  background: var(--color-zinc-100);
+  cursor: pointer;
+  transition: background-color 150ms ease-out;
+}
+.bf-weight-slider:focus-visible::-webkit-slider-thumb {
+  background: var(--color-zinc-300);
+  box-shadow: 0 0 0 3px var(--color-zinc-700);
+}
+.bf-weight-slider:focus-visible::-moz-range-thumb {
+  background: var(--color-zinc-300);
+  box-shadow: 0 0 0 3px var(--color-zinc-700);
+}

@@ -1,16 +1,137 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
-import { Outlet } from "@tanstack/react-router";
+import { Outlet, useNavigate, useSearch } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
 import { ScoreRing } from "./components/ui/score-ring";
 import { AddressSearchInput, type ResolvedAddress } from "./components/AddressSearchInput";
 import { FactorBreakdownList } from "./components/FactorBreakdownList";
+import { WeightDrawer } from "./components/WeightDrawer";
 import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, RESOLVED_ADDRESS_ZOOM } from "./map";
+import { apiClient } from "./lib/api/client";
+import dayjs from "./lib/dayjs";
+import { cn } from "./lib/utils";
+import { useDebouncedValue } from "./lib/useDebouncedValue";
+import { searchToWeights, weightsToSearch, type WeightSearch } from "./lib/weight-search-params";
+import type { Weights } from "./lib/weights";
+import type { components } from "./lib/api/schema";
+
+type ScoreResponse = components["schemas"]["ScoreResponse"];
+type Origin = { lat: number; lon: number; formattedAddress: string };
+
+const RESCORE_DEBOUNCE_MS = dayjs.duration(400, "milliseconds").asMilliseconds();
 
 export default function App() {
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const [resolved, setResolved] = useState<ResolvedAddress | null>(null);
+
+  // validateSearch (routes/index.tsx, on the root route) always returns a
+  // complete, sum-100 WeightSearch -- `strict: false` sidesteps a circular
+  // import (App.tsx is the root route's own component, so App.tsx can't
+  // import the root Route object back from routes/index.tsx to call its
+  // typed Route.useSearch()) at the cost of this one asserted cast.
+  const rawSearch = useSearch({ strict: false }) as WeightSearch;
+  // Memoized on the 9 raw primitive values, not just `useMemo(..., [rawSearch])`
+  // -- searchToWeights would otherwise return a brand-new object every
+  // render regardless of whether any weight actually changed, which fed a
+  // real infinite loop: useDebouncedValue's effect compares its input by
+  // reference, so a same-content-but-new-reference `weights` every render
+  // meant debouncedWeights never settled, kept re-firing the rescore
+  // mutation, which called setResolved, which re-rendered, which produced
+  // yet another new `weights` reference -- forever (confirmed live: ~20
+  // POST /api/v1/score calls/sec with no slider ever touched).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: depending on rawSearch itself (Biome's suggested fix) is exactly what caused the loop above -- rawSearch is a new object every render regardless of content, so it can never be a valid memo dependency here. The 9 listed fields are the complete, exact set searchToWeights reads (weight-search-params.ts) -- nothing is actually missing.
+  const weights = useMemo(
+    () => searchToWeights(rawSearch),
+    [
+      rawSearch.w_transit,
+      rawSearch.w_bike,
+      rawSearch.w_grocery,
+      rawSearch.w_thirdPlace,
+      rawSearch.w_green,
+      rawSearch.w_noise,
+      rawSearch.w_safety,
+      rawSearch.w_flood,
+      rawSearch.w_solar,
+    ]
+  );
+  const navigate = useNavigate({ from: "/" });
+  const debouncedWeights = useDebouncedValue(weights, RESCORE_DEBOUNCE_MS);
+
+  // Holds the scored origin outside React state: writing it must never
+  // itself re-trigger the rescore effect below (only a real weight change
+  // should), and a ref read isn't a reactive dependency. Resolving a new
+  // address writes this without touching `weights`/`debouncedWeights` at
+  // all, so the rescore effect below (keyed only on debouncedWeights)
+  // never fires just because a search happened -- no separate "skip the
+  // next one" flag needed.
+  const originRef = useRef<Origin | null>(null);
+  // Monotonic counter guarding against out-of-order responses: if two
+  // rescores are in flight at once (e.g. two presets toggled in quick
+  // succession, each past its own debounce window), a slower earlier
+  // response landing after a faster later one must not clobber it.
+  const rescoreSeqRef = useRef(0);
+
+  const rescoreMutation = useMutation({
+    mutationFn: async (vars: { origin: Origin; weights: Weights }): Promise<ScoreResponse> => {
+      const { data, error } = await apiClient.POST("/api/v1/score", {
+        body: {
+          origin: { lat: vars.origin.lat, lon: vars.origin.lon },
+          addressHint: vars.origin.formattedAddress,
+          weights: vars.weights,
+        },
+      });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  function handleResolved(next: ResolvedAddress) {
+    originRef.current = { lat: next.lat, lon: next.lon, formattedAddress: next.formattedAddress };
+    setResolved(next);
+  }
+
+  function handleReset() {
+    originRef.current = null;
+    setResolved(null);
+  }
+
+  useEffect(() => {
+    const origin = originRef.current;
+    if (!origin) return;
+    const seq = ++rescoreSeqRef.current;
+    rescoreMutation.mutate(
+      { origin, weights: debouncedWeights },
+      {
+        onSuccess: (score) => {
+          // Two guards against a stale response overwriting a newer one --
+          // rescoreMutation isn't itself cancelled, so neither is
+          // redundant: the origin check covers landing after the user has
+          // since searched a different address, and the sequence check
+          // covers landing out of order relative to a second rescore for
+          // this same address (e.g. two presets toggled in quick
+          // succession, each past its own debounce window).
+          if (
+            seq === rescoreSeqRef.current &&
+            originRef.current?.lat === origin.lat &&
+            originRef.current?.lon === origin.lon
+          ) {
+            setResolved((prev) => (prev ? { ...prev, score } : prev));
+          }
+        },
+      }
+    );
+    // rescoreMutation.mutate is referentially stable across renders
+    // (TanStack Query), so including it here doesn't cause extra re-runs.
+  }, [debouncedWeights, rescoreMutation.mutate]);
+
+  function handleWeightsChange(next: Weights) {
+    // replace: true -- a slider drag fires this on every tick, so pushing a
+    // new history entry per tick would make the browser Back button
+    // effectively unusable after any drag.
+    navigate({ search: (prev) => ({ ...prev, ...weightsToSearch(next) }), replace: true });
+  }
 
   useEffect(() => {
     if (!map || !resolved) return;
@@ -42,14 +163,19 @@ export default function App() {
                 <CardTitle>Livability Score</CardTitle>
               </CardHeader>
               <CardContent>
-                <AddressSearchInput onResolved={setResolved} onReset={() => setResolved(null)} />
+                <AddressSearchInput onResolved={handleResolved} onReset={handleReset} weights={weights} />
 
                 {resolved ? (
                   <>
                     <div className="mt-4 truncate font-mono text-xs text-zinc-500">
                       {resolved.formattedAddress}
                     </div>
-                    <div className="mt-3 flex justify-center">
+                    <div
+                      className={cn(
+                        "mt-3 flex justify-center transition-opacity motion-reduce:transition-none",
+                        rescoreMutation.isPending && "opacity-60"
+                      )}
+                    >
                       <ScoreRing score={resolved.score.compositeScore} />
                     </div>
                   </>
@@ -68,7 +194,19 @@ export default function App() {
               </CardContent>
             </Card>
 
-            {resolved && <FactorBreakdownList factors={resolved.score.factors} />}
+            {resolved && (
+              <>
+                <WeightDrawer weights={weights} onChange={handleWeightsChange} />
+                <div
+                  className={cn(
+                    "transition-opacity motion-reduce:transition-none",
+                    rescoreMutation.isPending && "opacity-60"
+                  )}
+                >
+                  <FactorBreakdownList factors={resolved.score.factors} />
+                </div>
+              </>
+            )}
 
             <Outlet />
           </div>

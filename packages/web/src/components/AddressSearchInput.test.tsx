@@ -75,13 +75,13 @@ mock.module("../lib/api/client", () => ({
 
 const { AddressSearchInput } = await import("./AddressSearchInput");
 
-function renderInput() {
+function renderInput(weights?: Record<string, number>) {
   const onResolved = mock(() => {});
   const onReset = mock(() => {});
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
-      <AddressSearchInput onResolved={onResolved} onReset={onReset} />
+      <AddressSearchInput onResolved={onResolved} onReset={onReset} weights={weights} />
     </QueryClientProvider>
   );
   return { onResolved, onReset };
@@ -116,6 +116,17 @@ describe("AddressSearchInput", () => {
     // street-facing inference still gets real address text to work with.
     expect(postMock).toHaveBeenCalledWith("/api/v1/score", {
       body: { origin: { lat: 41.8781, lon: -87.6298 }, addressHint: "233 S Wacker Dr, Chicago, IL" },
+    });
+  });
+
+  it("includes the current Weight Customization Slider Drawer weights in the score request when provided", async () => {
+    renderInput({ transit: 40, bike: 10, grocery: 15, thirdPlace: 10, green: 10, noise: 8, safety: 5, flood: 1, solar: 1 });
+
+    search("233 S Wacker Dr");
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    expect(postMock).toHaveBeenCalledWith("/api/v1/score", {
+      body: expect.objectContaining({ weights: expect.objectContaining({ transit: 40 }) }),
     });
   });
 

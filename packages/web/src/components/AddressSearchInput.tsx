@@ -20,6 +20,8 @@ export type AddressSearchInputProps = {
   onResolved: (resolved: ResolvedAddress) => void;
   /** Fires when the user starts a new search, so the caller can clear any previously resolved address/layers immediately. */
   onReset: () => void;
+  /** Current Weight Customization Slider Drawer weights, included in the initial score request so a pre-adjusted weighting (from the URL, or set before searching) applies from the very first score rather than only once App's own reactive rescore effect catches up. */
+  weights?: components["schemas"]["WeightOverrides"];
 };
 
 type FlowState =
@@ -39,7 +41,7 @@ type FlowState =
  * real user-supplied-address entry point anywhere in the app -- every
  * earlier layer/endpoint queried a fixed demo coordinate instead.
  */
-export function AddressSearchInput({ onResolved, onReset }: AddressSearchInputProps) {
+export function AddressSearchInput({ onResolved, onReset, weights }: AddressSearchInputProps) {
   const [query, setQuery] = useState("");
   const [flow, setFlow] = useState<FlowState>({ status: "idle" });
   const inputId = useId();
@@ -66,7 +68,7 @@ export function AddressSearchInput({ onResolved, onReset }: AddressSearchInputPr
       // inference, without ever triggering a geocode (docs/openapi.yaml
       // ScoreRequest.addressHint).
       const { data, error } = await apiClient.POST("/api/v1/score", {
-        body: { origin: candidate.coordinates, addressHint: candidate.formattedAddress },
+        body: { origin: candidate.coordinates, addressHint: candidate.formattedAddress, weights },
       });
       if (error) throw error;
       return data;
