@@ -55,17 +55,18 @@ function fakeMap() {
     removeSource: mock(() => {}),
     getLayer: mock(() => undefined),
     getSource: mock(() => undefined),
+    setLayoutProperty: mock(() => {}),
     on: mock(() => {}),
     off: mock(() => {}),
     getCanvas: mock(() => ({ style: {} })),
   } as unknown as MapLibreMap;
 }
 
-function renderWithClient(map: MapLibreMap) {
+function renderWithClient(map: MapLibreMap, visible?: boolean) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CtaRailLayer map={map} />
+      <CtaRailLayer map={map} visible={visible} />
     </QueryClientProvider>
   );
 }
@@ -194,5 +195,41 @@ describe("CtaRailLayer", () => {
     await waitFor(() => expect(getMock).toHaveBeenCalledTimes(2));
     const calledPaths = getMock.mock.calls.map((call) => call[0]).sort();
     expect(calledPaths).toEqual(["/api/v1/layers/cta-rail", "/api/v1/layers/cta-stations"]);
+  });
+
+  it("creates both layers hidden when visible=false from the start (MapLegend, Phase 5 deliverable 5)", async () => {
+    const map = fakeMap();
+    renderWithClient(map, false);
+
+    await waitFor(() => expect(map.addLayer).toHaveBeenCalledTimes(2));
+    const railLayerCall = (map.addLayer as ReturnType<typeof mock>).mock.calls.find(
+      (call) => (call[0] as { id: string }).id === "cta-rail-lines-layer"
+    );
+    const stationsLayerCall = (map.addLayer as ReturnType<typeof mock>).mock.calls.find(
+      (call) => (call[0] as { id: string }).id === "cta-stations-layer"
+    );
+    expect((railLayerCall?.[0] as { layout?: { visibility?: string } })?.layout?.visibility).toBe("none");
+    expect((stationsLayerCall?.[0] as { layout?: { visibility?: string } })?.layout?.visibility).toBe("none");
+  });
+
+  it("toggles both layers' visibility via setLayoutProperty when the visible prop flips after mount", async () => {
+    const map = fakeMap();
+    (map.getLayer as ReturnType<typeof mock>).mockImplementation(() => ({}) as never);
+    const { rerender } = render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <CtaRailLayer map={map} visible={true} />
+      </QueryClientProvider>
+    );
+    await waitFor(() => expect(map.addLayer).toHaveBeenCalledTimes(2));
+    (map.setLayoutProperty as ReturnType<typeof mock>).mockClear();
+
+    rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <CtaRailLayer map={map} visible={false} />
+      </QueryClientProvider>
+    );
+
+    expect(map.setLayoutProperty).toHaveBeenCalledWith("cta-rail-lines-layer", "visibility", "none");
+    expect(map.setLayoutProperty).toHaveBeenCalledWith("cta-stations-layer", "visibility", "none");
   });
 });
