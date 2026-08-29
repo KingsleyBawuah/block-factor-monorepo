@@ -116,4 +116,59 @@ describe("FactorCard", () => {
     fireEvent.click(getByRole("button"));
     expect(getAllByText("Walgreens")).toHaveLength(2);
   });
+
+  it("renders a colored CTA badge per line when a contributing POI is a station", () => {
+    const { getByRole, getByText } = render(
+      <FactorCard
+        label="Transit"
+        icon="lni-train-1"
+        factor={{
+          score: 100,
+          degraded: false,
+          contributingPois: [{ name: "Fullerton ('L' Station)", distanceMeters: 250, lines: ["Red", "Brown", "Purple"] }],
+        }}
+      />
+    );
+    fireEvent.click(getByRole("button"));
+
+    expect(getByText("Red").className).toContain("bg-[#c60c30]");
+    expect(getByText("Brown").className).toContain("bg-[#62361b]");
+    expect(getByText("Purple").className).toContain("bg-[#522398]");
+  });
+
+  it("falls back to an outline badge for an unrecognized line name", () => {
+    const { getByRole, getByText } = render(
+      <FactorCard
+        label="Transit"
+        icon="lni-train-1"
+        factor={{
+          score: 100,
+          degraded: false,
+          contributingPois: [{ name: "Future Stop", distanceMeters: 250, lines: ["Silver"] }],
+        }}
+      />
+    );
+    fireEvent.click(getByRole("button"));
+
+    expect(getByText("Silver").className).toContain("border-zinc-700");
+  });
+
+  it("renders no line badges for a contributing POI without lines (e.g. a bus corridor)", () => {
+    const { getByRole, getByText, container } = render(
+      <FactorCard
+        label="Transit"
+        icon="lni-train-1"
+        factor={{
+          score: 100,
+          degraded: false,
+          contributingPois: [{ name: "Route 156 - LaSalle (Bus)", distanceMeters: 80 }],
+        }}
+      />
+    );
+    fireEvent.click(getByRole("button"));
+
+    const poiRow = getByText("Route 156 - LaSalle (Bus)").closest("li");
+    expect(poiRow?.querySelector(".mt-1.flex.flex-wrap")).toBeNull();
+    expect(container.querySelector('[class*="bg-[#"]')).toBeNull();
+  });
 });

@@ -398,6 +398,15 @@ components:
           type: string
         distanceMeters:
           type: number
+        lines:
+          type: array
+          items:
+            type: string
+          description: >-
+            Real CTA 'L' line names serving this stop (e.g. ["Red", "Brown", "Purple"]),
+            set only when this contributing POI is a CTA station -- omitted entirely for
+            every other factor's contributing POIs (bus corridors, grocery stores, cafes,
+            etc.), which have no lines to report.
 
     FactorScore:
       type: object

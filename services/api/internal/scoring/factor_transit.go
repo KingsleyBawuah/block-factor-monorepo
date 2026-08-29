@@ -322,17 +322,20 @@ func CalculateTransitScore(stations []CtaStation, corridors []BusCorridor, lineS
 		distVal := float32(math.Round(closestStation.DistanceMeters*10) / 10)
 		minDistance = &distVal
 
-		var name string
+		poi := api.ContributingPoi{
+			Name:           fmt.Sprintf("%s ('L' Station)", closestStation.StopName),
+			DistanceMeters: distVal,
+		}
+		// Real per-line names now travel structurally via Lines (api.ContributingPoi,
+		// docs/openapi.yaml), rendered as actual colored CTA badges on the frontend
+		// (FactorCard.tsx) -- previously baked as plain text into Name itself
+		// ("Fullerton ('L' Red, Brown, Purple)"), which couldn't be styled at all.
 		if len(closestStation.Lines) > 0 {
-			name = fmt.Sprintf("%s ('L' %s)", closestStation.StopName, strings.Join(closestStation.Lines, ", "))
-		} else {
-			name = fmt.Sprintf("%s ('L' Station)", closestStation.StopName)
+			lines := closestStation.Lines
+			poi.Lines = &lines
 		}
 
-		contributing = append(contributing, api.ContributingPoi{
-			Name:           name,
-			DistanceMeters: distVal,
-		})
+		contributing = append(contributing, poi)
 	}
 
 	if qualifyingBusCorridor != nil {

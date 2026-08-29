@@ -271,6 +271,8 @@ export interface components {
         ContributingPoi: {
             name: string;
             distanceMeters: number;
+            /** @description Real CTA 'L' line names serving this stop (e.g. ["Red", "Brown", "Purple"]), set only when this contributing POI is a CTA station -- omitted entirely for every other factor's contributing POIs (bus corridors, grocery stores, cafes, etc.), which have no lines to report. */
+            lines?: string[];
         };
         FactorScore: {
             /** @description Composite sub-score (0-100). Null when `degraded` is true. */

@@ -622,7 +622,10 @@ type CommutePillDestination string
 // ContributingPoi defines model for ContributingPoi.
 type ContributingPoi struct {
 	DistanceMeters float32 `json:"distanceMeters"`
-	Name           string  `json:"name"`
+
+	// Lines Real CTA 'L' line names serving this stop (e.g. ["Red", "Brown", "Purple"]), set only when this contributing POI is a CTA station -- omitted entirely for every other factor's contributing POIs (bus corridors, grocery stores, cafes, etc.), which have no lines to report.
+	Lines *[]string `json:"lines,omitempty"`
+	Name  string    `json:"name"`
 }
 
 // Coordinates defines model for Coordinates.

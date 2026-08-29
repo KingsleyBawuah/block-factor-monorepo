@@ -206,6 +206,77 @@ func TestCalculateTransitScore_DualLineBonus(t *testing.T) {
 	}
 }
 
+// TestCalculateTransitScore_ContributingPoiLines verifies the closest
+// station's real per-line names travel structurally via
+// api.ContributingPoi.Lines (docs/openapi.yaml), not baked as plain text
+// into Name -- the frontend (FactorCard.tsx) renders these as actual
+// colored CTA badges, which a formatted string like "Fullerton ('L' Red,
+// Brown, Purple)" couldn't be.
+func TestCalculateTransitScore_ContributingPoiLines(t *testing.T) {
+	t.Run("a multi-line station's real Lines populate ContributingPoi.Lines, and Name carries no baked-in line list", func(t *testing.T) {
+		stations := []CtaStation{
+			{StopName: "Fullerton", Lines: []string{"Red", "Brown", "Purple"}, DistanceMeters: 250.0},
+		}
+
+		_, _, contributing := CalculateTransitScore(stations, nil, nil)
+
+		if len(contributing) != 1 {
+			t.Fatalf("got %d contributing pois, want 1", len(contributing))
+		}
+		poi := contributing[0]
+		if poi.Name != "Fullerton ('L' Station)" {
+			t.Errorf("got Name %q, want %q", poi.Name, "Fullerton ('L' Station)")
+		}
+		if poi.Lines == nil {
+			t.Fatal("got nil Lines, want [Red Brown Purple]")
+		}
+		want := []string{"Red", "Brown", "Purple"}
+		if len(*poi.Lines) != len(want) {
+			t.Fatalf("got Lines %v, want %v", *poi.Lines, want)
+		}
+		for i, line := range want {
+			if (*poi.Lines)[i] != line {
+				t.Errorf("Lines[%d] = %q, want %q", i, (*poi.Lines)[i], line)
+			}
+		}
+	})
+
+	t.Run("a station with no real Lines data leaves ContributingPoi.Lines nil rather than an empty slice", func(t *testing.T) {
+		stations := []CtaStation{
+			{StopName: "Unnamed Stop", Lines: nil, DistanceMeters: 250.0},
+		}
+
+		_, _, contributing := CalculateTransitScore(stations, nil, nil)
+
+		if len(contributing) != 1 {
+			t.Fatalf("got %d contributing pois, want 1", len(contributing))
+		}
+		if contributing[0].Lines != nil {
+			t.Errorf("got Lines %v, want nil", *contributing[0].Lines)
+		}
+	})
+
+	t.Run("a bus corridor's ContributingPoi never sets Lines, even when a nearby station also contributed", func(t *testing.T) {
+		stations := []CtaStation{
+			{StopName: "Belmont", Lines: []string{"Red"}, DistanceMeters: 300.0},
+		}
+		corridors := []BusCorridor{
+			{RouteID: "156", RouteName: "LaSalle", MeanHeadwayMinutes: 8.0, DistanceMeters: 80.0},
+		}
+
+		_, _, contributing := CalculateTransitScore(stations, corridors, nil)
+
+		if len(contributing) != 2 {
+			t.Fatalf("got %d contributing pois, want 2", len(contributing))
+		}
+		for _, poi := range contributing {
+			if poi.Name == "Route 156 - LaSalle (Bus)" && poi.Lines != nil {
+				t.Errorf("bus corridor poi got non-nil Lines %v, want nil", *poi.Lines)
+			}
+		}
+	})
+}
+
 func TestCalculateTransitScore_BusCorridorBonus(t *testing.T) {
 	tests := []struct {
 		name      string
