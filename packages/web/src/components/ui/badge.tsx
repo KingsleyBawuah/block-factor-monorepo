@@ -19,22 +19,6 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
     | "score-rose";
 }
 
-const CTA_BADGE_LINE_NAMES = new Set(["red", "blue", "brown", "green", "pink", "orange", "purple", "yellow"]);
-
-/**
- * Maps a real CTA line name (e.g. "Red", as returned by `GET /api/v1/score`'s
- * `ContributingPoi.lines` -- `factor_transit.go`) to this Badge's own
- * matching `cta-*` variant. Falls back to `"outline"` for anything
- * unrecognized: `lines` comes from the API over the wire, not a closed
- * local constant, so an unexpected value (a future 9th CTA line, a data
- * hiccup) should degrade to a plain badge rather than the variant lookup
- * silently returning `undefined` styling.
- */
-export function ctaLineBadgeVariant(line: string): BadgeProps["variant"] {
-  const key = line.toLowerCase();
-  return CTA_BADGE_LINE_NAMES.has(key) ? (`cta-${key}` as BadgeProps["variant"]) : "outline";
-}
-
 export function Badge({
   className,
   variant = "default",

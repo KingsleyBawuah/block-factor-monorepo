@@ -2,7 +2,8 @@ import { useId, useState } from "react";
 import { cn } from "../../lib/utils";
 import { formatDistanceMiles } from "../../lib/format";
 import { scoreTier } from "../../map";
-import { Badge, ctaLineBadgeVariant } from "./badge";
+import { ctaLineColor } from "../../map/layers/cta-colors";
+import { Badge } from "./badge";
 import type { components } from "../../lib/api/schema";
 
 type FactorScore = components["schemas"]["FactorScore"];
@@ -116,20 +117,30 @@ export function FactorCard({ label, icon, factor }: FactorCardProps) {
       {hasPois && expanded && (
         <ul id={panelId} className="space-y-1 border-t border-zinc-800 px-3 py-2">
           {factor.contributingPois?.map((poi, index) => (
-            <li key={`${poi.name}-${poi.distanceMeters}-${index}`} className="font-mono text-[11px] text-zinc-400">
-              <div className="flex items-center justify-between gap-2">
+            <li
+              key={`${poi.name}-${poi.distanceMeters}-${index}`}
+              className="flex items-center justify-between gap-2 font-mono text-[11px] text-zinc-400"
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
                 <span className="truncate">{poi.name}</span>
-                <span className="shrink-0 text-zinc-400">{formatDistanceMiles(poi.distanceMeters)}</span>
-              </div>
-              {poi.lines && poi.lines.length > 0 && (
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {poi.lines.map((line) => (
-                    <Badge key={line} variant={ctaLineBadgeVariant(line)}>
-                      {line}
-                    </Badge>
-                  ))}
-                </div>
-              )}
+                {poi.lines && poi.lines.length > 0 && (
+                  <span
+                    role="img"
+                    className="flex shrink-0 items-center gap-0.5"
+                    aria-label={`${poi.lines.join(", ")} line${poi.lines.length > 1 ? "s" : ""}`}
+                  >
+                    {poi.lines.map((line) => (
+                      <span
+                        key={line}
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: ctaLineColor(line) }}
+                        aria-hidden="true"
+                      />
+                    ))}
+                  </span>
+                )}
+              </span>
+              <span className="shrink-0 text-zinc-400">{formatDistanceMiles(poi.distanceMeters)}</span>
             </li>
           ))}
         </ul>

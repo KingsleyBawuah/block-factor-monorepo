@@ -117,7 +117,7 @@ describe("FactorCard", () => {
     expect(getAllByText("Walgreens")).toHaveLength(2);
   });
 
-  it("renders a colored CTA badge per line when a contributing POI is a station", () => {
+  it("renders one colored dot per line next to a station's name", () => {
     const { getByRole, getByText } = render(
       <FactorCard
         label="Transit"
@@ -131,12 +131,33 @@ describe("FactorCard", () => {
     );
     fireEvent.click(getByRole("button"));
 
-    expect(getByText("Red").className).toContain("bg-[#c60c30]");
-    expect(getByText("Brown").className).toContain("bg-[#62361b]");
-    expect(getByText("Purple").className).toContain("bg-[#522398]");
+    const nameRow = getByText("Fullerton ('L' Station)").parentElement;
+    if (!nameRow) throw new Error("expected the station name to have a parent element");
+    const dots = nameRow.querySelectorAll('span[aria-hidden="true"]');
+    expect(dots).toHaveLength(3);
+    expect((dots[0] as HTMLElement).style.backgroundColor).toBe("#c60c30"); // Red
+    expect((dots[1] as HTMLElement).style.backgroundColor).toBe("#62361b"); // Brown
+    expect((dots[2] as HTMLElement).style.backgroundColor).toBe("#522398"); // Purple
   });
 
-  it("falls back to an outline badge for an unrecognized line name", () => {
+  it("labels the dot cluster with the real line names for screen readers, since the dots alone are color-only", () => {
+    const { getByRole, getByLabelText } = render(
+      <FactorCard
+        label="Transit"
+        icon="lni-train-1"
+        factor={{
+          score: 100,
+          degraded: false,
+          contributingPois: [{ name: "Fullerton ('L' Station)", distanceMeters: 250, lines: ["Red", "Brown"] }],
+        }}
+      />
+    );
+    fireEvent.click(getByRole("button"));
+
+    expect(getByLabelText("Red, Brown lines")).toBeTruthy();
+  });
+
+  it("falls back to the muted line color for an unrecognized line name rather than omitting the dot", () => {
     const { getByRole, getByText } = render(
       <FactorCard
         label="Transit"
@@ -150,11 +171,12 @@ describe("FactorCard", () => {
     );
     fireEvent.click(getByRole("button"));
 
-    expect(getByText("Silver").className).toContain("border-zinc-700");
+    const dot = getByText("Future Stop").parentElement?.querySelector('span[aria-hidden="true"]') as HTMLElement;
+    expect(dot.style.backgroundColor).toBe("#71717a"); // the shared unrecognized-line fallback
   });
 
-  it("renders no line badges for a contributing POI without lines (e.g. a bus corridor)", () => {
-    const { getByRole, getByText, container } = render(
+  it("renders no line dots for a contributing POI without lines (e.g. a bus corridor)", () => {
+    const { getByRole, getByText } = render(
       <FactorCard
         label="Transit"
         icon="lni-train-1"
@@ -167,8 +189,7 @@ describe("FactorCard", () => {
     );
     fireEvent.click(getByRole("button"));
 
-    const poiRow = getByText("Route 156 - LaSalle (Bus)").closest("li");
-    expect(poiRow?.querySelector(".mt-1.flex.flex-wrap")).toBeNull();
-    expect(container.querySelector('[class*="bg-[#"]')).toBeNull();
+    const nameRow = getByText("Route 156 - LaSalle (Bus)").parentElement;
+    expect(nameRow?.querySelector('span[aria-hidden="true"]')).toBeNull();
   });
 });
