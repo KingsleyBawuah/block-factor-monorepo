@@ -69,17 +69,18 @@ function fakeMap() {
     hasImage: mock((id: string) => images.has(id)),
     getLayer: mock(() => undefined),
     getSource: mock(() => undefined),
+    setLayoutProperty: mock(() => {}),
     on: mock(() => {}),
     off: mock(() => {}),
     getCanvas: mock(() => canvas),
   } as unknown as MapLibreMap;
 }
 
-function renderWithClient(map: MapLibreMap) {
+function renderWithClient(map: MapLibreMap, visible?: boolean) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <DivvyDockLayer map={map} />
+      <DivvyDockLayer map={map} visible={visible} />
     </QueryClientProvider>
   );
 }
@@ -116,6 +117,7 @@ describe("DivvyDockLayer", () => {
       layout: {
         "icon-image": "divvy-dock-marker",
         "icon-size": 0.5,
+        visibility: "visible",
         "icon-allow-overlap": true,
         "text-field": ["to-string", ["get", "bikesAvailable"]],
         "text-font": [
@@ -356,6 +358,50 @@ describe("DivvyDockLayer", () => {
     expect(map.removeImage).toHaveBeenCalledWith("divvy-dock-marker");
     expect(map.off).toHaveBeenCalledWith("mouseenter", "divvy-docks-layer", expect.any(Function));
     expect(map.off).toHaveBeenCalledWith("mouseleave", "divvy-docks-layer", expect.any(Function));
+  });
+
+  it("creates the layer hidden when visible=false from the start (MapLegend, Phase 5 deliverable 5)", async () => {
+    const map = fakeMap();
+    renderWithClient(map, false);
+
+    await waitFor(() =>
+      expect(
+        (map.addLayer as ReturnType<typeof mock>).mock.calls.some(
+          (call) => (call[0] as { id: string }).id === "divvy-docks-layer"
+        )
+      ).toBe(true)
+    );
+    const layerCall = (map.addLayer as ReturnType<typeof mock>).mock.calls.find(
+      (call) => (call[0] as { id: string }).id === "divvy-docks-layer"
+    );
+    expect((layerCall?.[0] as { layout?: { visibility?: string } })?.layout?.visibility).toBe("none");
+  });
+
+  it("toggles the layer's visibility via setLayoutProperty when the visible prop flips after mount", async () => {
+    const map = fakeMap();
+    (map.getLayer as ReturnType<typeof mock>).mockImplementation(() => ({}) as never);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <DivvyDockLayer map={map} visible={true} />
+      </QueryClientProvider>
+    );
+    await waitFor(() =>
+      expect(
+        (map.addLayer as ReturnType<typeof mock>).mock.calls.some(
+          (call) => (call[0] as { id: string }).id === "divvy-docks-layer"
+        )
+      ).toBe(true)
+    );
+    (map.setLayoutProperty as ReturnType<typeof mock>).mockClear();
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <DivvyDockLayer map={map} visible={false} />
+      </QueryClientProvider>
+    );
+
+    expect(map.setLayoutProperty).toHaveBeenCalledWith("divvy-docks-layer", "visibility", "none");
   });
 
   it("fetches from the exact live endpoint path", async () => {

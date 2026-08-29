@@ -80,19 +80,20 @@ function fakeMap() {
     moveLayer: mock(() => {}),
     getLayer: mock(() => undefined),
     getSource: mock(() => undefined),
+    setLayoutProperty: mock(() => {}),
     on: mock(() => {}),
     off: mock(() => {}),
     getCanvas: mock(() => canvas),
   } as unknown as MapLibreMap;
 }
 
-function renderWithClient(map: MapLibreMap) {
+function renderWithClient(map: MapLibreMap, visible?: boolean) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ProtectedBikeLayer map={map} />
+      <ProtectedBikeLayer map={map} visible={visible} />
     </QueryClientProvider>,
   );
 }
@@ -129,7 +130,7 @@ describe("ProtectedBikeLayer", () => {
       id: "bike-routes-layer",
       type: "line",
       source: "bike-routes",
-      layout: { "line-join": "round", "line-cap": "round" },
+      layout: { "line-join": "round", "line-cap": "round", visibility: "visible" },
       paint: {
         "line-color": "#10b981",
         "line-width": [
@@ -212,6 +213,7 @@ describe("ProtectedBikeLayer", () => {
       id: "trail-access-fill-layer",
       type: "fill",
       source: "trail-access",
+      layout: { visibility: "visible" },
       paint: { "fill-color": "#10b981", "fill-opacity": 0.15 },
     });
 
@@ -224,6 +226,7 @@ describe("ProtectedBikeLayer", () => {
       id: "trail-access-outline-layer",
       type: "line",
       source: "trail-access",
+      layout: { visibility: "visible" },
       paint: { "line-color": "#10b981", "line-width": 1.5 },
     });
 
@@ -376,6 +379,42 @@ describe("ProtectedBikeLayer", () => {
       "trail-access-fill-layer",
       expect.any(Function),
     );
+  });
+
+  it("creates all three layers hidden when visible=false from the start (MapLegend, Phase 5 deliverable 5)", async () => {
+    const map = fakeMap();
+    renderWithClient(map, false);
+
+    await waitFor(() => expect(map.addLayer).toHaveBeenCalledTimes(3));
+    for (const id of ["bike-routes-layer", "trail-access-fill-layer", "trail-access-outline-layer"]) {
+      const call = (map.addLayer as ReturnType<typeof mock>).mock.calls.find(
+        (call) => (call[0] as { id: string }).id === id,
+      );
+      expect((call?.[0] as { layout?: { visibility?: string } })?.layout?.visibility).toBe("none");
+    }
+  });
+
+  it("toggles all three layers' visibility via setLayoutProperty when the visible prop flips after mount", async () => {
+    const map = fakeMap();
+    (map.getLayer as ReturnType<typeof mock>).mockImplementation(() => ({}) as never);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <ProtectedBikeLayer map={map} visible={true} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(map.addLayer).toHaveBeenCalledTimes(3));
+    (map.setLayoutProperty as ReturnType<typeof mock>).mockClear();
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <ProtectedBikeLayer map={map} visible={false} />
+      </QueryClientProvider>,
+    );
+
+    expect(map.setLayoutProperty).toHaveBeenCalledWith("bike-routes-layer", "visibility", "none");
+    expect(map.setLayoutProperty).toHaveBeenCalledWith("trail-access-fill-layer", "visibility", "none");
+    expect(map.setLayoutProperty).toHaveBeenCalledWith("trail-access-outline-layer", "visibility", "none");
   });
 
   it("fetches from the exact live endpoint paths", async () => {
