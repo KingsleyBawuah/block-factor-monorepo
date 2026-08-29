@@ -69,6 +69,7 @@ function fakeMap() {
     hasImage: mock((id: string) => images.has(id)),
     getLayer: mock(() => undefined),
     getSource: mock(() => undefined),
+    setLayoutProperty: mock(() => {}),
     on: mock(() => {}),
     off: mock(() => {}),
     getCanvas: mock(() => canvas),
@@ -116,6 +117,7 @@ describe("DivvyDockLayer", () => {
       layout: {
         "icon-image": "divvy-dock-marker",
         "icon-size": 0.5,
+        visibility: "visible",
         "icon-allow-overlap": true,
         "text-field": ["to-string", ["get", "bikesAvailable"]],
         "text-font": [

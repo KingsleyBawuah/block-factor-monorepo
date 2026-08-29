@@ -8,7 +8,16 @@ import { ScoreRing } from "./components/ui/score-ring";
 import { AddressSearchInput, type ResolvedAddress } from "./components/AddressSearchInput";
 import { FactorBreakdownList } from "./components/FactorBreakdownList";
 import { WeightDrawer } from "./components/WeightDrawer";
-import { MapCanvas, CtaRailLayer, ProtectedBikeLayer, PoiDensityLayer, DivvyDockLayer, RESOLVED_ADDRESS_ZOOM } from "./map";
+import {
+  MapCanvas,
+  MapLegend,
+  CtaRailLayer,
+  ProtectedBikeLayer,
+  PoiDensityLayer,
+  DivvyDockLayer,
+  RESOLVED_ADDRESS_ZOOM,
+  type MapLayerKey,
+} from "./map";
 import { apiClient } from "./lib/api/client";
 import dayjs from "./lib/dayjs";
 import { cn } from "./lib/utils";
@@ -22,9 +31,20 @@ type Origin = { lat: number; lon: number; formattedAddress: string };
 
 const RESCORE_DEBOUNCE_MS = dayjs.duration(400, "milliseconds").asMilliseconds();
 
+// Every layer stays on by default (docs/IMPLEMENTATION_PHASES.md Phase 5
+// deliverable 5) -- this is a manual toggle only, not a smart/auto-hide
+// default.
+const DEFAULT_LAYER_VISIBILITY: Record<MapLayerKey, boolean> = {
+  ctaRail: true,
+  bikeTrail: true,
+  poiDensity: true,
+  divvyDocks: true,
+};
+
 export default function App() {
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const [resolved, setResolved] = useState<ResolvedAddress | null>(null);
+  const [layerVisibility, setLayerVisibility] = useState<Record<MapLayerKey, boolean>>(DEFAULT_LAYER_VISIBILITY);
 
   // validateSearch (routes/index.tsx, on the root route) always returns a
   // complete, sum-100 WeightSearch -- `strict: false` sidesteps a circular
@@ -126,6 +146,10 @@ export default function App() {
     // (TanStack Query), so including it here doesn't cause extra re-runs.
   }, [debouncedWeights, rescoreMutation.mutate]);
 
+  function handleLayerToggle(key: MapLayerKey) {
+    setLayerVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
   function handleWeightsChange(next: Weights) {
     // replace: true -- a slider drag fires this on every tick, so pushing a
     // new history entry per tick would make the browser Back button
@@ -223,12 +247,15 @@ export default function App() {
               0.375rem matches index.css's --radius-lg override (rounded-lg's
               Tailwind default of 0.5rem is NOT what actually renders here).
             */}
-            <Card className="h-[70vh] overflow-hidden p-0 [clip-path:inset(0_round_0.375rem)] lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
+            <Card className="relative h-[70vh] overflow-hidden p-0 [clip-path:inset(0_round_0.375rem)] lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
               <MapCanvas onMapReady={setMap} />
-              {map && <CtaRailLayer map={map} />}
-              {map && <ProtectedBikeLayer map={map} />}
-              {map && resolved && <PoiDensityLayer map={map} lat={resolved.lat} lon={resolved.lon} />}
-              {map && <DivvyDockLayer map={map} />}
+              {map && <CtaRailLayer map={map} visible={layerVisibility.ctaRail} />}
+              {map && <ProtectedBikeLayer map={map} visible={layerVisibility.bikeTrail} />}
+              {map && resolved && (
+                <PoiDensityLayer map={map} lat={resolved.lat} lon={resolved.lon} visible={layerVisibility.poiDensity} />
+              )}
+              {map && <DivvyDockLayer map={map} visible={layerVisibility.divvyDocks} />}
+              <MapLegend visibility={layerVisibility} onToggle={handleLayerToggle} />
             </Card>
           </div>
         </div>

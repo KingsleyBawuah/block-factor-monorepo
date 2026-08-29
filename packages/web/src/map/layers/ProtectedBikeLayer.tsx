@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { Popup } from "maplibre-gl";
 import { apiClient } from "../../lib/api/client";
 import { escapeHtml } from "./escapeHtml";
 import { RAIL_LAYER_ID as CTA_RAIL_LAYER_ID } from "./CtaRailLayer";
+import { useLayerVisibility } from "./useLayerVisibility";
 import type {
   FeatureCollection,
   MultiLineStringGeometry,
@@ -36,10 +37,13 @@ const TRAIL_OUTLINE_LAYER_ID = "trail-access-outline-layer";
 
 // score-emerald (DESIGN.md) -- deliberately not CTA Green Line's #009b3a,
 // which would read as a transit line rather than bike infrastructure.
-const BIKE_GREEN = "#10b981";
+// Exported so MapLegend.tsx's swatch can reuse the exact same value.
+export const BIKE_GREEN = "#10b981";
 
 export type ProtectedBikeLayerProps = {
   map: MapLibreMap;
+  /** MapLegend's checkbox state for this layer (Phase 5 deliverable 5) -- defaults on, matching every other layer's default-visible behavior. */
+  visible?: boolean;
 };
 
 /**
@@ -52,7 +56,11 @@ export type ProtectedBikeLayerProps = {
  * nothing itself -- all output is imperative MapLibre sources/layers/popups
  * on `map`.
  */
-export function ProtectedBikeLayer({ map }: ProtectedBikeLayerProps) {
+export function ProtectedBikeLayer({ map, visible = true }: ProtectedBikeLayerProps) {
+  useLayerVisibility(map, [ROUTES_LAYER_ID, TRAIL_FILL_LAYER_ID, TRAIL_OUTLINE_LAYER_ID], visible);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+
   const routesQuery = useQuery({
     queryKey: ["layers", "bike-routes"],
     queryFn: async () => {
@@ -85,7 +93,11 @@ export function ProtectedBikeLayer({ map }: ProtectedBikeLayerProps) {
       id: ROUTES_LAYER_ID,
       type: "line",
       source: ROUTES_SOURCE_ID,
-      layout: { "line-join": "round", "line-cap": "round" },
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+        visibility: visibleRef.current ? "visible" : "none",
+      },
       paint: {
         "line-color": BIKE_GREEN,
         "line-width": [
@@ -157,12 +169,14 @@ export function ProtectedBikeLayer({ map }: ProtectedBikeLayerProps) {
       id: TRAIL_FILL_LAYER_ID,
       type: "fill",
       source: TRAIL_SOURCE_ID,
+      layout: { visibility: visibleRef.current ? "visible" : "none" },
       paint: { "fill-color": BIKE_GREEN, "fill-opacity": 0.15 },
     });
     map.addLayer({
       id: TRAIL_OUTLINE_LAYER_ID,
       type: "line",
       source: TRAIL_SOURCE_ID,
+      layout: { visibility: visibleRef.current ? "visible" : "none" },
       paint: { "line-color": BIKE_GREEN, "line-width": 1.5 },
     });
 

@@ -4,12 +4,14 @@ const ICON_SIZE = 24;
 // divvy-blue (DESIGN.md) -- Divvy's real brand blue, close in hue to CTA
 // Blue Line's #00a1de but split against DIVVY_GRAY below rather than used
 // as a flat dot specifically so the *pattern*, not the hue alone,
-// disambiguates this layer from CTA stations at a glance.
-const DIVVY_BLUE = "#41b6e6";
+// disambiguates this layer from CTA stations at a glance. Exported so
+// MapLegend.tsx's swatch can reuse the exact same value.
+export const DIVVY_BLUE = "#41b6e6";
 // text-secondary (DESIGN.md) -- stands in for the grey used on Divvy's
 // retroreflective e-bike fleet; no verified digital hex exists for that
-// physical coating.
-const DIVVY_GRAY = "#a1a1aa";
+// physical coating. Exported so MapLegend.tsx's swatch can reuse the exact
+// same value.
+export const DIVVY_GRAY = "#a1a1aa";
 // zinc-900 -- an outline the icon needs (unlike a flat circle-color dot)
 // since two bright, light colors meeting the dark basemap directly would
 // have no defined edge.

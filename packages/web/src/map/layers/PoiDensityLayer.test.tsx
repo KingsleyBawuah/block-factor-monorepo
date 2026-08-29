@@ -39,6 +39,7 @@ function fakeMap() {
     removeSource: mock(() => {}),
     getLayer: mock(() => undefined),
     getSource: mock(() => undefined),
+    setLayoutProperty: mock(() => {}),
     on: mock(() => {}),
     off: mock(() => {}),
     getCanvas: mock(() => canvas),
@@ -81,6 +82,7 @@ describe("PoiDensityLayer", () => {
       id: "poi-density-rings-layer",
       type: "line",
       source: "poi-density-rings",
+      layout: { visibility: "visible" },
       paint: {
         "line-color": "#71717a",
         "line-width": 1,
@@ -146,6 +148,7 @@ describe("PoiDensityLayer", () => {
       id: "poi-density-pois-layer",
       type: "circle",
       source: "poi-density-pois",
+      layout: { visibility: "visible" },
       paint: {
         "circle-radius": 4,
         "circle-color": [

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { Popup } from "maplibre-gl";
@@ -7,6 +7,7 @@ import { apiClient } from "../../lib/api/client";
 import { escapeHtml } from "./escapeHtml";
 import { createDivvyMarkerIcon, DIVVY_MARKER_ICON_ID } from "./divvyMarkerIcon";
 import { LABEL_FONT_STACK } from "./mapFonts";
+import { useLayerVisibility } from "./useLayerVisibility";
 import type { FeatureCollection, PointGeometry } from "../geojson";
 
 const DOCKS_SOURCE_ID = "divvy-docks";
@@ -24,6 +25,8 @@ type DivvyDockProperties = {
 
 export type DivvyDockLayerProps = {
   map: MapLibreMap;
+  /** MapLegend's checkbox state for this layer (Phase 5 deliverable 5) -- defaults on, matching every other layer's default-visible behavior. */
+  visible?: boolean;
 };
 
 /**
@@ -33,7 +36,11 @@ export type DivvyDockLayerProps = {
  * Display-only -- Divvy is not a scored factor. Renders nothing itself --
  * all output is imperative MapLibre sources/layers/popups on `map`.
  */
-export function DivvyDockLayer({ map }: DivvyDockLayerProps) {
+export function DivvyDockLayer({ map, visible = true }: DivvyDockLayerProps) {
+  useLayerVisibility(map, [DOCKS_LAYER_ID], visible);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+
   const docksQuery = useQuery({
     queryKey: ["layers", "divvy-docks"],
     queryFn: async () => {
@@ -60,6 +67,7 @@ export function DivvyDockLayer({ map }: DivvyDockLayerProps) {
       layout: {
         "icon-image": DIVVY_MARKER_ICON_ID,
         "icon-size": 0.5,
+        visibility: visibleRef.current ? "visible" : "none",
         // Every dock renders regardless of density (matches how CtaRailLayer's
         // circle-layer station markers behave -- circle layers have no
         // collision system to opt into in the first place) -- only the text

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { Popup } from "maplibre-gl";
@@ -8,6 +8,7 @@ import { expandRailSegments } from "./expandRailSegments";
 import { ctaLineColor, ctaLineTextColor } from "./cta-colors";
 import { normalizeStationProperties, type CtaStationProperties } from "./normalizeStationProperties";
 import { escapeHtml } from "./escapeHtml";
+import { useLayerVisibility } from "./useLayerVisibility";
 import type { FeatureCollection, PointGeometry } from "../geojson";
 
 const RAIL_SOURCE_ID = "cta-rail-lines";
@@ -22,6 +23,8 @@ const STATIONS_LAYER_ID = "cta-stations-layer";
 
 export type CtaRailLayerProps = {
   map: MapLibreMap;
+  /** MapLegend's checkbox state for this layer (Phase 5 deliverable 5) -- defaults on, matching every other layer's default-visible behavior. */
+  visible?: boolean;
 };
 
 /**
@@ -30,7 +33,11 @@ export type CtaRailLayerProps = {
  * segments, and interactive station hover cards. Renders nothing itself --
  * all output is imperative MapLibre sources/layers/popups on `map`.
  */
-export function CtaRailLayer({ map }: CtaRailLayerProps) {
+export function CtaRailLayer({ map, visible = true }: CtaRailLayerProps) {
+  useLayerVisibility(map, [RAIL_LAYER_ID, STATIONS_LAYER_ID], visible);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+
   const railQuery = useQuery({
     queryKey: ["layers", "cta-rail"],
     queryFn: async () => {
@@ -58,7 +65,11 @@ export function CtaRailLayer({ map }: CtaRailLayerProps) {
       id: RAIL_LAYER_ID,
       type: "line",
       source: RAIL_SOURCE_ID,
-      layout: { "line-join": "round", "line-cap": "round" },
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+        visibility: visibleRef.current ? "visible" : "none",
+      },
       paint: {
         "line-color": ["get", "color"],
         "line-width": 2,
@@ -92,6 +103,7 @@ export function CtaRailLayer({ map }: CtaRailLayerProps) {
       id: STATIONS_LAYER_ID,
       type: "circle",
       source: STATIONS_SOURCE_ID,
+      layout: { visibility: visibleRef.current ? "visible" : "none" },
       paint: {
         "circle-radius": 2.5,
         "circle-color": "#18181b", // zinc-900, matches DESIGN.md surface-card

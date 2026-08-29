@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { Popup } from "maplibre-gl";
@@ -9,6 +9,7 @@ import { poiIcon, poiCircleColorExpression } from "./poi-icons";
 import { distanceRingsGeoJSON } from "./distanceRing";
 import { RAIL_LAYER_ID as CTA_RAIL_LAYER_ID } from "./CtaRailLayer";
 import { ROUTES_LAYER_ID as BIKE_ROUTES_LAYER_ID } from "./ProtectedBikeLayer";
+import { useLayerVisibility } from "./useLayerVisibility";
 import type { FeatureCollection, PointGeometry } from "../geojson";
 
 const RINGS_SOURCE_ID = "poi-density-rings";
@@ -28,6 +29,8 @@ export type PoiDensityLayerProps = {
   /** Coordinate to query GET /api/v1/places around -- the current resolved address (App.tsx). */
   lat: number;
   lon: number;
+  /** MapLegend's checkbox state for this layer (Phase 5 deliverable 5) -- defaults on, matching every other layer's default-visible behavior. */
+  visible?: boolean;
 };
 
 /**
@@ -37,7 +40,11 @@ export type PoiDensityLayerProps = {
  * reference rings at half and full search radius. Renders nothing itself --
  * all output is imperative MapLibre sources/layers/popups on `map`.
  */
-export function PoiDensityLayer({ map, lat, lon }: PoiDensityLayerProps) {
+export function PoiDensityLayer({ map, lat, lon, visible = true }: PoiDensityLayerProps) {
+  useLayerVisibility(map, [RINGS_LAYER_ID, POIS_LAYER_ID], visible);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+
   const placesQuery = useQuery({
     queryKey: ["layers", "places", lat, lon],
     queryFn: async () => {
@@ -68,6 +75,7 @@ export function PoiDensityLayer({ map, lat, lon }: PoiDensityLayerProps) {
         id: RINGS_LAYER_ID,
         type: "line",
         source: RINGS_SOURCE_ID,
+        layout: { visibility: visibleRef.current ? "visible" : "none" },
         paint: {
           "line-color": "#71717a", // zinc-500, matches DESIGN.md text-muted -- a spatial reference guide, not scored data, so deliberately not an accent color
           "line-width": 1,
@@ -95,6 +103,7 @@ export function PoiDensityLayer({ map, lat, lon }: PoiDensityLayerProps) {
       id: POIS_LAYER_ID,
       type: "circle",
       source: POIS_SOURCE_ID,
+      layout: { visibility: visibleRef.current ? "visible" : "none" },
       paint: {
         "circle-radius": 4,
         // Per-category poi-* color (DESIGN.md "POI Category Markers") --

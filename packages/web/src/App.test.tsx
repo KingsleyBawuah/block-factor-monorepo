@@ -261,6 +261,23 @@ describe("App component", () => {
     expect(getMock.mock.calls.filter((c) => c[0] === "/api/v1/geocode").length).toBe(geocodeCallsBefore);
   });
 
+  it("renders the map legend independent of scoring state, and toggling a layer checkbox keeps its state", async () => {
+    renderApp();
+
+    // Map-chrome, not a score concern -- available before any address search.
+    const legendToggle = await screen.findByRole("button", { name: /layers/i });
+    fireEvent.click(legendToggle);
+
+    const divvyCheckbox = screen.getByRole("checkbox", { name: "Divvy Docks" }) as HTMLInputElement;
+    expect(divvyCheckbox.checked).toBe(true);
+
+    fireEvent.click(divvyCheckbox);
+    expect(divvyCheckbox.checked).toBe(false);
+
+    // Unrelated layers stay untouched by that one toggle.
+    expect((screen.getByRole("checkbox", { name: "CTA Rail" }) as HTMLInputElement).checked).toBe(true);
+  });
+
   it("renders outlet child route content", async () => {
     renderApp();
 

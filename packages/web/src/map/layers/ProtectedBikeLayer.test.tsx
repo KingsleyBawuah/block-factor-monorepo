@@ -80,6 +80,7 @@ function fakeMap() {
     moveLayer: mock(() => {}),
     getLayer: mock(() => undefined),
     getSource: mock(() => undefined),
+    setLayoutProperty: mock(() => {}),
     on: mock(() => {}),
     off: mock(() => {}),
     getCanvas: mock(() => canvas),
@@ -129,7 +130,7 @@ describe("ProtectedBikeLayer", () => {
       id: "bike-routes-layer",
       type: "line",
       source: "bike-routes",
-      layout: { "line-join": "round", "line-cap": "round" },
+      layout: { "line-join": "round", "line-cap": "round", visibility: "visible" },
       paint: {
         "line-color": "#10b981",
         "line-width": [
@@ -212,6 +213,7 @@ describe("ProtectedBikeLayer", () => {
       id: "trail-access-fill-layer",
       type: "fill",
       source: "trail-access",
+      layout: { visibility: "visible" },
       paint: { "fill-color": "#10b981", "fill-opacity": 0.15 },
     });
 
@@ -224,6 +226,7 @@ describe("ProtectedBikeLayer", () => {
       id: "trail-access-outline-layer",
       type: "line",
       source: "trail-access",
+      layout: { visibility: "visible" },
       paint: { "line-color": "#10b981", "line-width": 1.5 },
     });
 
