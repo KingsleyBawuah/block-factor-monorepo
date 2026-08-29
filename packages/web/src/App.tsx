@@ -208,13 +208,6 @@ export default function App() {
                     Search an address above to see its BlockFactor score.
                   </div>
                 )}
-
-                <div className="mt-4 flex flex-wrap gap-1.5">
-                  <Badge variant="cta-blue">Blue Line</Badge>
-                  <Badge variant="cta-red">Red Line</Badge>
-                  <Badge variant="cta-pink">Pink Line</Badge>
-                  <Badge variant="cta-green">Green Line</Badge>
-                </div>
               </CardContent>
             </Card>
 

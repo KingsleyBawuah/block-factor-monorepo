@@ -50,12 +50,11 @@ export type MapLegendEntry = {
  * what the map itself actually renders.
  */
 export const MAP_LEGEND_ENTRIES: MapLegendEntry[] = [
-  // Red + Blue -- the two most recognizable CTA lines (also the first two
-  // App.tsx's own header badges show); a full 8-line swatch cluster would
-  // be too small/busy to read at this size, and unlike POI Density's 3
-  // categories, individual line identity isn't this layer's own legend
-  // concern -- CtaRailLayer's station hover cards already show real
-  // per-line badges for that.
+  // Red + Blue -- the two most recognizable CTA lines; a full 8-line dot
+  // cluster would be too small/busy to read at legend size, and unlike POI
+  // Density's 3 categories, individual line identity isn't this entry's
+  // own legend concern -- CtaRailLayer's own station hover cards already
+  // show real per-line badges for that.
   { key: "ctaRail", label: "CTA Rail", swatchColors: [ctaLineColor("Red"), ctaLineColor("Blue")] },
   {
     key: "bikeTrail",

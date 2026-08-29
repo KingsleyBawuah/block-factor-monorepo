@@ -145,15 +145,6 @@ describe("App component", () => {
     expect(factor.className).toContain("text-flag-red");
   });
 
-  it("renders authentic CTA rail badges", async () => {
-    renderApp();
-
-    expect(await screen.findByText("Blue Line")).toBeTruthy();
-    expect(await screen.findByText("Red Line")).toBeTruthy();
-    expect(await screen.findByText("Pink Line")).toBeTruthy();
-    expect(await screen.findByText("Green Line")).toBeTruthy();
-  });
-
   it("prompts to search before any address has resolved, with no factor breakdown list", async () => {
     renderApp();
 
