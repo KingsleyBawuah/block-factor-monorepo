@@ -163,6 +163,10 @@ export function CtaRailLayer({ map, visible = true }: CtaRailLayerProps) {
     return () => {
       map.off("mouseenter", STATIONS_LAYER_ID, handleMouseEnter);
       map.off("mouseleave", STATIONS_LAYER_ID, handleMouseLeave);
+      // Unmounting mid-hover skips handleMouseLeave (its mouseleave event
+      // never fires), which would otherwise leave the cursor stuck as
+      // "pointer" -- reset it here too.
+      map.getCanvas().style.cursor = "";
       popup.remove();
       if (map.getLayer(STATIONS_LAYER_ID)) map.removeLayer(STATIONS_LAYER_ID);
       if (map.getSource(STATIONS_SOURCE_ID)) map.removeSource(STATIONS_SOURCE_ID);

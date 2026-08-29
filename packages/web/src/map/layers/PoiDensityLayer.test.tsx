@@ -46,11 +46,11 @@ function fakeMap() {
   } as unknown as MapLibreMap;
 }
 
-function renderWithClient(map: MapLibreMap) {
+function renderWithClient(map: MapLibreMap, visible?: boolean) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <PoiDensityLayer map={map} lat={41.8781} lon={-87.6298} />
+      <PoiDensityLayer map={map} lat={41.8781} lon={-87.6298} visible={visible} />
     </QueryClientProvider>
   );
 }
@@ -298,6 +298,56 @@ describe("PoiDensityLayer", () => {
     expect(map.removeSource).toHaveBeenCalledWith("poi-density-pois");
     expect(map.off).toHaveBeenCalledWith("mouseenter", "poi-density-pois-layer", expect.any(Function));
     expect(map.off).toHaveBeenCalledWith("mouseleave", "poi-density-pois-layer", expect.any(Function));
+  });
+
+  it("creates both layers hidden when visible=false from the start (MapLegend, Phase 5 deliverable 5)", async () => {
+    const map = fakeMap();
+    renderWithClient(map, false);
+
+    const ringsLayerCall = (map.addLayer as ReturnType<typeof mock>).mock.calls.find(
+      (call) => (call[0] as { id: string }).id === "poi-density-rings-layer"
+    );
+    expect((ringsLayerCall?.[0] as { layout?: { visibility?: string } })?.layout?.visibility).toBe("none");
+
+    await waitFor(() =>
+      expect(
+        (map.addLayer as ReturnType<typeof mock>).mock.calls.some(
+          (call) => (call[0] as { id: string }).id === "poi-density-pois-layer"
+        )
+      ).toBe(true)
+    );
+    const poisLayerCall = (map.addLayer as ReturnType<typeof mock>).mock.calls.find(
+      (call) => (call[0] as { id: string }).id === "poi-density-pois-layer"
+    );
+    expect((poisLayerCall?.[0] as { layout?: { visibility?: string } })?.layout?.visibility).toBe("none");
+  });
+
+  it("toggles both layers' visibility via setLayoutProperty when the visible prop flips after mount", async () => {
+    const map = fakeMap();
+    (map.getLayer as ReturnType<typeof mock>).mockImplementation(() => ({}) as never);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <PoiDensityLayer map={map} lat={41.8781} lon={-87.6298} visible={true} />
+      </QueryClientProvider>
+    );
+    await waitFor(() =>
+      expect(
+        (map.addLayer as ReturnType<typeof mock>).mock.calls.some(
+          (call) => (call[0] as { id: string }).id === "poi-density-pois-layer"
+        )
+      ).toBe(true)
+    );
+    (map.setLayoutProperty as ReturnType<typeof mock>).mockClear();
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <PoiDensityLayer map={map} lat={41.8781} lon={-87.6298} visible={false} />
+      </QueryClientProvider>
+    );
+
+    expect(map.setLayoutProperty).toHaveBeenCalledWith("poi-density-rings-layer", "visibility", "none");
+    expect(map.setLayoutProperty).toHaveBeenCalledWith("poi-density-pois-layer", "visibility", "none");
   });
 
   it("fetches /api/v1/places with the given lat/lon as query params", async () => {

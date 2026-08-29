@@ -41,13 +41,18 @@ describe("MapLegend", () => {
     expect((getByRole("checkbox", { name: "CTA Rail" }) as HTMLInputElement).checked).toBe(true);
   });
 
-  it("calls onToggle with the layer's key when its checkbox is clicked", () => {
+  it.each([
+    ["CTA Rail", "ctaRail"],
+    ["Bike / Trail", "bikeTrail"],
+    ["Cafes / Fitness / Groceries", "poiDensity"],
+    ["Divvy Docks", "divvyDocks"],
+  ] as const)("calls onToggle with %s's key ('%s') when its checkbox is clicked", (label, key) => {
     const { getByRole, onToggle } = renderLegend();
     fireEvent.click(getByRole("button", { name: /layers/i }));
 
-    fireEvent.click(getByRole("checkbox", { name: "Bike / Trail" }));
+    fireEvent.click(getByRole("checkbox", { name: label }));
 
-    expect(onToggle).toHaveBeenCalledWith("bikeTrail");
+    expect(onToggle).toHaveBeenCalledWith(key);
   });
 
   it("shows the bike lane protection mini-key (Protected / Shared lane) under the Bike / Trail row", () => {

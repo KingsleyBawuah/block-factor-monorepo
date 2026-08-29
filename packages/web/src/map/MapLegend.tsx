@@ -62,7 +62,7 @@ export function MapLegend({ visibility, onToggle }: MapLegendProps) {
                     {entry.lineDetail.map((detail) => (
                       <li key={detail.label} className="flex items-center gap-1.5">
                         <LineSample detail={detail} color={entry.swatchColors[0]} />
-                        <span className="truncate text-[11px] text-zinc-500">{detail.label}</span>
+                        <span className="truncate text-[11px] text-zinc-400">{detail.label}</span>
                       </li>
                     ))}
                   </ul>
