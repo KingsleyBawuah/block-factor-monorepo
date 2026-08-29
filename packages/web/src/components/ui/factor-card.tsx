@@ -2,6 +2,8 @@ import { useId, useState } from "react";
 import { cn } from "../../lib/utils";
 import { formatDistanceMiles } from "../../lib/format";
 import { scoreTier } from "../../map";
+import { ctaLineColor } from "../../map/layers/cta-colors";
+import { busCategoryColor, busCategoryLabel } from "../../map/layers/bus-colors";
 import { Badge } from "./badge";
 import type { components } from "../../lib/api/schema";
 
@@ -120,7 +122,38 @@ export function FactorCard({ label, icon, factor }: FactorCardProps) {
               key={`${poi.name}-${poi.distanceMeters}-${index}`}
               className="flex items-center justify-between gap-2 font-mono text-[11px] text-zinc-400"
             >
-              <span className="truncate">{poi.name}</span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate">{poi.name}</span>
+                {poi.lines && poi.lines.length > 0 && (
+                  <span
+                    role="img"
+                    className="flex shrink-0 items-center gap-0.5"
+                    aria-label={`${poi.lines.join(", ")} line${poi.lines.length > 1 ? "s" : ""}`}
+                  >
+                    {poi.lines.map((line) => (
+                      // title -- a hover tooltip naming the line, so the
+                      // color itself is never the only way to tell which
+                      // line a dot represents (color-blind users).
+                      <span
+                        key={line}
+                        title={`${line} Line`}
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: ctaLineColor(line) }}
+                        aria-hidden="true"
+                      />
+                    ))}
+                  </span>
+                )}
+                {poi.busCategory && (
+                  <span
+                    role="img"
+                    title={busCategoryLabel(poi.busCategory)}
+                    aria-label={busCategoryLabel(poi.busCategory)}
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: busCategoryColor(poi.busCategory) }}
+                  />
+                )}
+              </span>
               <span className="shrink-0 text-zinc-400">{formatDistanceMiles(poi.distanceMeters)}</span>
             </li>
           ))}

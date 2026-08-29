@@ -398,6 +398,27 @@ components:
           type: string
         distanceMeters:
           type: number
+        lines:
+          type: array
+          items:
+            type: string
+          description: >-
+            Real CTA 'L' line names serving this stop (e.g. ["Red", "Brown", "Purple"]),
+            set only when this contributing POI is a CTA station -- omitted entirely for
+            every other factor's contributing POIs (bus corridors, grocery stores, cafes,
+            etc.), which have no lines to report.
+        busCategory:
+          type: string
+          enum: [local, express, jump]
+          description: >-
+            Real CTA bus route service category, set only when this contributing POI is
+            a bus corridor. Verified against CTA's live published GTFS feed (routes.txt):
+            "jump" is the single Jeffery Jump route (route id J14, real color #0065BD);
+            "express" covers X-prefixed arterial routes and any route whose real name
+            contains "Express" (real color #B71234 maroon) -- CTA doesn't use a distinct
+            color or category for the X-prefix beyond Express itself; everything else is
+            "local" (real color #99999C grey). Omitted for CTA stations and every other
+            factor's contributing POIs.
 
     FactorScore:
       type: object

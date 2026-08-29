@@ -206,6 +206,172 @@ func TestCalculateTransitScore_DualLineBonus(t *testing.T) {
 	}
 }
 
+// TestCalculateTransitScore_ContributingPoiLines verifies the closest
+// station's real per-line names travel structurally via
+// api.ContributingPoi.Lines (docs/openapi.yaml), not baked as plain text
+// into Name -- the frontend (FactorCard.tsx) renders these as actual
+// colored CTA badges, which a formatted string like "Fullerton ('L' Red,
+// Brown, Purple)" couldn't be.
+func TestCalculateTransitScore_ContributingPoiLines(t *testing.T) {
+	t.Run("a multi-line station's real Lines populate ContributingPoi.Lines, and Name carries no baked-in line list", func(t *testing.T) {
+		stations := []CtaStation{
+			{StopName: "Fullerton", Lines: []string{"Red", "Brown", "Purple"}, DistanceMeters: 250.0},
+		}
+
+		_, _, contributing := CalculateTransitScore(stations, nil, nil)
+
+		if len(contributing) != 1 {
+			t.Fatalf("got %d contributing pois, want 1", len(contributing))
+		}
+		poi := contributing[0]
+		if poi.Name != "Fullerton ('L' Station)" {
+			t.Errorf("got Name %q, want %q", poi.Name, "Fullerton ('L' Station)")
+		}
+		if poi.Lines == nil {
+			t.Fatal("got nil Lines, want [Red Brown Purple]")
+		}
+		want := []string{"Red", "Brown", "Purple"}
+		if len(*poi.Lines) != len(want) {
+			t.Fatalf("got Lines %v, want %v", *poi.Lines, want)
+		}
+		for i, line := range want {
+			if (*poi.Lines)[i] != line {
+				t.Errorf("Lines[%d] = %q, want %q", i, (*poi.Lines)[i], line)
+			}
+		}
+	})
+
+	t.Run("a station with no real Lines data leaves ContributingPoi.Lines nil rather than an empty slice", func(t *testing.T) {
+		stations := []CtaStation{
+			{StopName: "Unnamed Stop", Lines: nil, DistanceMeters: 250.0},
+		}
+
+		_, _, contributing := CalculateTransitScore(stations, nil, nil)
+
+		if len(contributing) != 1 {
+			t.Fatalf("got %d contributing pois, want 1", len(contributing))
+		}
+		if contributing[0].Lines != nil {
+			t.Errorf("got Lines %v, want nil", *contributing[0].Lines)
+		}
+	})
+
+	t.Run("a bus corridor's ContributingPoi never sets Lines, even when a nearby station also contributed", func(t *testing.T) {
+		stations := []CtaStation{
+			{StopName: "Belmont", Lines: []string{"Red"}, DistanceMeters: 300.0},
+		}
+		corridors := []BusCorridor{
+			{RouteID: "156", RouteName: "LaSalle", MeanHeadwayMinutes: 8.0, DistanceMeters: 80.0},
+		}
+
+		_, _, contributing := CalculateTransitScore(stations, corridors, nil)
+
+		if len(contributing) != 2 {
+			t.Fatalf("got %d contributing pois, want 2", len(contributing))
+		}
+		for _, poi := range contributing {
+			if poi.Name == "Route 156 - LaSalle (Bus)" && poi.Lines != nil {
+				t.Errorf("bus corridor poi got non-nil Lines %v, want nil", *poi.Lines)
+			}
+		}
+	})
+
+	t.Run("a bus corridor's ContributingPoi gets a real BusCategory, and a CTA station's never sets one", func(t *testing.T) {
+		stations := []CtaStation{
+			{StopName: "Belmont", Lines: []string{"Red"}, DistanceMeters: 300.0},
+		}
+		corridors := []BusCorridor{
+			{RouteID: "X49", RouteName: "X49 - Western Express", MeanHeadwayMinutes: 8.0, DistanceMeters: 80.0},
+		}
+
+		_, _, contributing := CalculateTransitScore(stations, corridors, nil)
+
+		if len(contributing) != 2 {
+			t.Fatalf("got %d contributing pois, want 2", len(contributing))
+		}
+		for _, poi := range contributing {
+			switch poi.Name {
+			case "Belmont ('L' Station)":
+				if poi.BusCategory != nil {
+					t.Errorf("station poi got non-nil BusCategory %v, want nil", *poi.BusCategory)
+				}
+			case "Route X49 - Western Express (Bus)":
+				if poi.BusCategory == nil || *poi.BusCategory != api.Express {
+					t.Errorf("got BusCategory %v, want %q", poi.BusCategory, api.Express)
+				}
+			default:
+				t.Errorf("got unexpected poi.Name %q", poi.Name)
+			}
+		}
+	})
+
+	t.Run("a bus corridor's ContributingPoi name doesn't double the RouteID prefix already baked into RouteName", func(t *testing.T) {
+		// bus_corridors.route_name is ingested as "<RouteID> - <full name>"
+		// (confirmed live, e.g. "37 - Sedgwick") -- naively formatting
+		// "Route %s - %s (Bus)" against RouteID and the already-prefixed
+		// RouteName produced "Route 37 - 37 - Sedgwick (Bus)", visibly wrong
+		// and confirmed live in the UI before this fix.
+		corridors := []BusCorridor{
+			{RouteID: "37", RouteName: "37 - Sedgwick", MeanHeadwayMinutes: 8.0, DistanceMeters: 80.0},
+		}
+
+		_, _, contributing := CalculateTransitScore(nil, corridors, nil)
+
+		if len(contributing) != 1 {
+			t.Fatalf("got %d contributing pois, want 1", len(contributing))
+		}
+		want := "Route 37 - Sedgwick (Bus)"
+		if contributing[0].Name != want {
+			t.Errorf("got poi.Name %q, want %q", contributing[0].Name, want)
+		}
+	})
+}
+
+// TestClassifyBusRoute exercises every case against real CTA route
+// id/name pairs, hand-confirmed live against this app's own ingested
+// bus_corridors data (docker exec ... psql, cross-checked against CTA's
+// real published GTFS feed) rather than synthetic examples -- J14, X4/X9/X49,
+// and 192 in particular are real, currently-existing CTA routes, not
+// invented test fixtures.
+func TestClassifyBusRoute(t *testing.T) {
+	tests := []struct {
+		routeID   string
+		routeName string
+		want      api.ContributingPoiBusCategory
+	}{
+		{"J14", "J14 - Jeffery Jump", api.Jump},
+		{"X4", "X4 - Cottage Grove Express", api.Express},
+		{"X9", "X9 - Ashland Express", api.Express},
+		{"X49", "X49 - Western Express", api.Express},
+		{"2", "2 - Hyde Park Express", api.Express},
+		{"120", "120 - Ogilvie/Streeterville Express", api.Express},
+		// Real, confirmed false positive (see classifyBusRoute's doc
+		// comment): CTA's actual GTFS route_color for 192 is grey/local,
+		// but its real name contains "Express" -- this heuristic can't
+		// tell the two apart without ingesting route_color directly.
+		{"192", "192 - University of Chicago Hospitals Express", api.Express},
+		{"3", "3 - King Drive", api.Local},
+		{"20", "20 - Madison", api.Local},
+		{"N5", "N5 - South Shore Night Bus", api.Local}, // no Night category (see PR discussion) -- N-prefix isn't a reliable GTFS signal
+		// Synthetic, not live-data: every X-route currently ingested (X4/X9/X49
+		// above) happens to also contain "Express" in its real name, which
+		// would mask a deleted `HasPrefix(routeID, "X")` case -- the
+		// `strings.Contains` fallback would still catch it and this test
+		// wouldn't notice. This isolates the X-prefix branch on its own with
+		// a route name that deliberately omits "express".
+		{"X21", "X21 - Cermak Limited", api.Express},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.routeID, func(t *testing.T) {
+			got := classifyBusRoute(tt.routeID, tt.routeName)
+			if got != tt.want {
+				t.Errorf("classifyBusRoute(%q, %q) = %q, want %q", tt.routeID, tt.routeName, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCalculateTransitScore_BusCorridorBonus(t *testing.T) {
 	tests := []struct {
 		name      string

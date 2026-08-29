@@ -322,17 +322,20 @@ func CalculateTransitScore(stations []CtaStation, corridors []BusCorridor, lineS
 		distVal := float32(math.Round(closestStation.DistanceMeters*10) / 10)
 		minDistance = &distVal
 
-		var name string
+		poi := api.ContributingPoi{
+			Name:           fmt.Sprintf("%s ('L' Station)", closestStation.StopName),
+			DistanceMeters: distVal,
+		}
+		// Real per-line names now travel structurally via Lines (api.ContributingPoi,
+		// docs/openapi.yaml), rendered as actual colored CTA badges on the frontend
+		// (FactorCard.tsx) -- previously baked as plain text into Name itself
+		// ("Fullerton ('L' Red, Brown, Purple)"), which couldn't be styled at all.
 		if len(closestStation.Lines) > 0 {
-			name = fmt.Sprintf("%s ('L' %s)", closestStation.StopName, strings.Join(closestStation.Lines, ", "))
-		} else {
-			name = fmt.Sprintf("%s ('L' Station)", closestStation.StopName)
+			lines := closestStation.Lines
+			poi.Lines = &lines
 		}
 
-		contributing = append(contributing, api.ContributingPoi{
-			Name:           name,
-			DistanceMeters: distVal,
-		})
+		contributing = append(contributing, poi)
 	}
 
 	if qualifyingBusCorridor != nil {
@@ -345,16 +348,52 @@ func CalculateTransitScore(stations []CtaStation, corridors []BusCorridor, lineS
 		if busName == "" {
 			busName = fmt.Sprintf("Route %s Bus", qualifyingBusCorridor.RouteID)
 		} else {
-			busName = fmt.Sprintf("Route %s - %s (Bus)", qualifyingBusCorridor.RouteID, qualifyingBusCorridor.RouteName)
+			// bus_corridors.route_name is ingested as "<RouteID> - <full name>"
+			// (e.g. "37 - Sedgwick", confirmed live against the real table) --
+			// stripping that redundant prefix avoids doubling it into
+			// "Route 37 - 37 - Sedgwick (Bus)".
+			displayName := strings.TrimPrefix(qualifyingBusCorridor.RouteName, qualifyingBusCorridor.RouteID+" - ")
+			busName = fmt.Sprintf("Route %s - %s (Bus)", qualifyingBusCorridor.RouteID, displayName)
 		}
 
+		category := classifyBusRoute(qualifyingBusCorridor.RouteID, qualifyingBusCorridor.RouteName)
 		contributing = append(contributing, api.ContributingPoi{
 			Name:           busName,
 			DistanceMeters: busDistVal,
+			BusCategory:    &category,
 		})
 	}
 
 	return score, minDistance, contributing
+}
+
+// classifyBusRoute derives a CTA bus route's real service category from its
+// route id/name. Verified directly against CTA's live published GTFS feed
+// (routes.txt, downloaded and inspected, not assumed): real route_color is
+// #0065BD (royal blue) for the single Jeffery Jump route (J14), #B71234
+// (maroon) for Express routes -- including every X-prefixed arterial route,
+// which CTA colors identically to any other Express route rather than as
+// its own category -- and #99999C (grey) for everything else. The app's own
+// bus_corridors table doesn't ingest route_color directly, so this derives
+// the same categories from RouteID/RouteName instead.
+//
+// Known limitation, confirmed against the real feed rather than
+// undiscovered: route 192 ("University of Chicago Hospitals Express") has
+// "Express" in its real CTA name but is actually GTFS-colored grey/local --
+// this heuristic has no way to know that short of ingesting route_color
+// directly, so it classifies 192 as express (a real, accepted false
+// positive, not a silent bug).
+func classifyBusRoute(routeID, routeName string) api.ContributingPoiBusCategory {
+	switch {
+	case strings.HasPrefix(routeID, "J"):
+		return api.Jump
+	case strings.HasPrefix(routeID, "X"):
+		return api.Express
+	case strings.Contains(strings.ToLower(routeName), "express"):
+		return api.Express
+	default:
+		return api.Local
+	}
 }
 
 // calculateBusDirectionalBonus returns the bus bonus points and the closest qualifying
