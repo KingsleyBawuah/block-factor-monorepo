@@ -269,6 +269,33 @@ describe("App component", () => {
     expect((screen.getByRole("checkbox", { name: "CTA Rail" }) as HTMLInputElement).checked).toBe(true);
   });
 
+  it("pins a resolved address to the Comparison Tray and unpins it again (Phase 5 deliverable 3)", async () => {
+    renderApp();
+
+    // No pin control exists at all before an address has resolved -- it
+    // lives inside the same conditional as the resolved-address block.
+    expect(screen.queryByRole("button", { name: /pin for comparison/i })).toBeNull();
+
+    await searchFor233Wacker();
+
+    const pinButton = await screen.findByRole("button", { name: /pin for comparison/i });
+    expect(pinButton.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByText(/comparing/i)).toBeNull();
+
+    fireEvent.click(pinButton);
+
+    expect(await screen.findByText("Comparing 1/3")).toBeTruthy();
+    const pinnedButton = await screen.findByRole("button", { name: /already pinned for comparison/i });
+    expect(pinnedButton.getAttribute("aria-pressed")).toBe("true");
+    expect((pinnedButton as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /unpin 233 s wacker dr/i }));
+
+    expect(screen.queryByText(/comparing/i)).toBeNull();
+    const unpinnedButton = await screen.findByRole("button", { name: /pin for comparison/i });
+    expect(unpinnedButton.getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("renders outlet child route content", async () => {
     renderApp();
 

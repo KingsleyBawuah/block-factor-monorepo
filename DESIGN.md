@@ -195,10 +195,13 @@ The Map Legend & Layer Visibility Controls (`packages/web/src/map/MapLegend.tsx`
 
 ## Layout
 
-The UI uses an asymmetrical split-pane layout designed for concurrent visual and spatial analysis:
-- **Left Sidebar (Desktop `col-span-4` / `min-w-[380px]`):** Scrollable analytical column housing the address input, composite score card, individual 10-factor breakdowns, and commute duration pills.
-- **Right Map Canvas (Desktop `col-span-8` / sticky `h-[calc(100vh-7rem)]`):** Fixed-viewport MapLibre GL vector canvas displaying the candidate address, CTA rail network, high-frequency bus corridors, bike routes, and spatial heatmaps.
-- **Spacing Scale:** Built on strict 4px/8px modular units (`p-4` / 16px cards, `gap-6` / 24px grid gutters, `py-0.5 px-2` badge chips).
+The UI uses an asymmetrical split-pane app shell designed for concurrent visual and spatial analysis. On `lg+` screens the page itself never scrolls (`h-screen`/`overflow-hidden` on the root) -- the header, map, and Comparison Tray all stay in fixed position, and only the sidebar's own content scrolls internally:
+- **Header:** `sticky top-0`, persistent at the top of the viewport at every breakpoint.
+- **Left Sidebar (Desktop fixed `w-[400px]`):** Independently `overflow-y-auto` analytical column housing the address input, composite score card, Weight Customization Drawer, and the 10-factor breakdowns -- scrolls on its own without moving the header, map, or tray.
+- **Right Map Canvas (Desktop `flex-1` / `h-full`):** Fills the exact remaining viewport height next to the sidebar (not a hand-tuned `vh` percentage, which could leave a gap beneath it depending on actual header height) -- MapLibre GL vector canvas displaying the candidate address, CTA rail network, high-frequency bus corridors, bike routes, and spatial heatmaps.
+- **Bottom Comparison Tray:** Sits at the bottom of the same fixed viewport, below the map/sidebar row, only once at least one address is pinned.
+- **Below `lg`:** Falls back to the original full-page-scroll stacked layout (a fixed-height split-screen doesn't fit a narrow single column) -- the header and tray stay `sticky` so they remain pinned during that scroll, but the sidebar and map scroll together with the page.
+- **Spacing Scale:** Built on strict 4px/8px modular units (`p-4` / 16px cards, `gap-6` / 24px flex gutters, `py-0.5 px-2` badge chips).
 
 ## Elevation & Depth
 
@@ -240,6 +243,9 @@ BlockFactor uses **flat tonal layering**. Surfaces are flat at rest with zero dr
 - **Shape:** `rounded-lg` (6px).
 - **Primary:** `bg-zinc-100 text-zinc-950 hover:bg-zinc-200` font-mono font-medium text-xs uppercase.
 - **Secondary / Ghost:** `bg-zinc-800 text-zinc-100 hover:bg-zinc-700` with 1px `zinc-700` border.
+
+### Comparison Tray
+Sticky bottom dock (`sticky bottom-0`, `border-t border-zinc-800`, `bg-zinc-900/95`), hidden entirely until at least one address is pinned. Pinned addresses render as compact chips (`rounded-sm border border-zinc-800 bg-zinc-950`) carrying the truncated address, a Score Indicator badge for the composite score, and an unpin control -- the same visual language as everywhere else a score gets a badge, not a bespoke tray-only style. The factor-by-factor comparison table (reachable only once 2+ are pinned) reuses the Tabular Monospace Rule and Score Indicator tier colors per cell, with "Unavailable" text (not a blank cell or `NaN`) for a degraded or missing factor. Each pinned entry is an immutable snapshot of the score at the moment it was pinned -- it does not live-rescore when the Weight Customization sliders change, so a comparison always reflects the addresses as they were pinned, not a moving target.
 
 ### Inputs & Address Search
 - **Style:** `bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 font-sans`.
