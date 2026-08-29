@@ -157,6 +157,23 @@ describe("FactorCard", () => {
     expect(getByLabelText("Red, Brown lines")).toBeTruthy();
   });
 
+  it("uses the singular 'line' (not 'lines') in the aria-label for a single-line station", () => {
+    const { getByRole, getByLabelText } = render(
+      <FactorCard
+        label="Transit"
+        icon="lni-train-1"
+        factor={{
+          score: 100,
+          degraded: false,
+          contributingPois: [{ name: "95th/Dan Ryan ('L' Station)", distanceMeters: 250, lines: ["Red"] }],
+        }}
+      />
+    );
+    fireEvent.click(getByRole("button"));
+
+    expect(getByLabelText("Red line")).toBeTruthy();
+  });
+
   it("falls back to the muted line color for an unrecognized line name rather than omitting the dot", () => {
     const { getByRole, getByText } = render(
       <FactorCard

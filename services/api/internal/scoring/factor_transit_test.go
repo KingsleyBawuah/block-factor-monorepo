@@ -295,11 +295,34 @@ func TestCalculateTransitScore_ContributingPoiLines(t *testing.T) {
 				if poi.BusCategory != nil {
 					t.Errorf("station poi got non-nil BusCategory %v, want nil", *poi.BusCategory)
 				}
-			case "Route X49 - X49 - Western Express (Bus)":
+			case "Route X49 - Western Express (Bus)":
 				if poi.BusCategory == nil || *poi.BusCategory != api.Express {
 					t.Errorf("got BusCategory %v, want %q", poi.BusCategory, api.Express)
 				}
+			default:
+				t.Errorf("got unexpected poi.Name %q", poi.Name)
 			}
+		}
+	})
+
+	t.Run("a bus corridor's ContributingPoi name doesn't double the RouteID prefix already baked into RouteName", func(t *testing.T) {
+		// bus_corridors.route_name is ingested as "<RouteID> - <full name>"
+		// (confirmed live, e.g. "37 - Sedgwick") -- naively formatting
+		// "Route %s - %s (Bus)" against RouteID and the already-prefixed
+		// RouteName produced "Route 37 - 37 - Sedgwick (Bus)", visibly wrong
+		// and confirmed live in the UI before this fix.
+		corridors := []BusCorridor{
+			{RouteID: "37", RouteName: "37 - Sedgwick", MeanHeadwayMinutes: 8.0, DistanceMeters: 80.0},
+		}
+
+		_, _, contributing := CalculateTransitScore(nil, corridors, nil)
+
+		if len(contributing) != 1 {
+			t.Fatalf("got %d contributing pois, want 1", len(contributing))
+		}
+		want := "Route 37 - Sedgwick (Bus)"
+		if contributing[0].Name != want {
+			t.Errorf("got poi.Name %q, want %q", contributing[0].Name, want)
 		}
 	})
 }
@@ -330,6 +353,13 @@ func TestClassifyBusRoute(t *testing.T) {
 		{"3", "3 - King Drive", api.Local},
 		{"20", "20 - Madison", api.Local},
 		{"N5", "N5 - South Shore Night Bus", api.Local}, // no Night category (see PR discussion) -- N-prefix isn't a reliable GTFS signal
+		// Synthetic, not live-data: every X-route currently ingested (X4/X9/X49
+		// above) happens to also contain "Express" in its real name, which
+		// would mask a deleted `HasPrefix(routeID, "X")` case -- the
+		// `strings.Contains` fallback would still catch it and this test
+		// wouldn't notice. This isolates the X-prefix branch on its own with
+		// a route name that deliberately omits "express".
+		{"X21", "X21 - Cermak Limited", api.Express},
 	}
 
 	for _, tt := range tests {

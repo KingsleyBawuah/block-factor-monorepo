@@ -348,7 +348,12 @@ func CalculateTransitScore(stations []CtaStation, corridors []BusCorridor, lineS
 		if busName == "" {
 			busName = fmt.Sprintf("Route %s Bus", qualifyingBusCorridor.RouteID)
 		} else {
-			busName = fmt.Sprintf("Route %s - %s (Bus)", qualifyingBusCorridor.RouteID, qualifyingBusCorridor.RouteName)
+			// bus_corridors.route_name is ingested as "<RouteID> - <full name>"
+			// (e.g. "37 - Sedgwick", confirmed live against the real table) --
+			// stripping that redundant prefix avoids doubling it into
+			// "Route 37 - 37 - Sedgwick (Bus)".
+			displayName := strings.TrimPrefix(qualifyingBusCorridor.RouteName, qualifyingBusCorridor.RouteID+" - ")
+			busName = fmt.Sprintf("Route %s - %s (Bus)", qualifyingBusCorridor.RouteID, displayName)
 		}
 
 		category := classifyBusRoute(qualifyingBusCorridor.RouteID, qualifyingBusCorridor.RouteName)
