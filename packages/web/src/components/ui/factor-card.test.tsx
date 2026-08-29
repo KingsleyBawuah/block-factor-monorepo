@@ -192,4 +192,95 @@ describe("FactorCard", () => {
     const nameRow = getByText("Route 156 - LaSalle (Bus)").parentElement;
     expect(nameRow?.querySelector('span[aria-hidden="true"]')).toBeNull();
   });
+
+  it("gives each line dot a hover tooltip naming the line, since the color alone isn't enough for color-blind users", () => {
+    const { getByRole, getByText } = render(
+      <FactorCard
+        label="Transit"
+        icon="lni-train-1"
+        factor={{
+          score: 100,
+          degraded: false,
+          contributingPois: [{ name: "Fullerton ('L' Station)", distanceMeters: 250, lines: ["Red", "Brown"] }],
+        }}
+      />
+    );
+    fireEvent.click(getByRole("button"));
+
+    const nameRow = getByText("Fullerton ('L' Station)").parentElement;
+    const dots = nameRow?.querySelectorAll('span[aria-hidden="true"]');
+    if (!dots) throw new Error("expected line dots to render");
+    expect((dots[0] as HTMLElement).title).toBe("Red Line");
+    expect((dots[1] as HTMLElement).title).toBe("Brown Line");
+  });
+
+  const busCategoryCases: ["express" | "local" | "jump", string, string][] = [
+    ["express", "#b71234", "Express bus"],
+    ["local", "#99999c", "Local bus"],
+    ["jump", "#0065bd", "Jeffery Jump"],
+  ];
+
+  it.each(busCategoryCases)("renders a colored, tooltipped bus category dot for %s routes", (busCategory, expectedColor, expectedLabel) => {
+    const { getByRole } = render(
+      <FactorCard
+        label="Transit"
+        icon="lni-train-1"
+        factor={{
+          score: 100,
+          degraded: false,
+          contributingPois: [{ name: "Route X49 - Western Express (Bus)", distanceMeters: 80, busCategory }],
+        }}
+      />
+    );
+    fireEvent.click(getByRole("button"));
+
+    const dot = getByRole("img", { name: expectedLabel }) as HTMLElement;
+    expect(dot.style.backgroundColor).toBe(expectedColor);
+    expect(dot.title).toBe(expectedLabel);
+  });
+
+  it("falls back to the local/grey color and a generic label for an unrecognized bus category", () => {
+    const { getByRole } = render(
+      <FactorCard
+        label="Transit"
+        icon="lni-train-1"
+        factor={{
+          score: 100,
+          degraded: false,
+          // "nightOwl" isn't in the OpenAPI-generated busCategory union --
+          // deliberately simulating a real value the wire could send that
+          // the frontend's type doesn't (yet) know about.
+          contributingPois: [
+            {
+              name: "Route 5 - Future Route (Bus)",
+              distanceMeters: 80,
+              busCategory: "nightOwl" as unknown as "local" | "express" | "jump",
+            },
+          ],
+        }}
+      />
+    );
+    fireEvent.click(getByRole("button"));
+
+    const dot = getByRole("img", { name: "Bus" }) as HTMLElement;
+    expect(dot.style.backgroundColor).toBe("#99999c");
+  });
+
+  it("renders no bus category dot for a contributing POI without one (e.g. a CTA station)", () => {
+    const { getByRole, queryByRole } = render(
+      <FactorCard
+        label="Transit"
+        icon="lni-train-1"
+        factor={{
+          score: 100,
+          degraded: false,
+          contributingPois: [{ name: "Fullerton ('L' Station)", distanceMeters: 250, lines: ["Red"] }],
+        }}
+      />
+    );
+    fireEvent.click(getByRole("button"));
+
+    // Only the line-dot cluster's own role="img" should exist -- no separate bus-category dot.
+    expect(queryByRole("img", { name: /bus/i })).toBeNull();
+  });
 });

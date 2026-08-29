@@ -351,13 +351,44 @@ func CalculateTransitScore(stations []CtaStation, corridors []BusCorridor, lineS
 			busName = fmt.Sprintf("Route %s - %s (Bus)", qualifyingBusCorridor.RouteID, qualifyingBusCorridor.RouteName)
 		}
 
+		category := classifyBusRoute(qualifyingBusCorridor.RouteID, qualifyingBusCorridor.RouteName)
 		contributing = append(contributing, api.ContributingPoi{
 			Name:           busName,
 			DistanceMeters: busDistVal,
+			BusCategory:    &category,
 		})
 	}
 
 	return score, minDistance, contributing
+}
+
+// classifyBusRoute derives a CTA bus route's real service category from its
+// route id/name. Verified directly against CTA's live published GTFS feed
+// (routes.txt, downloaded and inspected, not assumed): real route_color is
+// #0065BD (royal blue) for the single Jeffery Jump route (J14), #B71234
+// (maroon) for Express routes -- including every X-prefixed arterial route,
+// which CTA colors identically to any other Express route rather than as
+// its own category -- and #99999C (grey) for everything else. The app's own
+// bus_corridors table doesn't ingest route_color directly, so this derives
+// the same categories from RouteID/RouteName instead.
+//
+// Known limitation, confirmed against the real feed rather than
+// undiscovered: route 192 ("University of Chicago Hospitals Express") has
+// "Express" in its real CTA name but is actually GTFS-colored grey/local --
+// this heuristic has no way to know that short of ingesting route_color
+// directly, so it classifies 192 as express (a real, accepted false
+// positive, not a silent bug).
+func classifyBusRoute(routeID, routeName string) api.ContributingPoiBusCategory {
+	switch {
+	case strings.HasPrefix(routeID, "J"):
+		return api.Jump
+	case strings.HasPrefix(routeID, "X"):
+		return api.Express
+	case strings.Contains(strings.ToLower(routeName), "express"):
+		return api.Express
+	default:
+		return api.Local
+	}
 }
 
 // calculateBusDirectionalBonus returns the bus bonus points and the closest qualifying

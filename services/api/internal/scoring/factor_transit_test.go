@@ -275,6 +275,71 @@ func TestCalculateTransitScore_ContributingPoiLines(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("a bus corridor's ContributingPoi gets a real BusCategory, and a CTA station's never sets one", func(t *testing.T) {
+		stations := []CtaStation{
+			{StopName: "Belmont", Lines: []string{"Red"}, DistanceMeters: 300.0},
+		}
+		corridors := []BusCorridor{
+			{RouteID: "X49", RouteName: "X49 - Western Express", MeanHeadwayMinutes: 8.0, DistanceMeters: 80.0},
+		}
+
+		_, _, contributing := CalculateTransitScore(stations, corridors, nil)
+
+		if len(contributing) != 2 {
+			t.Fatalf("got %d contributing pois, want 2", len(contributing))
+		}
+		for _, poi := range contributing {
+			switch poi.Name {
+			case "Belmont ('L' Station)":
+				if poi.BusCategory != nil {
+					t.Errorf("station poi got non-nil BusCategory %v, want nil", *poi.BusCategory)
+				}
+			case "Route X49 - X49 - Western Express (Bus)":
+				if poi.BusCategory == nil || *poi.BusCategory != api.Express {
+					t.Errorf("got BusCategory %v, want %q", poi.BusCategory, api.Express)
+				}
+			}
+		}
+	})
+}
+
+// TestClassifyBusRoute exercises every case against real CTA route
+// id/name pairs, hand-confirmed live against this app's own ingested
+// bus_corridors data (docker exec ... psql, cross-checked against CTA's
+// real published GTFS feed) rather than synthetic examples -- J14, X4/X9/X49,
+// and 192 in particular are real, currently-existing CTA routes, not
+// invented test fixtures.
+func TestClassifyBusRoute(t *testing.T) {
+	tests := []struct {
+		routeID   string
+		routeName string
+		want      api.ContributingPoiBusCategory
+	}{
+		{"J14", "J14 - Jeffery Jump", api.Jump},
+		{"X4", "X4 - Cottage Grove Express", api.Express},
+		{"X9", "X9 - Ashland Express", api.Express},
+		{"X49", "X49 - Western Express", api.Express},
+		{"2", "2 - Hyde Park Express", api.Express},
+		{"120", "120 - Ogilvie/Streeterville Express", api.Express},
+		// Real, confirmed false positive (see classifyBusRoute's doc
+		// comment): CTA's actual GTFS route_color for 192 is grey/local,
+		// but its real name contains "Express" -- this heuristic can't
+		// tell the two apart without ingesting route_color directly.
+		{"192", "192 - University of Chicago Hospitals Express", api.Express},
+		{"3", "3 - King Drive", api.Local},
+		{"20", "20 - Madison", api.Local},
+		{"N5", "N5 - South Shore Night Bus", api.Local}, // no Night category (see PR discussion) -- N-prefix isn't a reliable GTFS signal
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.routeID, func(t *testing.T) {
+			got := classifyBusRoute(tt.routeID, tt.routeName)
+			if got != tt.want {
+				t.Errorf("classifyBusRoute(%q, %q) = %q, want %q", tt.routeID, tt.routeName, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestCalculateTransitScore_BusCorridorBonus(t *testing.T) {

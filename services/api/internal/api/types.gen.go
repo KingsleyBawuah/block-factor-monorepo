@@ -109,6 +109,27 @@ func (e CommutePillDestination) Valid() bool {
 	}
 }
 
+// Defines values for ContributingPoiBusCategory.
+const (
+	Express ContributingPoiBusCategory = "express"
+	Jump    ContributingPoiBusCategory = "jump"
+	Local   ContributingPoiBusCategory = "local"
+)
+
+// Valid indicates whether the value is a known member of the ContributingPoiBusCategory enum.
+func (e ContributingPoiBusCategory) Valid() bool {
+	switch e {
+	case Express:
+		return true
+	case Jump:
+		return true
+	case Local:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CtaRailLineFeatureGeometryType.
 const (
 	CtaRailLineFeatureGeometryTypeMultiLineString CtaRailLineFeatureGeometryType = "MultiLineString"
@@ -621,12 +642,17 @@ type CommutePillDestination string
 
 // ContributingPoi defines model for ContributingPoi.
 type ContributingPoi struct {
-	DistanceMeters float32 `json:"distanceMeters"`
+	// BusCategory Real CTA bus route service category, set only when this contributing POI is a bus corridor. Verified against CTA's live published GTFS feed (routes.txt): "jump" is the single Jeffery Jump route (route id J14, real color #0065BD); "express" covers X-prefixed arterial routes and any route whose real name contains "Express" (real color #B71234 maroon) -- CTA doesn't use a distinct color or category for the X-prefix beyond Express itself; everything else is "local" (real color #99999C grey). Omitted for CTA stations and every other factor's contributing POIs.
+	BusCategory    *ContributingPoiBusCategory `json:"busCategory,omitempty"`
+	DistanceMeters float32                     `json:"distanceMeters"`
 
 	// Lines Real CTA 'L' line names serving this stop (e.g. ["Red", "Brown", "Purple"]), set only when this contributing POI is a CTA station -- omitted entirely for every other factor's contributing POIs (bus corridors, grocery stores, cafes, etc.), which have no lines to report.
 	Lines *[]string `json:"lines,omitempty"`
 	Name  string    `json:"name"`
 }
+
+// ContributingPoiBusCategory Real CTA bus route service category, set only when this contributing POI is a bus corridor. Verified against CTA's live published GTFS feed (routes.txt): "jump" is the single Jeffery Jump route (route id J14, real color #0065BD); "express" covers X-prefixed arterial routes and any route whose real name contains "Express" (real color #B71234 maroon) -- CTA doesn't use a distinct color or category for the X-prefix beyond Express itself; everything else is "local" (real color #99999C grey). Omitted for CTA stations and every other factor's contributing POIs.
+type ContributingPoiBusCategory string
 
 // Coordinates defines model for Coordinates.
 type Coordinates struct {
