@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import "lineicons/dist/lineicons.css";
 import { Badge, type BadgeProps } from "./ui/badge";
 import { cn } from "../lib/utils";
@@ -43,6 +43,7 @@ function roundedTier(score: number): { rounded: number; tier: ScoreTier } {
 export function ComparisonTray({ pinned, onUnpin }: ComparisonTrayProps) {
   const [expanded, setExpanded] = useState(false);
   const canExpand = pinned.length >= 2;
+  const panelId = useId();
 
   if (pinned.length === 0) return null;
 
@@ -81,6 +82,7 @@ export function ComparisonTray({ pinned, onUnpin }: ComparisonTrayProps) {
             type="button"
             onClick={() => setExpanded((v) => !v)}
             aria-expanded={expanded}
+            aria-controls={panelId}
             className="flex shrink-0 items-center gap-1.5 rounded-sm border border-zinc-700 bg-zinc-800 px-2 py-1 font-mono text-xs font-medium tracking-wide text-zinc-200 uppercase hover:bg-zinc-700"
           >
             <i className="lni lni-layers-1 text-xs" aria-hidden="true" />
@@ -90,14 +92,17 @@ export function ComparisonTray({ pinned, onUnpin }: ComparisonTrayProps) {
       </div>
 
       {expanded && canExpand && (
-        <div className="max-h-64 overflow-y-auto border-t border-zinc-800 px-6 py-2">
+        <div id={panelId} className="max-h-64 overflow-y-auto border-t border-zinc-800 px-6 py-2">
           <table className="w-full border-collapse font-mono text-xs">
             <thead>
               <tr>
-                <th className="px-2 py-1 text-left tracking-wide text-zinc-500 uppercase">Factor</th>
+                <th scope="col" className="px-2 py-1 text-left tracking-wide text-zinc-500 uppercase">
+                  Factor
+                </th>
                 {pinned.map((p) => (
                   <th
                     key={`${p.lat}-${p.lon}`}
+                    scope="col"
                     className="max-w-[8rem] truncate px-2 py-1 text-left font-normal tracking-wide text-zinc-500 uppercase"
                   >
                     {p.formattedAddress}
@@ -111,17 +116,17 @@ export function ComparisonTray({ pinned, onUnpin }: ComparisonTrayProps) {
                 const { label, icon } = FACTOR_METADATA[key];
                 return (
                   <tr key={key} className="border-t border-zinc-900">
-                    <td className="px-2 py-1.5 text-zinc-300">
+                    <th scope="row" className="px-2 py-1.5 text-left font-normal text-zinc-300">
                       <span className="inline-flex items-center gap-1.5">
                         <i className={cn("lni", icon, "text-zinc-500")} aria-hidden="true" />
                         {label}
                       </span>
-                    </td>
+                    </th>
                     {pinned.map((p) => {
                       const factor = p.score.factors[key];
                       if (!factor || factor.degraded || factor.score == null) {
                         return (
-                          <td key={`${p.lat}-${p.lon}`} className="px-2 py-1.5 text-zinc-600">
+                          <td key={`${p.lat}-${p.lon}`} className="px-2 py-1.5 text-zinc-400">
                             Unavailable
                           </td>
                         );

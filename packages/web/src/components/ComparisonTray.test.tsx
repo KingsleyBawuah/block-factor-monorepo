@@ -55,7 +55,7 @@ describe("ComparisonTray", () => {
   });
 
   it("expands to a factor-by-factor comparison table on Compare, and collapses again on a second click", () => {
-    const { getByRole, getByText, queryByText } = render(
+    const { getByRole, getByText, getAllByText, queryByText } = render(
       <ComparisonTray
         pinned={[fakePin({ lat: 1, lon: 1 }), fakePin({ lat: 2, lon: 2, formattedAddress: "875 N Michigan Ave" })]}
         onUnpin={mock(() => {})}
@@ -67,6 +67,19 @@ describe("ComparisonTray", () => {
 
     expect(getByText("Transit")).toBeTruthy();
     expect(getByText("Groceries")).toBeTruthy();
+    // Both pinned fixtures share the same transit/grocery scores (92/60) --
+    // asserts the actual cell values and their tier-color classes, not just
+    // that the factor labels rendered somewhere in the table.
+    const transitCells = getAllByText("92");
+    expect(transitCells).toHaveLength(2);
+    for (const cell of transitCells) {
+      expect(cell.className).toContain("text-emerald-400");
+    }
+    const groceryCells = getAllByText("60");
+    expect(groceryCells).toHaveLength(2);
+    for (const cell of groceryCells) {
+      expect(cell.className).toContain("text-amber-400");
+    }
 
     fireEvent.click(getByRole("button", { name: /hide comparison/i }));
     expect(queryByText("Transit")).toBeNull();
