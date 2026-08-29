@@ -8,6 +8,8 @@ import { ScoreRing } from "./components/ui/score-ring";
 import { AddressSearchInput, type ResolvedAddress } from "./components/AddressSearchInput";
 import { FactorBreakdownList } from "./components/FactorBreakdownList";
 import { WeightDrawer } from "./components/WeightDrawer";
+import { ComparisonTray } from "./components/ComparisonTray";
+import { isPinned, pinAddress, unpinAddress, MAX_PINNED_ADDRESSES, type PinnedAddress } from "./lib/pinned-addresses";
 import {
   MapCanvas,
   MapLegend,
@@ -45,6 +47,7 @@ export default function App() {
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const [resolved, setResolved] = useState<ResolvedAddress | null>(null);
   const [layerVisibility, setLayerVisibility] = useState<Record<MapLayerKey, boolean>>(DEFAULT_LAYER_VISIBILITY);
+  const [pinned, setPinned] = useState<PinnedAddress[]>([]);
 
   // validateSearch (routes/index.tsx, on the root route) always returns a
   // complete, sum-100 WeightSearch -- `strict: false` sidesteps a circular
@@ -150,6 +153,22 @@ export default function App() {
     setLayerVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
+  function handlePin() {
+    if (!resolved) return;
+    setPinned((prev) =>
+      pinAddress(prev, {
+        formattedAddress: resolved.formattedAddress,
+        lat: resolved.lat,
+        lon: resolved.lon,
+        score: resolved.score,
+      })
+    );
+  }
+
+  function handleUnpin(index: number) {
+    setPinned((prev) => unpinAddress(prev, index));
+  }
+
   function handleWeightsChange(next: Weights) {
     // replace: true -- a slider drag fires this on every tick, so pushing a
     // new history entry per tick would make the browser Back button
@@ -162,9 +181,26 @@ export default function App() {
     map.flyTo({ center: [resolved.lon, resolved.lat], zoom: RESOLVED_ADDRESS_ZOOM });
   }, [map, resolved]);
 
+  const alreadyPinned = resolved ? isPinned(pinned, resolved.lat, resolved.lon) : false;
+  const pinDisabled = !resolved || alreadyPinned || pinned.length >= MAX_PINNED_ADDRESSES;
+  const pinTitle = alreadyPinned
+    ? "Already pinned for comparison"
+    : !resolved
+      ? "Search an address first"
+      : pinned.length >= MAX_PINNED_ADDRESSES
+        ? `Comparison tray full (${MAX_PINNED_ADDRESSES}/${MAX_PINNED_ADDRESSES})`
+        : "Pin for comparison";
+
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 font-sans text-zinc-100">
-      <header className="border-b border-zinc-800 bg-zinc-900/60 px-6 py-3">
+    // lg:h-screen + lg:overflow-hidden lock the page itself from scrolling
+    // on desktop -- only the sidebar below scrolls internally (its own
+    // lg:overflow-y-auto), and the map fills the rest of the viewport
+    // exactly rather than the old vh-percentage guess that left a gap
+    // beneath it. Below the lg breakpoint the page scrolls normally (a
+    // fixed-height split-screen doesn't fit a narrow stacked layout), with
+    // the header/tray sticky so they still stay in view during that scroll.
+    <div className="flex min-h-screen flex-col bg-zinc-950 font-sans text-zinc-100 lg:h-screen lg:overflow-hidden">
+      <header className="sticky top-0 z-20 shrink-0 border-b border-zinc-800 bg-zinc-900/95 px-6 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <span className="text-sm font-semibold tracking-wider uppercase">
@@ -179,80 +215,97 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex flex-1 p-6">
-        <div className="grid w-full grid-cols-1 gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-4 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Livability Score</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <AddressSearchInput onResolved={handleResolved} onReset={handleReset} weights={weights} />
+      <main className="flex flex-1 flex-col gap-6 p-6 lg:min-h-0 lg:flex-row lg:overflow-hidden">
+        <div className="flex flex-col gap-4 lg:min-h-0 lg:w-[400px] lg:shrink-0 lg:overflow-y-auto lg:pr-1">
+          <Card>
+            <CardHeader>
+              <CardTitle>Livability Score</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AddressSearchInput onResolved={handleResolved} onReset={handleReset} weights={weights} />
 
-                {resolved ? (
-                  <>
-                    <div className="mt-4 truncate font-mono text-xs text-zinc-500">
-                      {resolved.formattedAddress}
-                    </div>
-                    <div
+              {resolved ? (
+                <>
+                  <div className="mt-4 flex items-start justify-between gap-2">
+                    <div className="truncate font-mono text-xs text-zinc-500">{resolved.formattedAddress}</div>
+                    <button
+                      type="button"
+                      onClick={handlePin}
+                      disabled={pinDisabled}
+                      title={pinTitle}
+                      aria-label={pinTitle}
+                      aria-pressed={alreadyPinned}
                       className={cn(
-                        "mt-3 flex justify-center transition-opacity motion-reduce:transition-none",
-                        rescoreMutation.isPending && "opacity-60"
+                        "shrink-0 rounded-sm border p-1 transition-colors",
+                        alreadyPinned
+                          ? "border-emerald-900/60 bg-emerald-950/40 text-emerald-400"
+                          : "border-zinc-800 bg-zinc-950 text-zinc-500 hover:text-zinc-300",
+                        pinDisabled && !alreadyPinned && "cursor-not-allowed opacity-40 hover:text-zinc-500"
                       )}
                     >
-                      <ScoreRing score={resolved.score.compositeScore} />
-                    </div>
-                  </>
-                ) : (
-                  <div className="mt-4 py-2 font-mono text-xs text-zinc-500">
-                    Search an address above to see its BlockFactor score.
+                      <i className="lni lni-map-pin-5 text-xs" aria-hidden="true" />
+                    </button>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {resolved && (
-              <>
-                <WeightDrawer weights={weights} onChange={handleWeightsChange} />
-                <div
-                  className={cn(
-                    "transition-opacity motion-reduce:transition-none",
-                    rescoreMutation.isPending && "opacity-60"
-                  )}
-                >
-                  <FactorBreakdownList factors={resolved.score.factors} />
+                  <div
+                    className={cn(
+                      "mt-3 flex justify-center transition-opacity motion-reduce:transition-none",
+                      rescoreMutation.isPending && "opacity-60"
+                    )}
+                  >
+                    <ScoreRing score={resolved.score.compositeScore} />
+                  </div>
+                </>
+              ) : (
+                <div className="mt-4 py-2 font-mono text-xs text-zinc-500">
+                  Search an address above to see its BlockFactor score.
                 </div>
-              </>
-            )}
-
-            <Outlet />
-          </div>
-
-          <div className="min-w-0 lg:col-span-8">
-            {/*
-              clip-path (not just overflow-hidden) is required here: Firefox
-              renders the MapLibre WebGL canvas on its own GPU-composited
-              layer, which its overflow:hidden + border-radius clipping
-              doesn't reach -- a long-standing Gecko bug (e.g. Mozilla
-              Bugzilla #915492, #537433), confirmed live (rounded in Chrome,
-              square in Firefox/Zen at the same commit). clip-path is a real
-              compositor-level clip Firefox does honor on canvas layers.
-              0.375rem matches index.css's --radius-lg override (rounded-lg's
-              Tailwind default of 0.5rem is NOT what actually renders here).
-            */}
-            <Card className="relative h-[70vh] overflow-hidden p-0 [clip-path:inset(0_round_0.375rem)] lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
-              <MapCanvas onMapReady={setMap} />
-              {map && <CtaRailLayer map={map} visible={layerVisibility.ctaRail} />}
-              {map && <ProtectedBikeLayer map={map} visible={layerVisibility.bikeTrail} />}
-              {map && resolved && (
-                <PoiDensityLayer map={map} lat={resolved.lat} lon={resolved.lon} visible={layerVisibility.poiDensity} />
               )}
-              {map && <DivvyDockLayer map={map} visible={layerVisibility.divvyDocks} />}
-              <MapLegend visibility={layerVisibility} onToggle={handleLayerToggle} />
-            </Card>
-          </div>
+            </CardContent>
+          </Card>
+
+          {resolved && (
+            <>
+              <WeightDrawer weights={weights} onChange={handleWeightsChange} />
+              <div
+                className={cn(
+                  "transition-opacity motion-reduce:transition-none",
+                  rescoreMutation.isPending && "opacity-60"
+                )}
+              >
+                <FactorBreakdownList factors={resolved.score.factors} />
+              </div>
+            </>
+          )}
+
+          <Outlet />
+        </div>
+
+        <div className="min-w-0 flex-1 lg:h-full">
+          {/*
+            clip-path (not just overflow-hidden) is required here: Firefox
+            renders the MapLibre WebGL canvas on its own GPU-composited
+            layer, which its overflow:hidden + border-radius clipping
+            doesn't reach -- a long-standing Gecko bug (e.g. Mozilla
+            Bugzilla #915492, #537433), confirmed live (rounded in Chrome,
+            square in Firefox/Zen at the same commit). clip-path is a real
+            compositor-level clip Firefox does honor on canvas layers.
+            0.375rem matches index.css's --radius-lg override (rounded-lg's
+            Tailwind default of 0.5rem is NOT what actually renders here).
+          */}
+          <Card className="relative h-[70vh] overflow-hidden p-0 [clip-path:inset(0_round_0.375rem)] lg:h-full">
+            <MapCanvas onMapReady={setMap} />
+            {map && <CtaRailLayer map={map} visible={layerVisibility.ctaRail} />}
+            {map && <ProtectedBikeLayer map={map} visible={layerVisibility.bikeTrail} />}
+            {map && resolved && (
+              <PoiDensityLayer map={map} lat={resolved.lat} lon={resolved.lon} visible={layerVisibility.poiDensity} />
+            )}
+            {map && <DivvyDockLayer map={map} visible={layerVisibility.divvyDocks} />}
+            <MapLegend visibility={layerVisibility} onToggle={handleLayerToggle} />
+          </Card>
         </div>
       </main>
+
+      <ComparisonTray pinned={pinned} onUnpin={handleUnpin} />
     </div>
   );
 }

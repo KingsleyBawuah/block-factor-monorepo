@@ -172,9 +172,9 @@ Affiliate integration (contextual cards + click instrumentation) originally scop
    - [x] Collapsible Weight Customization Slider Drawer with instant reactive recalculation and URL search param sync.
    - [x] 9–10 Dense Factor Breakdown Cards (the commute card renders only when a destination is set) with distance badges ("straight-line" qualifier) and sub-score progress bars.
 3. **Bottom Multi-Address Comparison Tray:**
-   - [ ] Sticky dock to pin and compare up to 3 addresses side-by-side.
+   - [x] Sticky dock to pin and compare up to 3 addresses side-by-side.
 4. **Error & Empty States:**
-   - [ ] Address-not-found, ambiguous-address candidate picker, out-of-coverage (422 `OUT_OF_COVERAGE`), geocoding failure, OTP2-unavailable, and degraded-factor (`null`) states — styled per AGENTS.md (high-density copy, no emojis).
+   - [x] Address-not-found, ambiguous-address candidate picker, out-of-coverage (422 `OUT_OF_COVERAGE`), geocoding failure, OTP2-unavailable, and degraded-factor (`null`) states — styled per AGENTS.md (high-density copy, no emojis).
 5. **Map Legend & Layer Visibility Controls:**
    - [x] A collapsible panel anchored on the map itself (top-left, mirroring the zoom/compass control's top-right position) rather than the left analytics panel — map display is a map-chrome concern, not a score concern. Each Phase 4 map layer (CTA rail, protected bike/trail, POI density, Divvy docks) gets one entry: a color swatch + label doubling as the legend, plus a checkbox toggling that layer's visibility. Addresses the map getting visually overwhelming with every layer always on at once — Divvy's ~2,050 stations being the sharpest example. All layers stay on by default; this deliverable is the manual toggle only, not a smart/auto-hide default.
 
