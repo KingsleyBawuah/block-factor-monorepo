@@ -1,6 +1,7 @@
 {
   "name": "blockfactor-monorepo",
   "private": true,
+  "license": "AGPL-3.0-only",
   "engines": {
     "bun": "1.4.0"
   },

@@ -3,7 +3,7 @@
 **Version:** 1.0 (Draft / In Review)  
 **Target Market:** Chicago, IL  
 **Repository Structure:** Monorepo (Go API + React/TanStack Frontend + PostGIS / Docker Services)  
-**License:** Proprietary / All Rights Reserved  
+**License:** AGPL-3.0-only  
 
 **See also:**
 * [ARCHITECTURE.md](./ARCHITECTURE.md) — Technical Architecture Specification

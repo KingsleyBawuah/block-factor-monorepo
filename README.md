@@ -35,7 +35,7 @@ BlockFactor is an analytical location-intelligence platform engineered to evalua
 | **[Data Source Reference](docs/DATA_SOURCES.md)** | Verified real-world field names, resource IDs, and category values for each ingested dataset — the ground truth behind the migration schemas. |
 | **[Agent Guidelines & Working Agreements](AGENTS.md)** | Pair programming standards, permission gates, idiomatic Go standards, and anti-vibe-coding UI rules. |
 | **[Open Data Attribution](ATTRIBUTION.md)** | OpenStreetMap, CTA, City of Chicago, FEMA, and FCC data attribution notices. |
-| **[License](LICENSE)** | Proprietary / Closed-Source License. |
+| **[License](LICENSE)** | GNU Affero General Public License v3.0 (AGPL-3.0-only). |
 
 ---
 
@@ -87,3 +87,9 @@ blockfactor/
 ├── docker-compose.yml           # Unified Docker Compose with OTP2 profiles
 └── Makefile                     # Universal developer tasks and CI targets
 ```
+
+---
+
+## License
+
+Copyright (c) 2026 Kingsley Bawuah. Licensed under AGPL-3.0-only; see LICENSE. Third-party data remains under its own terms; see ATTRIBUTION.md.
