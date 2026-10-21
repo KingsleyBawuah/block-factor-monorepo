@@ -10,7 +10,7 @@
 
 ## Overview
 
-BlockFactor integrates multiple external APIs, spatial datasets, and transit feeds. Because BlockFactor is a closed-source platform with a planned commercial monetization layer in Phase 2, we must strictly adhere to the terms of service (ToS), licensing limitations, and technical guardrails of each integration.
+BlockFactor integrates multiple external APIs, spatial datasets, and transit feeds. Because BlockFactor is an open-source platform (AGPL-3.0-only) with a planned monetization layer in Phase 2 to cover hosting costs, we must strictly adhere to the terms of service (ToS), licensing limitations, and technical guardrails of each integration.
 
 ---
 
