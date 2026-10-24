@@ -122,44 +122,58 @@ The application must look and feel like an analytical, high-density location int
 
 ## 6. Agent Division of Labor
 
-### Claude Code CLI (`claude`) — Role: Architect & Algorithmic Planner
+All agent work is done by Claude Code sessions, coordinated through Orca workspaces. One session pairs with the user as the **coordinator**; it launches **workers** for well-scoped, one-PR-sized tasks.
+
+### Coordinator — Role: Architect, Planner & Reviewer
 * Primary Focus: Architecture, complex SQL/PostGIS query design, mathematical formula validation, and OpenAPI specification authoring.
 * Responsibilities:
   * Writing and updating `docs/openapi.yaml`.
   * Drafting `db/migrations/*.sql` for spatial indexes and staging table swaps.
   * Writing the math logic for scoring factors (`internal/scoring/factor_*.go`).
-  * Reviewing multi-file diffs and ensuring adherence to `ARCHITECTURE.md` and `PRD.md`.
+  * Splitting approved work into one-PR-sized tasks and writing each worker's brief.
+  * Reviewing every worker's diff against `ARCHITECTURE.md` and `PRD.md` before the user commits or merges.
 
-<!--### Postgres MCP (Claude Code only)
-* A `crystaldba/postgres-mcp` server ("Postgres MCP Pro") runs locally as a Docker container (`postgres-mcp`, SSE transport on `localhost:8000`), connected to the local `blockfactor-db` container. It gives Claude direct schema introspection, `EXPLAIN`/query-plan analysis, health checks (`analyze_db_health`), slow-query reporting (`get_top_queries`, via `pg_stat_statements`), and index-tuning recommendations (`analyze_query_indexes`/`analyze_workload_indexes`, using a DTA — Database Tuning Advisor — algorithm that simulates candidate indexes with `hypopg` before recommending them).
-* The server runs in **`--access-mode=restricted`**, which enforces read-only transactions with SQL parsing and execution timeouts at the server level — `execute_sql` cannot run DDL/DML even if asked. Use it for schema exploration, query plans, health checks, and index analysis.
-* Schema changes still go exclusively through `db/migrations/*.sql` (goose), drafted by Claude and applied by Agy via `make migrate-up` — this MCP is diagnostic-only and does not change that division of labor from the Handoff Protocol below.
-* An index recommendation from the DTA tools is a proposal, not a migration: if one is adopted, write it into a proper goose migration file rather than attempting to apply it directly (which restricted mode would reject anyway).-->
-* **Known limitation — PostGIS functions:** `execute_sql`'s restricted-mode validator recognizes plain columns, `count(*)`, and core Postgres built-ins (`upper()`, `now()`, etc.), but rejects any call to a PostGIS extension function (`ST_Area`, `ST_GeometryType`, `ST_IsValid`, `ST_DWithin`, ...) — confirmed by testing directly. Since this project's actual spatial data only gets interesting through those functions, use `docker exec blockfactor-db psql -U blockfactor -d blockfactor -c "..."` as the fallback whenever a query needs to call one.
-
-<!--### Antigravity CLI (`agy`) — Role: Execution & Tooling Engine
-* Primary Focus: File scaffolding, dependency wiring, test execution, container diagnostics, and continuous code validation.
+### Workers — Role: Execution & Tooling
+* Launched by the coordinator into their own Orca workspace (own branch, own checkout):
+  `orca worktree create --name <task> --no-parent --agent claude --model <model-id> --effort <level> --prompt "<brief>" --json`
+* Primary Focus: Implementing a specified task, file scaffolding, dependency wiring, test execution, and container diagnostics.
 * Responsibilities:
   * Running build and code-generation pipelines (`make generate`, `make generate-check`).
-  * Applying database migrations (`make migrate-up`) and ingestion CLI tasks (`make seed`) that Claude has drafted — agy's own permission system will prompt for approval before running these.
+  * Applying database migrations (`make migrate-up`) and ingestion CLI tasks (`make seed`).
   * Running linters and unit tests (`make test`, `make lint`) and resolving compilation/import errors.
-  * Inspecting Docker service logs (`blockfactor-db`, `blockfactor-otp`).-->
+  * Inspecting Docker service logs (`blockfactor-db`, `blockfactor-otp`).
+* Workers follow every rule in this file, including Rule 4: no commit, push, or PR without the user's explicit approval.
 
 ### Handoff Protocol
-* Claude and Agy run in separate threads with no shared context. When Claude produces instructions meant for Agy, write them as a self-contained prompt — restate relevant constraints and file paths rather than referring back to prior conversation.
-* When execution fails against another agent's artifact (OpenAPI spec, migration, scoring logic), report the failure back rather than patching that file directly. Ownership stays with whichever agent authored it.
+* Workers start with no shared context. A worker brief is a self-contained prompt: restate the relevant constraints, file paths, the branch name (`type/short-kebab-description`), and the no-commit rule rather than referring back to prior conversation.
+* When execution fails against an artifact the worker didn't author (OpenAPI spec, migration, scoring logic), the worker reports the failure back to the coordinator rather than patching that file directly.
 * **PR Scope:** Prefer multiple small, reviewable PRs over one large one. A single implementation-phase deliverable item (per `IMPLEMENTATION_PHASES.md`'s checklist) is usually the right PR size — not a whole phase. Exception: initial scaffolding where files are inherently interdependent (e.g. Phase 1) may reasonably span one PR, but should still be called out explicitly as a deliberate exception, not the default.
 
-### Git Worktree Isolation
-* **Why:** Claude and Agy previously shared a single working directory (`block-factor-monorepo/`). Because both agents run real `git`/`gh` commands against that one checkout, one agent's `git checkout` or `gh pr checkout` silently switches the branch out from under the other mid-task — confirmed live during PR #39's review, where a PR-review checkout swapped the branch a file-edit was in progress against. No work was lost that time only because nothing was mid-edit at that exact moment; the failure mode is real and was pure luck to dodge.
-* **The fix — separate working directories, one shared `.git`:** `git worktree` lets multiple independent working directories attach to the same repository (shared object store and refs — a commit made in one is immediately visible in the others, no push/pull needed between them) while each has its own independent branch checkout. One agent's checkout can no longer affect another's.
+### Choosing a Model
+Pick the cheapest model that can do the task well, and set effort to match. Adjust effort before switching model tiers; if a worker fails the same task twice, relaunch it one tier up rather than retrying as-is.
+
+| Model | ID | Use for | Price (input / output per 1M tokens) |
+|---|---|---|---|
+| Claude Haiku 5.5 | `claude-haiku-5-5` | Mechanical, fully specified work: renames, link/typo fixes, read-only code searches, log triage. | $0.10 / $0.50 |
+| Claude Sonnet 5.5 | `claude-sonnet-5-5` | **Default worker.** Implementing a specified one-PR task: Go handlers and clients, React components, tests, wiring, Docker/Makefile changes. | $2 / $10 |
+| Claude Opus 5.5 | `claude-opus-5-5` | **Coordinator.** PostGIS/SQL design, scoring math, OpenAPI and migration design, multi-file review, hard debugging. Workers only when the task needs design judgment. | $4 / $20 |
+| Claude Fable 5.1 | `claude-fable-5-1` | Rare: long-horizon or unusually hard problems where Opus has already fallen short. | $10 / $50 |
+
+* **Effort:** `low` for mechanical tasks, `medium` for typical worker tasks, `high`/`xhigh` for design, review, and debugging. Use `max` only when correctness clearly outweighs cost.
+* Prices are Anthropic API list prices as of 2026-10; models and prices change, so verify current ones per Rule 7 before relying on this table.
+
+### Workspace Isolation
+* **Why:** Agents run real `git`/`gh` commands. Two agents sharing one checkout means one agent's `git checkout` or `gh pr checkout` silently switches the branch out from under the other mid-task — confirmed live during PR #39's review.
+* **The fix — separate working directories, one shared `.git`:** Orca workspaces are `git worktree`s: independent working directories attached to the same repository (shared object store and refs — a commit made in one is immediately visible in the others), each with its own branch checkout.
 * **Convention:**
-  * `block-factor-monorepo/` (the primary clone) stays on `main` at all times — the stable trunk, kept up to date via `git pull`, and not used for feature-branch work or PR reviews by either agent.
-  * **Agy:** Operates exclusively inside its dedicated worktree (`Developer/worktrees/block-factor-monorepo/agy/block-factor-monorepo`). All build commands, tests, migrations, branch modifications, and `gh pr checkout` review commands must be executed within this dedicated worktree.
-  * **Claude:** Operates exclusively inside its dedicated worktree (`Developer/block-factor-monorepo.worktrees/claude/`).
-  * `git worktree list` shows all registered worktrees and what each has checked out; `git worktree remove <path>` cleans one up once its branch is merged.
-* **The constraint that makes this safe, not just tidy:** git refuses to check out the same branch in two worktrees at once — it errors instead of letting two working directories diverge on one branch. That converts the old failure mode (a silent, disruptive branch swap) into a loud, safe error: if an agent tries to review/check out a branch the other agent is still actively working on, it'll fail cleanly instead of clobbering anything.
-* **Per-worktree setup, since only tracked files are shared:** gitignored local config (`.env`) and installed dependencies (`node_modules`, anything from `bun install`) live per-worktree, not in the shared `.git` — copy `.env` into a new worktree manually, and run `bun install` there separately before any frontend tooling will work.
+  * `~/orca/block-factor-monorepo/` (the primary clone) stays on `main` at all times — kept up to date via `git pull`, and not used for feature-branch work or PR reviews.
+  * Every task, coordinator or worker, gets its own Orca workspace under `~/orca/workspaces/block-factor-monorepo/<name>`, created with `orca worktree create` and removed with `orca worktree rm` once its branch is merged.
+  * `git worktree list` shows all registered worktrees and what each has checked out.
+* **The constraint that makes this safe, not just tidy:** git refuses to check out the same branch in two worktrees at once, so an agent trying to check out a branch another agent is actively working on fails loudly instead of clobbering anything.
+* **Per-workspace setup, since only tracked files are shared:** Orca's repo setup hook runs `bun install` in each new workspace; gitignored local config (`.env`) is not shared and must be copied in manually before anything that needs it will run.
+
+### PostGIS Queries
+* For ad-hoc queries that call PostGIS functions (`ST_Area`, `ST_DWithin`, ...), use `docker exec blockfactor-db psql -U blockfactor -d blockfactor -c "..."`.
 
 ---
 
