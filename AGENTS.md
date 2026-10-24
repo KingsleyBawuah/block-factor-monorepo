@@ -160,3 +160,19 @@ The application must look and feel like an analytical, high-density location int
   * `git worktree list` shows all registered worktrees and what each has checked out; `git worktree remove <path>` cleans one up once its branch is merged.
 * **The constraint that makes this safe, not just tidy:** git refuses to check out the same branch in two worktrees at once — it errors instead of letting two working directories diverge on one branch. That converts the old failure mode (a silent, disruptive branch swap) into a loud, safe error: if an agent tries to review/check out a branch the other agent is still actively working on, it'll fail cleanly instead of clobbering anything.
 * **Per-worktree setup, since only tracked files are shared:** gitignored local config (`.env`) and installed dependencies (`node_modules`, anything from `bun install`) live per-worktree, not in the shared `.git` — copy `.env` into a new worktree manually, and run `bun install` there separately before any frontend tooling will work.
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` + `docs/adr/`, plus `docs/GIS_GLOSSARY.md` for GIS terms. See `docs/agents/domain.md`.
