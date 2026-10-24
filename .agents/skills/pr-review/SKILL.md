@@ -7,14 +7,15 @@ description: Deep, critical review of a GitHub pull request before it merges. Us
 
 Perform a maximally rigorous, critical review of the given pull request before it merges. This is not a rubber-stamp pass — assume there is a real defect to find, and don't stop until you've either found one or genuinely exhausted the angles worth checking. An "LGTM" with nothing wrong is a legitimate outcome, but it should be earned by actually looking, not defaulted to.
 
-## Setup: isolated worktree, never the shared working directory
+## Setup: dedicated review workspace, never a shared working directory
 
-**Never run `git checkout` or `gh pr checkout` in the project's primary working directory (`block-factor-monorepo/`) or in Claude's worktree.** Doing so silently switches that directory's branch out from under whatever is running there — this has already happened once (during review of PR #39) and disrupted an in-progress task elsewhere. Always work from Agy's dedicated worktree (`Developer/worktrees/block-factor-monorepo/agy/block-factor-monorepo`) — see `AGENTS.md` §6 "Git Worktree Isolation" for the full convention this follows.
+**Never run `git checkout` or `gh pr checkout` in the primary clone (`~/orca/block-factor-monorepo/`) or in another agent's workspace.** Doing so silently switches that directory's branch out from under whatever is running there — this has already happened once (during review of PR #39) and disrupted an in-progress task elsewhere. Always review from a dedicated Orca workspace — see `AGENTS.md` §6 "Workspace Isolation" for the full convention this follows.
 
-1. Ensure you are executing inside Agy's dedicated worktree (`Developer/worktrees/block-factor-monorepo/agy/block-factor-monorepo`), never the primary clone on `main`.
+1. Create a review workspace: `orca worktree create --name review-pr-<PR-number> --no-parent --json`, and run every following step inside its path (`~/orca/workspaces/block-factor-monorepo/review-pr-<PR-number>`), never the primary clone on `main`.
 2. Sync trunk and remote references: `git fetch origin`.
-3. Check out the PR's actual branch inside this worktree: `gh pr checkout <PR-number>`. This is safe — it only affects Agy's worktree, not the primary clone or Claude's worktree.
-4. Ensure `.env` is present in the worktree, and run `bun install` under `packages/web/` if the PR touches frontend code — gitignored local config and installed dependencies live per-worktree.
+3. Check out the PR's actual branch inside this workspace: `gh pr checkout <PR-number>`. This is safe — it only affects the review workspace. If git refuses because the branch is checked out in another workspace, review that PR from `origin/<branch>` with `git diff origin/main...origin/<branch>` instead of checking it out.
+4. Ensure `.env` is present in the workspace, and run `bun install` under `packages/web/` if the PR touches frontend code — gitignored local config and installed dependencies live per-workspace.
+5. After the review, remove the workspace: `orca worktree rm --worktree path:<workspace-path> --json`.
 
 ## Review approach
 
